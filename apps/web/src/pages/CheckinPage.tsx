@@ -113,6 +113,9 @@ export function CheckinPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Check-in de hoje</h1>
           <div className="flex gap-3">
+            <Link to="/" className="text-sm text-neutral-400">
+              Início
+            </Link>
             <Link to="/wods" className="text-sm text-neutral-400">
               Meus WODs
             </Link>

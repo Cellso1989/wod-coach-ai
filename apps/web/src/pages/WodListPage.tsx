@@ -26,9 +26,14 @@ export function WodListPage() {
       <div className="mx-auto max-w-md space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Meus WODs</h1>
-          <Link to="/wods/new" className="text-sm text-orange-500">
-            + Novo
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link to="/" className="text-sm text-neutral-400">
+              Início
+            </Link>
+            <Link to="/wods/new" className="text-sm text-orange-500">
+              + Novo
+            </Link>
+          </div>
         </div>
 
         {loading && <p className="text-neutral-400">Carregando...</p>}

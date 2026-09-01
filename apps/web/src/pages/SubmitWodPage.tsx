@@ -54,9 +54,14 @@ export function SubmitWodPage() {
       <div className="mx-auto max-w-md space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Enviar WOD</h1>
-          <Link to="/wods" className="text-sm text-neutral-400">
-            Histórico
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link to="/" className="text-sm text-neutral-400">
+              Início
+            </Link>
+            <Link to="/wods" className="text-sm text-neutral-400">
+              Histórico
+            </Link>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

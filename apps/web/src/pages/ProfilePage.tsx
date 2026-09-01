@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api.js";
 import { useAuth } from "../lib/auth-context.js";
 
@@ -10,10 +11,6 @@ interface ProfileFormState {
   level: string;
   competitionCategory: string;
   weeklyFrequency: string;
-  goals: string;
-  injuries: string;
-  limitedMovements: string;
-  equipment: string;
 }
 
 const EMPTY_FORM: ProfileFormState = {
@@ -24,18 +21,7 @@ const EMPTY_FORM: ProfileFormState = {
   level: "",
   competitionCategory: "",
   weeklyFrequency: "",
-  goals: "",
-  injuries: "",
-  limitedMovements: "",
-  equipment: "",
 };
-
-function toCommaList(value: string): string[] {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
 
 export function ProfilePage() {
   const { user, logout } = useAuth();
@@ -56,10 +42,6 @@ export function ProfilePage() {
           level: (profile.level as string) ?? "",
           competitionCategory: (profile.competitionCategory as string) ?? "",
           weeklyFrequency: profile.weeklyFrequency != null ? String(profile.weeklyFrequency) : "",
-          goals: ((profile.goals as string[]) ?? []).join(", "),
-          injuries: ((profile.injuries as string[]) ?? []).join(", "),
-          limitedMovements: ((profile.limitedMovements as string[]) ?? []).join(", "),
-          equipment: ((profile.equipment as string[]) ?? []).join(", "),
         });
       })
       .catch(() => {
@@ -81,10 +63,6 @@ export function ProfilePage() {
         level: form.level || undefined,
         competitionCategory: form.competitionCategory || undefined,
         weeklyFrequency: form.weeklyFrequency ? Number(form.weeklyFrequency) : undefined,
-        goals: toCommaList(form.goals),
-        injuries: toCommaList(form.injuries),
-        limitedMovements: toCommaList(form.limitedMovements),
-        equipment: toCommaList(form.equipment),
       });
       setSaved(true);
     } catch (err) {
@@ -105,9 +83,14 @@ export function ProfilePage() {
       <div className="mx-auto max-w-md space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Meu perfil</h1>
-          <button onClick={() => void logout()} className="text-sm text-neutral-400">
-            Sair
-          </button>
+          <div className="flex gap-3">
+            <Link to="/" className="text-sm text-neutral-400">
+              Início
+            </Link>
+            <button onClick={() => void logout()} className="text-sm text-neutral-400">
+              Sair
+            </button>
+          </div>
         </div>
 
         <p className="text-neutral-400 text-sm">Logado como {user?.name}</p>
@@ -179,40 +162,6 @@ export function ProfilePage() {
               placeholder="Frequência semanal"
               value={form.weeklyFrequency}
               onChange={(e) => setForm({ ...form, weeklyFrequency: e.target.value })}
-              className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3"
-            />
-          </fieldset>
-
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-semibold text-neutral-300 mb-1">
-              Objetivos, limitações e equipamentos
-            </legend>
-            <input
-              type="text"
-              placeholder="Objetivos (separados por vírgula)"
-              value={form.goals}
-              onChange={(e) => setForm({ ...form, goals: e.target.value })}
-              className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3"
-            />
-            <input
-              type="text"
-              placeholder="Lesões (separadas por vírgula)"
-              value={form.injuries}
-              onChange={(e) => setForm({ ...form, injuries: e.target.value })}
-              className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3"
-            />
-            <input
-              type="text"
-              placeholder="Movimentos limitados (separados por vírgula)"
-              value={form.limitedMovements}
-              onChange={(e) => setForm({ ...form, limitedMovements: e.target.value })}
-              className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3"
-            />
-            <input
-              type="text"
-              placeholder="Equipamentos (separados por vírgula)"
-              value={form.equipment}
-              onChange={(e) => setForm({ ...form, equipment: e.target.value })}
               className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3"
             />
           </fieldset>

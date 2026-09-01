@@ -59,7 +59,7 @@ export function PersonalRecordsPage() {
       <div className="mx-auto max-w-md space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Meus PRs</h1>
-          <Link to="/checkin" className="text-sm text-neutral-400">
+          <Link to="/" className="text-sm text-neutral-400">
             Início
           </Link>
         </div>
