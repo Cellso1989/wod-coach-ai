@@ -11,8 +11,6 @@ services:
     plan: free
     region: oregon
     buildCommand: >-
-      corepack enable &&
-      corepack prepare pnpm@11.25.0 --activate &&
       pnpm install --frozen-lockfile &&
       pnpm db:generate &&
       pnpm build
