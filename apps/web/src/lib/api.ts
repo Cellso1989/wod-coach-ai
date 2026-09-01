@@ -24,7 +24,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
-    throw new ApiError(response.status, body.error ?? "Unexpected error");
+    throw new ApiError(response.status, body.error ?? "Erro inesperado");
   }
 
   if (response.status === 204) {
@@ -43,7 +43,7 @@ async function requestForm<T>(path: string, formData: FormData): Promise<T> {
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
-    throw new ApiError(response.status, body.error ?? "Unexpected error");
+    throw new ApiError(response.status, body.error ?? "Erro inesperado");
   }
 
   return response.json() as Promise<T>;

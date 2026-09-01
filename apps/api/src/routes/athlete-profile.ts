@@ -11,7 +11,7 @@ export default async function athleteProfileRoutes(app: FastifyInstance) {
     });
 
     if (!profile) {
-      return reply.code(404).send({ error: "Athlete profile not found" });
+      return reply.code(404).send({ error: "Perfil do atleta não encontrado" });
     }
 
     return reply.send({ profile });
@@ -20,7 +20,7 @@ export default async function athleteProfileRoutes(app: FastifyInstance) {
   app.put("/athlete-profile", async (request, reply) => {
     const parsed = athleteProfileSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error.flatten() });
+      return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
     }
 
     const data = parsed.data;

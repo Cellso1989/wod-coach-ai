@@ -10,12 +10,12 @@ export default async function wodResultRoutes(app: FastifyInstance) {
 
     const wod = await prisma.wod.findFirst({ where: { id, userId: request.user.sub } });
     if (!wod) {
-      return reply.code(404).send({ error: "WOD not found" });
+      return reply.code(404).send({ error: "WOD não encontrado" });
     }
 
     const parsed = wodResultSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error.flatten() });
+      return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
     }
 
     const result = await prisma.wodResult.upsert({
@@ -36,17 +36,17 @@ export default async function wodResultRoutes(app: FastifyInstance) {
       include: { result: true },
     });
     if (!wod) {
-      return reply.code(404).send({ error: "WOD not found" });
+      return reply.code(404).send({ error: "WOD não encontrado" });
     }
     if (!wod.result) {
       return reply
         .code(409)
-        .send({ error: "Register the WOD result before submitting feedback" });
+        .send({ error: "Registre o resultado do WOD antes de enviar o feedback" });
     }
 
     const parsed = wodFeedbackSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error.flatten() });
+      return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
     }
 
     const feedback = await prisma.wodFeedback.upsert({

@@ -26,14 +26,14 @@ export default async function authRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const parsed = registerSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.code(400).send({ error: "Invalid input", details: parsed.error.flatten() });
+        return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
       }
 
       const { name, email, password } = parsed.data;
 
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) {
-        return reply.code(409).send({ error: "Email already registered" });
+        return reply.code(409).send({ error: "E-mail já cadastrado" });
       }
 
       const passwordHash = await bcrypt.hash(password, 12);
@@ -58,14 +58,14 @@ export default async function authRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const parsed = loginSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.code(400).send({ error: "Invalid input", details: parsed.error.flatten() });
+        return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
       }
 
       const { email, password } = parsed.data;
 
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-        return reply.code(401).send({ error: "Invalid email or password" });
+        return reply.code(401).send({ error: "E-mail ou senha inválidos" });
       }
 
       const token = app.jwt.sign({ sub: user.id });
@@ -89,7 +89,7 @@ export default async function authRoutes(app: FastifyInstance) {
   app.get("/auth/me", { onRequest: [app.authenticate] }, async (request, reply) => {
     const user = await prisma.user.findUnique({ where: { id: request.user.sub } });
     if (!user) {
-      return reply.code(404).send({ error: "User not found" });
+      return reply.code(404).send({ error: "Usuário não encontrado" });
     }
     return reply.send({ user: publicUser(user) });
   });

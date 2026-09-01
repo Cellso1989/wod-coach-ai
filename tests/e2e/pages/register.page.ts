@@ -15,6 +15,6 @@ export class RegisterPage {
   }
 
   errorMessage() {
-    return this.page.getByText(/Não foi possível criar a conta|already registered/i);
+    return this.page.getByText(/Não foi possível criar a conta|já cadastrado/i);
   }
 }

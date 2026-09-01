@@ -14,6 +14,6 @@ export class LoginPage {
   }
 
   errorMessage() {
-    return this.page.getByText(/Não foi possível entrar|Invalid/i);
+    return this.page.getByText(/Não foi possível entrar|inválid[oa]/i);
   }
 }

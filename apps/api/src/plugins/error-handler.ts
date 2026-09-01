@@ -16,25 +16,26 @@ export default fp(async (app: FastifyInstance) => {
     request.log.error({ err: error }, "Unhandled request error");
 
     if (error instanceof ZodError) {
-      return reply.code(400).send({ error: "Invalid input", details: error.flatten() });
+      return reply.code(400).send({ error: "Dados inválidos", details: error.flatten() });
     }
 
-    // Fastify's own validation/parsing errors (bad JSON body, etc.)
+    // Fastify's own validation/parsing errors (bad JSON body, etc.) come
+    // with an English message — replace it with a generic PT-BR one.
     if (error.statusCode && error.statusCode < 500) {
-      return reply.code(error.statusCode).send({ error: error.message });
+      return reply.code(error.statusCode).send({ error: "Requisição inválida" });
     }
 
     // Prisma known-request errors: surface a generic conflict for
     // unique-constraint violations, hide everything else.
     const prismaCode = "code" in error ? (error as { code?: unknown }).code : undefined;
     if (prismaCode === "P2002") {
-      return reply.code(409).send({ error: "This record already exists" });
+      return reply.code(409).send({ error: "Este registro já existe" });
     }
     if (prismaCode === "P2025") {
-      return reply.code(404).send({ error: "Record not found" });
+      return reply.code(404).send({ error: "Registro não encontrado" });
     }
 
-    return reply.code(500).send({ error: "Internal server error" });
+    return reply.code(500).send({ error: "Erro interno do servidor" });
   });
 
   // O notFoundHandler é registrado em app.ts (único lugar permitido pelo

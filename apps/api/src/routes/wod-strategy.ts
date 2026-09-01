@@ -29,10 +29,10 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
       athleteContextResult = await getAthleteContextForWod(userId, id);
     } catch (err) {
       if (err instanceof WodNotFoundError) {
-        return reply.code(404).send({ error: "WOD not found" });
+        return reply.code(404).send({ error: "WOD não encontrado" });
       }
       if (err instanceof WodNotAnalyzedError) {
-        return reply.code(409).send({ error: "Analyze this WOD before generating a strategy" });
+        return reply.code(409).send({ error: "Analise este WOD antes de gerar uma estratégia" });
       }
       throw err;
     }
@@ -54,7 +54,7 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
     try {
       client = createAnthropicClient();
     } catch {
-      return reply.code(503).send({ error: "AI strategy generation is not configured yet" });
+      return reply.code(503).send({ error: "A geração de estratégia por IA ainda não foi configurada" });
     }
 
     const strategyInput: StrategyCoachInput = {
@@ -112,7 +112,7 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof StrategyGenerationError) {
         request.log.warn({ err: err.message, rawResponse: err.rawResponse }, "Strategy generation failed");
-        return reply.code(502).send({ error: "Could not generate a strategy right now" });
+        return reply.code(502).send({ error: "Não foi possível gerar uma estratégia agora" });
       }
       throw err;
     }
@@ -164,12 +164,12 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
 
     const wod = await prisma.wod.findFirst({ where: { id, userId: request.user.sub } });
     if (!wod) {
-      return reply.code(404).send({ error: "WOD not found" });
+      return reply.code(404).send({ error: "WOD não encontrado" });
     }
 
     const strategy = await prisma.wodStrategy.findUnique({ where: { wodId: id } });
     if (!strategy) {
-      return reply.code(404).send({ error: "This WOD has no strategy yet" });
+      return reply.code(404).send({ error: "Este WOD ainda não tem estratégia" });
     }
 
     return reply.send({ strategy });

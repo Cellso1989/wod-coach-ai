@@ -35,11 +35,11 @@ test("quando a análise de IA falha (API indisponível), a interface mostra um e
   await page.waitForURL(/\/wods\/[^/]+$/);
 
   await page.route("**/wods/*/analyze", (route) =>
-    route.fulfill({ status: 502, json: { error: "Could not analyze this WOD right now" } }),
+    route.fulfill({ status: 502, json: { error: "Não foi possível analisar este WOD agora" } }),
   );
 
   const wodDetailPage = new WodDetailPage(page);
   await wodDetailPage.analyze();
 
-  await expect(page.getByText(/Could not analyze this WOD right now/)).toBeVisible();
+  await expect(page.getByText(/Não foi possível analisar este WOD agora/)).toBeVisible();
 });

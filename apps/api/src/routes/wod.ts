@@ -38,13 +38,13 @@ async function parseMultipart(request: FastifyRequest): Promise<ParsedSubmission
 
 class UnsupportedImageTypeError extends Error {
   constructor(mimetype: string) {
-    super(`Unsupported image type: ${mimetype}`);
+    super(`Tipo de imagem não suportado: ${mimetype}`);
   }
 }
 
 class ImageTooLargeError extends Error {
   constructor() {
-    super("Image exceeds the maximum allowed size");
+    super("A imagem excede o tamanho máximo permitido");
   }
 }
 
@@ -66,7 +66,7 @@ export default async function wodRoutes(app: FastifyInstance) {
     if (!fieldsResult.success) {
       return reply
         .code(400)
-        .send({ error: "Invalid input", details: fieldsResult.error.flatten() });
+        .send({ error: "Dados inválidos", details: fieldsResult.error.flatten() });
     }
 
     const { rawText, name, notes, date } = fieldsResult.data;
@@ -75,7 +75,7 @@ export default async function wodRoutes(app: FastifyInstance) {
     if (!rawText && !hasImage) {
       return reply
         .code(400)
-        .send({ error: "Provide at least a text WOD or an image of the WOD" });
+        .send({ error: "Envie o texto do WOD ou uma imagem do treino" });
     }
 
     const sourceType = rawText && hasImage ? "TEXT_AND_IMAGE" : hasImage ? "IMAGE" : "TEXT";
@@ -122,7 +122,7 @@ export default async function wodRoutes(app: FastifyInstance) {
     });
 
     if (!wod) {
-      return reply.code(404).send({ error: "WOD not found" });
+      return reply.code(404).send({ error: "WOD não encontrado" });
     }
 
     return reply.send({ wod });

@@ -37,7 +37,7 @@ export default fp(async (app) => {
     try {
       await request.jwtVerify();
     } catch {
-      await reply.code(401).send({ error: "Unauthorized" });
+      await reply.code(401).send({ error: "Não autenticado" });
     }
   });
 });

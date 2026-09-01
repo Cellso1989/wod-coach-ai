@@ -13,7 +13,7 @@ export default async function dailyCheckinRoutes(app: FastifyInstance) {
   app.post("/checkins", async (request, reply) => {
     const parsed = dailyCheckinSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error.flatten() });
+      return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
     }
 
     const { date, weightKg, notes, ...metrics } = parsed.data;
@@ -56,7 +56,7 @@ export default async function dailyCheckinRoutes(app: FastifyInstance) {
     });
 
     if (!checkin) {
-      return reply.code(404).send({ error: "No check-in for today" });
+      return reply.code(404).send({ error: "Nenhum check-in registrado hoje" });
     }
 
     return reply.send({ checkin });

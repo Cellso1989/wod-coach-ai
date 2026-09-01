@@ -12,14 +12,14 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
 
     const wod = await prisma.wod.findFirst({ where: { id, userId: request.user.sub } });
     if (!wod) {
-      return reply.code(404).send({ error: "WOD not found" });
+      return reply.code(404).send({ error: "WOD não encontrado" });
     }
 
     let client: Anthropic;
     try {
       client = createAnthropicClient();
     } catch {
-      return reply.code(503).send({ error: "AI analysis is not configured yet" });
+      return reply.code(503).send({ error: "A análise por IA ainda não foi configurada" });
     }
 
     let output;
@@ -31,7 +31,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof WodAnalysisError) {
         request.log.warn({ err: err.message, rawResponse: err.rawResponse }, "WOD analysis failed");
-        return reply.code(502).send({ error: "Could not analyze this WOD right now" });
+        return reply.code(502).send({ error: "Não foi possível analisar este WOD agora" });
       }
       throw err;
     }
@@ -101,7 +101,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
 
     const wod = await prisma.wod.findFirst({ where: { id, userId: request.user.sub } });
     if (!wod) {
-      return reply.code(404).send({ error: "WOD not found" });
+      return reply.code(404).send({ error: "WOD não encontrado" });
     }
 
     const analysis = await prisma.wodAnalysis.findUnique({
@@ -110,7 +110,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
     });
 
     if (!analysis) {
-      return reply.code(404).send({ error: "This WOD has not been analyzed yet" });
+      return reply.code(404).send({ error: "Este WOD ainda não foi analisado" });
     }
 
     return reply.send({ analysis });

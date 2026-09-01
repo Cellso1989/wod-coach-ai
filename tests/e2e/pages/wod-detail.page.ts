@@ -26,6 +26,6 @@ export class WodDetailPage {
   }
 
   notFoundMessage() {
-    return this.page.getByText(/WOD not found|Erro ao carregar/i);
+    return this.page.getByText(/WOD não encontrado|Erro ao carregar/i);
   }
 }

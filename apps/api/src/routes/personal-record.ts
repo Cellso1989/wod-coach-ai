@@ -8,7 +8,7 @@ export default async function personalRecordRoutes(app: FastifyInstance) {
   app.post("/personal-records", async (request, reply) => {
     const parsed = personalRecordSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error.flatten() });
+      return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
     }
 
     const record = await prisma.personalRecord.create({
@@ -34,12 +34,12 @@ export default async function personalRecordRoutes(app: FastifyInstance) {
       where: { id, userId: request.user.sub },
     });
     if (!existing) {
-      return reply.code(404).send({ error: "Personal record not found" });
+      return reply.code(404).send({ error: "PR não encontrado" });
     }
 
     const parsed = personalRecordSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Invalid input", details: parsed.error.flatten() });
+      return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
     }
 
     const record = await prisma.personalRecord.update({
@@ -57,7 +57,7 @@ export default async function personalRecordRoutes(app: FastifyInstance) {
       where: { id, userId: request.user.sub },
     });
     if (!existing) {
-      return reply.code(404).send({ error: "Personal record not found" });
+      return reply.code(404).send({ error: "PR não encontrado" });
     }
 
     await prisma.personalRecord.delete({ where: { id } });

@@ -77,7 +77,7 @@ export function buildApp(): FastifyInstance {
   // só quando o build dele está sendo servido nesta instância).
   app.setNotFoundHandler((request, reply) => {
     if (!serveFrontend || request.url.startsWith("/api/")) {
-      return reply.code(404).send({ error: "Route not found" });
+      return reply.code(404).send({ error: "Rota não encontrada" });
     }
     // Qualquer outra rota GET é uma página do SPA (React Router cuida
     // do roteamento no client) — devolve o index.html com 200, não 404
