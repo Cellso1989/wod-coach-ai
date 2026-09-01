@@ -46,11 +46,20 @@ docker compose up -d          # sobe PostgreSQL
 pnpm install
 pnpm db:generate
 pnpm db:migrate
+pnpm build                     # IMPORTANTE — ver nota abaixo
 pnpm dev                       # roda web + api em paralelo
 ```
 
 - Web: http://localhost:5173
 - API: http://localhost:3333/health
+
+> **`pnpm build` antes do primeiro `pnpm dev`:** os pacotes internos (`@wod-coach-ai/types`,
+> `validation`, `database`, `coach-engine`, `ai`) apontam `main`/`types` para `dist/`, não para
+> `src/` — assim a API roda em produção com `node dist/server.js` puro, sem precisar de
+> `tsx`/`ts-node` para resolver pacotes irmãos. Isso significa que **sempre que você editar o
+> código-fonte de um desses pacotes**, precisa rodar `pnpm build` de novo antes de `pnpm dev` ou
+> `pnpm test` refletirem a mudança — `turbo` já cuida da ordem de build entre pacotes
+> automaticamente quando você roda os scripts pela raiz do monorepo.
 
 ## Scripts
 
