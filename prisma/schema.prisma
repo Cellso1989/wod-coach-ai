@@ -1,0 +1,320 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Wod, WodAnalysis, WodStrategy, WodResult, etc. are added
+// in their owning phase (see docs/phases.md).
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  athleteProfile AthleteProfile?
+  dailyCheckins  DailyCheckin[]
+  wods           Wod[]
+  personalRecords PersonalRecord[]
+
+  @@map("users")
+}
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum CrossfitLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  COMPETITOR
+}
+
+model AthleteProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Dados físicos
+  birthDate DateTime?
+  heightCm  Int?
+  weightKg  Float?
+  sex       Sex?
+
+  // Experiência
+  crossfitSince      DateTime?
+  level              CrossfitLevel?
+  competitionCategory String?
+  weeklyFrequency    Int?
+
+  // Objetivos, limitações e equipamentos (seção 7).
+  // Modelados como arrays simples nesta fase; normalizar em
+  // tabelas próprias (Goal, Injury, Equipment) só se/quando o
+  // produto precisar de um catálogo compartilhado entre atletas.
+  goals             String[]
+  injuries          String[]
+  limitedMovements  String[]
+  equipment         String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("athlete_profiles")
+}
+
+// Check-in diário (seção 8). O readinessScore é calculado por uma
+// fórmula determinística em @wod-coach-ai/coach-engine — nunca pela IA.
+model DailyCheckin {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Data do check-in, normalizada para meia-noite UTC (um por atleta por dia).
+  date DateTime
+
+  sleep           Int
+  energy          Int
+  stress          Int
+  muscleSoreness  Int
+  jointPain       Int
+  motivation      Int
+  weightKg        Float?
+  notes           String?
+
+  readinessScore     Int
+  readinessBand      String
+  cautionFlags       String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@map("daily_checkins")
+}
+
+enum WodSourceType {
+  TEXT
+  IMAGE
+  TEXT_AND_IMAGE
+}
+
+// Envio bruto do WOD pelo atleta (seção 9/19). A interpretação
+// semântica (movimentos, formato, estímulo) é feita pelo
+// WodAnalyzerAgent na Fase 5 e vive em um modelo WodAnalysis à parte.
+model Wod {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date       DateTime
+  sourceType WodSourceType
+
+  rawText String?
+
+  // Armazenamento simples em base64 nesta fase (sem storage de
+  // objetos configurado ainda). Migrar para storage externo se o
+  // volume de imagens justificar, sem quebrar o contrato da API.
+  imageData     String?
+  imageMimeType String?
+
+  name  String?
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  analysis WodAnalysis?
+  result   WodResult?
+  strategy WodStrategy?
+
+  @@map("wods")
+}
+
+enum WodFormat {
+  AMRAP
+  FOR_TIME
+  EMOM
+  E2MOM
+  CHIPPER
+  ROUNDS_FOR_TIME
+  STRENGTH
+  INTERVAL
+}
+
+enum MovementCategory {
+  gymnastics
+  weightlifting
+  conditioning
+  monostructural
+  mixed_modal
+}
+
+// Interpretação do WOD pelo WodAnalyzerAgent (Fase 5, seção 10).
+// Gerada por IA, mas SEMPRE validada com Zod antes de chegar aqui —
+// nunca persistimos uma resposta que falhou na validação (seção 30).
+model WodAnalysis {
+  id     String @id @default(uuid())
+  wodId  String @unique
+  wod    Wod    @relation(fields: [wodId], references: [id], onDelete: Cascade)
+
+  format          WodFormat?
+  durationMinutes Int?
+  stimulus        String?
+
+  estimatedIntensity Int?
+  engineDemand       Int?
+  gripDemand         Int?
+  legDemand          Int?
+  gymnasticsDemand   Int?
+  technicalDemand    Int?
+
+  // Confiança da IA na análise (seção 37/38) — não inventamos dados
+  // ausentes; uma confiança baixa reflete incerteza real.
+  confidence Float
+  warnings   String[]
+
+  // Resposta bruta da IA (já validada), preservada para depuração/auditoria.
+  rawResponse Json
+
+  movements WodMovement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("wod_analyses")
+}
+
+model WodMovement {
+  id            String      @id @default(uuid())
+  wodAnalysisId String
+  wodAnalysis   WodAnalysis @relation(fields: [wodAnalysisId], references: [id], onDelete: Cascade)
+
+  order    Int
+  name     String
+  category MovementCategory
+
+  reps            Int?
+  distanceMeters  Int?
+  loadDescription String?
+  calories        Int?
+
+  createdAt DateTime @default(now())
+
+  @@map("wod_movements")
+}
+
+// Resultado registrado pelo atleta após executar o WOD (seção 16/22).
+model WodResult {
+  id    String @id @default(uuid())
+  wodId String @unique
+  wod   Wod    @relation(fields: [wodId], references: [id], onDelete: Cascade)
+
+  // Texto livre pois o formato varia muito por tipo de WOD
+  // (ex: "8 rounds + 12 reps", "12:34", "225 lb").
+  score String
+
+  timeSeconds Int?
+  rounds      Int?
+  reps        Int?
+  load        Float?
+  distance    Float?
+
+  rpe Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  feedback WodFeedback?
+
+  @@map("wod_results")
+}
+
+enum StrategyOutcome {
+  YES
+  PARTIALLY
+  NO
+}
+
+// Feedback pós-WOD (seção 16/23) — insumo do Learning Loop (Fase 9).
+model WodFeedback {
+  id          String    @id @default(uuid())
+  wodResultId String    @unique
+  wodResult   WodResult @relation(fields: [wodResultId], references: [id], onDelete: Cascade)
+
+  strategyWorked    StrategyOutcome?
+  gripScore         Int?
+  legsScore         Int?
+  breathingScore    Int?
+  overallDifficulty Int?
+  whereItBroke      String?
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("wod_feedbacks")
+}
+
+// PRs de CrossFit (seção 24). movementName é texto livre para permitir
+// expansão da biblioteca sem migração; o frontend sugere uma lista comum.
+model PersonalRecord {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  movementName String
+  value        Float
+  unit         String
+  achievedAt   DateTime @default(now())
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, movementName])
+  @@map("personal_records")
+}
+
+// Estratégia recomendada pelo StrategyCoachAgent (Fase 8, seção 12/21/37).
+// Gerada por IA, mas SEMPRE validada com Zod antes de chegar aqui —
+// nunca persistimos uma resposta que falhou na validação (seção 30).
+model WodStrategy {
+  id    String @id @default(uuid())
+  wodId String @unique
+  wod   Wod    @relation(fields: [wodId], references: [id], onDelete: Cascade)
+
+  recommendedIntensity Int
+  targetRpe            Int
+  loadRecommendation   String?
+  pacing               String
+  restStrategy         String
+  transitionStrategy   String
+  energyManagement     String
+  goal                 String
+  target               String?
+  criticalPoint        String?
+
+  // Arrays de { movement, strategy } (seção 12) — armazenados como JSON
+  // pois a estrutura é uma lista de pares livres, não uma entidade própria.
+  breakStrategy    Json
+  movementStrategy Json
+
+  confidence Float
+  warnings   String[]
+
+  // Resposta bruta da IA (já validada), preservada para depuração/auditoria.
+  rawResponse Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("wod_strategies")
+}

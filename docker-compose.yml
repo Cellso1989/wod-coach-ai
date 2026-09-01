@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: wod-coach-ai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wodcoach}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wodcoach}
+      POSTGRES_DB: ${POSTGRES_DB:-wod_coach_ai}
+    ports:
+      - "5432:5432"
+    volumes:
+      - wod_coach_ai_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wodcoach}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  wod_coach_ai_pg_data:
