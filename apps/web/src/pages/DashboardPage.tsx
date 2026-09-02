@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type DailyCheckin, type PersonalRecord, type Wod } from "../lib/api.js";
 import { useAuth } from "../lib/auth-context.js";
+import { NavBar } from "../components/NavBar.js";
 
 const READINESS_COLOR: Record<DailyCheckin["readinessBand"], string> = {
   high: "text-green-400",
@@ -63,16 +64,16 @@ export function DashboardPage() {
             <h1 className="text-xl font-bold">WOD Coach AI</h1>
             <p className="text-sm text-neutral-500">Olá, {user?.name}</p>
           </div>
-          <button onClick={() => void logout()} className="text-sm text-neutral-400">
+          <button
+            onClick={() => void logout()}
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-[#303030] bg-transparent px-3 text-sm text-neutral-400 transition-colors duration-150 hover:border-red-900/60 hover:text-red-400"
+          >
+            <span aria-hidden="true">↪</span>
             Sair
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-3 text-sm text-neutral-400">
-          <Link to="/wods">Meus WODs</Link>
-          <Link to="/personal-records">PRs</Link>
-          <Link to="/profile">Perfil</Link>
-        </div>
+        <NavBar />
 
         {/* Readiness de hoje */}
         {checkin ? (
