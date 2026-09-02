@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { COMMON_LIFTS, COMMON_GYMNASTICS, COMMON_BENCHMARK_WODS } from "@wod-coach-ai/types";
 import { api, ApiError, type PersonalRecord } from "../lib/api.js";
+import { NavBar } from "../components/NavBar.js";
 
 const SUGGESTED_MOVEMENTS = [...COMMON_LIFTS, ...COMMON_GYMNASTICS, ...COMMON_BENCHMARK_WODS];
 
@@ -63,6 +64,8 @@ export function PersonalRecordsPage() {
             Início
           </Link>
         </div>
+
+        <NavBar />
 
         <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-neutral-800 p-4">
           {formError && <p className="text-red-400 text-sm">{formError}</p>}

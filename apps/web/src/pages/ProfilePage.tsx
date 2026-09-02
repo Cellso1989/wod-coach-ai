@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api.js";
 import { useAuth } from "../lib/auth-context.js";
+import { NavBar } from "../components/NavBar.js";
+import { LogoutButton } from "../components/LogoutButton.js";
 
 interface ProfileFormState {
   birthDate: string;
@@ -24,7 +26,7 @@ const EMPTY_FORM: ProfileFormState = {
 };
 
 export function ProfilePage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [form, setForm] = useState<ProfileFormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,15 +85,15 @@ export function ProfilePage() {
       <div className="mx-auto max-w-md space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Meu perfil</h1>
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
             <Link to="/" className="text-sm text-neutral-400">
               Início
             </Link>
-            <button onClick={() => void logout()} className="text-sm text-neutral-400">
-              Sair
-            </button>
+            <LogoutButton />
           </div>
         </div>
+
+        <NavBar />
 
         <p className="text-neutral-400 text-sm">Logado como {user?.name}</p>
 

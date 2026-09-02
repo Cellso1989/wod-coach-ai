@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError, type Wod } from "../lib/api.js";
+import { NavBar } from "../components/NavBar.js";
 
 const SOURCE_LABEL: Record<Wod["sourceType"], string> = {
   TEXT: "📝",
@@ -35,6 +36,8 @@ export function WodListPage() {
             </Link>
           </div>
         </div>
+
+        <NavBar />
 
         {loading && <p className="text-neutral-400">Carregando...</p>}
         {error && <p className="text-red-400 text-sm">{error}</p>}

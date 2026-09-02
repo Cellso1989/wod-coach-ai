@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, type DailyCheckin, type PersonalRecord, type Wod } from "../lib/api.js";
 import { useAuth } from "../lib/auth-context.js";
 import { NavBar } from "../components/NavBar.js";
+import { LogoutButton } from "../components/LogoutButton.js";
 
 const READINESS_COLOR: Record<DailyCheckin["readinessBand"], string> = {
   high: "text-green-400",
@@ -21,7 +22,7 @@ function isToday(dateStr: string): boolean {
 }
 
 export function DashboardPage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [checkin, setCheckin] = useState<DailyCheckin | null>(null);
   const [recentWods, setRecentWods] = useState<Wod[]>([]);
   const [records, setRecords] = useState<PersonalRecord[]>([]);
@@ -64,13 +65,7 @@ export function DashboardPage() {
             <h1 className="text-xl font-bold">WOD Coach AI</h1>
             <p className="text-sm text-neutral-500">Olá, {user?.name}</p>
           </div>
-          <button
-            onClick={() => void logout()}
-            className="flex h-9 items-center gap-1.5 rounded-lg border border-[#303030] bg-transparent px-3 text-sm text-neutral-400 transition-colors duration-150 hover:border-red-900/60 hover:text-red-400"
-          >
-            <span aria-hidden="true">↪</span>
-            Sair
-          </button>
+          <LogoutButton />
         </div>
 
         <NavBar />
