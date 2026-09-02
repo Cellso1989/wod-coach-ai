@@ -65,8 +65,11 @@ depois — com este formato exato:
 {
   "recommendedIntensity": 1-10,
   "targetRpe": 1-10,
-  "loadRecommendation": string ou null (só sugira carga/percentual se houver PR ou histórico
-    de carga para o movimento em questão; caso contrário, oriente por RPE e null aqui),
+  "loadRecommendation": string ou null (só sugira carga se houver PR ou histórico de carga
+    para o movimento em questão; caso contrário, oriente por RPE e null aqui. Se o treino
+    tiver múltiplos blocos com % diferentes do PR — ex: "2x 70-75%, 2x 75-80%, 4x 80-85%" —
+    calcule o peso real de cada bloco a partir do PR e liste-os de forma curta, ex:
+    "70-75kg / 75-80kg / 80-85kg (PR 100kg)"),
   "pacing": string,
   "breakStrategy": [{ "movement": string, "strategy": string }],
   "restStrategy": string,

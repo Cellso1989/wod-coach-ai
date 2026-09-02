@@ -21,7 +21,7 @@ export type StrategyMovementNote = z.infer<typeof strategyMovementNoteSchema>;
 export const strategyOutputSchema = z.object({
   recommendedIntensity: z.number().int().min(1).max(10),
   targetRpe: z.number().int().min(1).max(10),
-  loadRecommendation: z.string().trim().max(150).nullable(),
+  loadRecommendation: z.string().trim().max(300).nullable(),
   pacing: z.string().trim().min(1).max(300),
   breakStrategy: z.array(strategyMovementNoteSchema).max(8),
   restStrategy: z.string().trim().min(1).max(300),
