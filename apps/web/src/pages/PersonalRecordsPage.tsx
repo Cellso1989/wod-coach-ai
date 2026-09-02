@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { COMMON_LIFTS, COMMON_BENCHMARK_WODS } from "@wod-coach-ai/types";
+import { COMMON_LIFTS, COMMON_GYMNASTICS, COMMON_BENCHMARK_WODS } from "@wod-coach-ai/types";
 import { api, ApiError, type PersonalRecord } from "../lib/api.js";
 
-const SUGGESTED_MOVEMENTS = [...COMMON_LIFTS, ...COMMON_BENCHMARK_WODS];
+const SUGGESTED_MOVEMENTS = [...COMMON_LIFTS, ...COMMON_GYMNASTICS, ...COMMON_BENCHMARK_WODS];
 
 export function PersonalRecordsPage() {
   const [records, setRecords] = useState<PersonalRecord[]>([]);

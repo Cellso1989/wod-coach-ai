@@ -31,24 +31,6 @@ const CATEGORY_ICON: Record<string, string> = {
   mixed_modal: "⚙️",
 };
 
-function DemandBar({ label, value }: { label: string; value: number | null }) {
-  if (value == null) return null;
-  return (
-    <div className="space-y-1">
-      <div className="flex justify-between text-xs text-neutral-400">
-        <span>{label}</span>
-        <span>{value}/10</span>
-      </div>
-      <div className="h-2 rounded-full bg-neutral-800">
-        <div
-          className="h-2 rounded-full bg-orange-600"
-          style={{ width: `${(value / 10) * 100}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 export function WodDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [wod, setWod] = useState<Wod | null>(null);
@@ -182,15 +164,6 @@ export function WodDetailPage() {
                       </li>
                     ))}
                   </ul>
-                </div>
-
-                <div className="space-y-2">
-                  <h2 className="text-sm font-semibold text-neutral-300">Demanda estimada</h2>
-                  <DemandBar label="Engine" value={analysis.engineDemand} />
-                  <DemandBar label="Grip" value={analysis.gripDemand} />
-                  <DemandBar label="Pernas" value={analysis.legDemand} />
-                  <DemandBar label="Ginástica" value={analysis.gymnasticsDemand} />
-                  <DemandBar label="Técnica" value={analysis.technicalDemand} />
                 </div>
 
                 <p className="text-xs text-neutral-600">

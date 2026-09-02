@@ -48,6 +48,21 @@ export const COMMON_LIFTS = [
   "Bench Press",
 ] as const;
 
+export const COMMON_GYMNASTICS = [
+  "Pull-up",
+  "Chest-to-Bar Pull-up",
+  "Strict Pull-up",
+  "Muscle-up",
+  "Ring Muscle-up",
+  "Handstand Push-up",
+  "Strict Handstand Push-up",
+  "Handstand Walk",
+  "Toes to Bar",
+  "Rope Climb",
+  "Double Under",
+  "Pistol",
+] as const;
+
 export const COMMON_BENCHMARK_WODS = [
   "Fran",
   "Helen",
