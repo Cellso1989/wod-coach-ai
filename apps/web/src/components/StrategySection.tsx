@@ -58,11 +58,6 @@ export function StrategySection({
           Estratégia
         </h3>
 
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-neutral-300">Pacing</p>
-          <p className="text-sm text-neutral-400">{strategy.pacing}</p>
-        </div>
-
         {strategy.breakStrategy.length > 0 && (
           <div className="space-y-1">
             <p className="text-sm font-medium text-neutral-300">Quebras por movimento</p>
@@ -79,18 +74,6 @@ export function StrategySection({
           <p className="text-sm font-medium text-neutral-300">Descanso</p>
           <p className="text-sm text-neutral-400">{strategy.restStrategy}</p>
         </div>
-
-        {strategy.movementStrategy.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-neutral-300">Técnica por movimento</p>
-            {strategy.movementStrategy.map((note) => (
-              <p key={note.movement} className="text-sm text-neutral-400">
-                <span className="font-medium text-neutral-300">{note.movement}:</span>{" "}
-                {note.strategy}
-              </p>
-            ))}
-          </div>
-        )}
 
         <div className="space-y-1">
           <p className="text-sm font-medium text-neutral-300">Transições</p>
