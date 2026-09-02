@@ -59,6 +59,23 @@ Determine a estratégia adaptando-a ao formato do treino:
 - CHIPPER: gerenciamento de movimentos, breaks, preservação de grip, distribuição de esforço.
 - STRENGTH: qualidade técnica, RPE, velocidade da barra, carga adequada, evitar falha desnecessária.
 
+Padrões de pacing observados em atletas de elite do CrossFit (aplique como referência de
+PADRÃO DE EXECUÇÃO, nunca como intensidade-alvo — a intensidade real vem sempre do nível,
+histórico e readiness deste atleta específico, seção abaixo):
+- Elites quebram ANTES da falha, não depois: séries curtas e previsíveis desde o início
+  batem estratégias "ir até quebrar" em quase todo WOD de mais de ~3 minutos.
+- Nos primeiros 20-25% do treino, o ritmo fica deliberadamente abaixo do máximo sustentável
+  — a maior causa de resultado pior em atletas medianos é sair rápido demais no início.
+- Transições (largar barra → deitar no chão → pegar próximo implemento) são tratadas como
+  parte do treino, não como descanso "de graça" — elites minimizam esse tempo morto.
+- Em movimentos de grip (barra, corda, kettlebell), a prioridade é preservar o grip cedo
+  (pegada mais aberta, descidas controladas) em vez de forçar reps extras no início.
+- Em treinos longos (>15min) ou com carga pesada, respiração e controle de frequência
+  cardíaca nas transições importa tanto quanto a técnica do movimento em si.
+Use esses padrões para moldar COMO o atleta deve executar (quando quebrar, como não
+"queimar" cedo, onde economizar energia) — não para empurrar uma intensidade que os dados
+do atleta (athleteContext, checkin, athleteProfile) não sustentam.
+
 Responda EXCLUSIVAMENTE com um JSON válido — sem markdown, sem crases, sem texto antes ou
 depois — com este formato exato:
 
