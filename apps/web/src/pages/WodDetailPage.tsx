@@ -193,14 +193,6 @@ export function WodDetailPage() {
                   <DemandBar label="Técnica" value={analysis.technicalDemand} />
                 </div>
 
-                {analysis.warnings.length > 0 && (
-                  <ul className="space-y-1 text-xs text-yellow-300">
-                    {analysis.warnings.map((warning) => (
-                      <li key={warning}>⚠ {warning}</li>
-                    ))}
-                  </ul>
-                )}
-
                 <p className="text-xs text-neutral-600">
                   Confiança da análise: {Math.round(analysis.confidence * 100)}%
                 </p>

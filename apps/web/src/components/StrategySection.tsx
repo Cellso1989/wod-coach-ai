@@ -116,19 +116,6 @@ export function StrategySection({
         </div>
       )}
 
-      {strategy.warnings.length > 0 && (
-        <div className="space-y-1 border-t border-neutral-800 pt-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-            Pontos de atenção
-          </p>
-          <ul className="space-y-1 text-sm text-yellow-300">
-            {strategy.warnings.map((warning) => (
-              <li key={warning}>⚠ {warning}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       <p className="text-center text-xs text-neutral-600">
         Confiança da recomendação: {Math.round(strategy.confidence * 100)}%
       </p>
