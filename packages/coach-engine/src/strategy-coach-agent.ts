@@ -94,7 +94,12 @@ depois — com este formato exato:
   "transitionStrategy": string,
   "energyManagement": string,
   "goal": string (objetivo prático da sessão, ex: "Manter consistência, sem falhar antes da metade"),
-  "target": string ou null (meta, ex: "8-9 rounds"),
+  "target": string ou null (meta OBJETIVA e mensurável — sempre baseada em tempo total ou em
+    rounds/reps, nunca uma frase vaga. Para FOR_TIME/CHIPPER/ROUNDS_FOR_TIME, estime uma faixa
+    de tempo total de conclusão (ex: "Terminar entre 11:30-12:30"), calculada a partir da
+    duração/movimentos do wodAnalysis e do nível/histórico do atleta. Para AMRAP/EMOM/E2MOM/
+    INTERVAL, estime rounds ou reps completos (ex: "7-8 rounds completos"). Só deixe null se
+    não houver dados mínimos (ex: WOD sem duração nem movimentos claros) para estimar nada),
   "criticalPoint": string ou null (o principal ponto de atenção, ex: "Grip"),
   "warnings": [string],
   "confidence": 0-1

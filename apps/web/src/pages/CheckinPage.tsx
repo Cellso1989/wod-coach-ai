@@ -56,6 +56,7 @@ export function CheckinPage() {
   const [notes, setNotes] = useState("");
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DailyCheckin | null>(null);
 
@@ -82,6 +83,7 @@ export function CheckinPage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    setSaving(true);
     try {
       const { checkin } = await api.saveCheckin({
         sleep,
@@ -96,6 +98,8 @@ export function CheckinPage() {
       setResult(checkin);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Não foi possível salvar o check-in.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -137,7 +141,7 @@ export function CheckinPage() {
 
         {result && (
           <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 text-center">
-            <p className="text-sm text-neutral-400">Readiness Score</p>
+            <p className="text-sm text-neutral-400">Nível de Prontidão</p>
             <p className="text-4xl font-bold">{result.readinessScore}</p>
             <p className={`text-sm font-semibold ${READINESS_COLOR[result.readinessBand]}`}>
               {READINESS_LABEL[result.readinessBand]}
@@ -214,8 +218,12 @@ export function CheckinPage() {
             className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3"
           />
 
-          <button type="submit" className="w-full rounded-lg bg-orange-600 py-3 font-semibold">
-            Salvar check-in
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full rounded-lg bg-orange-600 py-3 font-semibold transition-colors duration-150 hover:bg-orange-700 active:bg-orange-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? "Salvando..." : "Salvar check-in"}
           </button>
         </form>
       </div>

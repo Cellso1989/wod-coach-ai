@@ -70,10 +70,10 @@ export function DashboardPage() {
 
         <NavBar />
 
-        {/* Readiness de hoje */}
+        {/* Prontidão de hoje */}
         {checkin ? (
           <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 text-center">
-            <p className="text-sm text-neutral-400">Readiness de hoje</p>
+            <p className="text-sm text-neutral-400">Prontidão de hoje</p>
             <p className="text-4xl font-bold">{checkin.readinessScore}</p>
             <p className={`text-sm font-semibold ${READINESS_COLOR[checkin.readinessBand]}`}>
               {checkin.readinessBand === "high"

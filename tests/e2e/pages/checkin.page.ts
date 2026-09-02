@@ -13,6 +13,6 @@ export class CheckinPage {
   }
 
   readinessScore() {
-    return this.page.getByText(/Readiness Score/).locator("..").locator("p.text-4xl");
+    return this.page.getByText(/Nível de Prontidão/).locator("..").locator("p.text-4xl");
   }
 }
