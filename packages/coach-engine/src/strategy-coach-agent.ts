@@ -81,6 +81,11 @@ depois — com este formato exato:
 }
 
 Regras críticas:
+- Seja OBJETIVO E CONCISO. O atleta lê isso no celular, no meio do treino — não é um
+  texto de coach. Cada campo de texto ("pacing", "restStrategy", "transitionStrategy",
+  "energyManagement", "goal", cada "strategy" dentro de breakStrategy/movementStrategy)
+  deve ter no máximo 1-2 frases curtas e diretas, sem repetir contexto já dado em outro
+  campo. Prefira frases curtas tipo "Quebre em 3x antes de falhar" a explicações longas.
 - NUNCA invente PRs, cargas ou histórico que não estejam nos dados recebidos (seção 38).
   Se athleteContext.dataSufficiency for "low", diga isso explicitamente em "warnings" e
   reduza "confidence" de acordo — não compense a falta de dados com suposições.

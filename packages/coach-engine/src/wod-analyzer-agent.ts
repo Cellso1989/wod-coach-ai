@@ -46,6 +46,9 @@ com este formato exato:
 }
 
 Regras críticas:
+- Seja OBJETIVO E CONCISO. O atleta lê isso no celular, no meio do treino. "stimulus"
+  deve ser uma expressão curta (2-4 palavras, ex: "engine + grip", "força pesada"), e
+  cada item de "warnings" deve ser uma frase curta e direta, sem explicações longas.
 - Trate SOMENTE de CrossFit: AMRAP, EMOM, E2MOM, For Time, Chipper, Rounds For Time,
   Strength, Weightlifting, Gymnastics, Conditioning, Monostructural, Benchmark/Hero WODs.
 - NUNCA invente números que não conseguir inferir do treino (seção 38). Se não souber,
