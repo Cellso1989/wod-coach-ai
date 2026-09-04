@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api.js";
 
@@ -13,17 +13,32 @@ export function SubmitWodPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
+  function setImageFile(file: File | null) {
     setImage(file);
     setImagePreviewUrl(file ? URL.createObjectURL(file) : null);
   }
 
+  function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
+    setImageFile(event.target.files?.[0] ?? null);
+  }
+
   function clearImage() {
-    setImage(null);
-    setImagePreviewUrl(null);
+    setImageFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
+
+  useEffect(() => {
+    function onWindowPaste(event: globalThis.ClipboardEvent) {
+      const item = Array.from(event.clipboardData?.items ?? []).find((i) => i.type.startsWith("image/"));
+      const file = item?.getAsFile();
+      if (file) {
+        event.preventDefault();
+        setImageFile(file);
+      }
+    }
+    window.addEventListener("paste", onWindowPaste);
+    return () => window.removeEventListener("paste", onWindowPaste);
+  }, []);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -101,8 +116,9 @@ export function SubmitWodPage() {
               </button>
             </div>
           ) : (
-            <label className="flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-neutral-700 px-4 py-8 text-sm text-neutral-400">
-              📷 Tirar foto ou escolher imagem do treino
+            <label className="flex w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-700 px-4 py-8 text-center text-sm text-neutral-400">
+              <span>📷 Tirar foto ou escolher imagem do treino</span>
+              <span className="text-xs text-neutral-500">ou cole um print com Ctrl+V</span>
               <input
                 ref={fileInputRef}
                 type="file"
