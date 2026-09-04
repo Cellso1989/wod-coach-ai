@@ -5,6 +5,7 @@ import { api, ApiError, type PersonalRecord } from "../lib/api.js";
 import { NavBar } from "../components/NavBar.js";
 import { BrandHomeLink } from "../components/BrandHomeLink.js";
 import { PrHistoryChart } from "../components/PrHistoryChart.js";
+import { MovementAutocomplete } from "../components/MovementAutocomplete.js";
 
 const SUGGESTED_MOVEMENTS = [...COMMON_LIFTS, ...COMMON_GYMNASTICS, ...COMMON_BENCHMARK_WODS];
 
@@ -89,6 +90,7 @@ export function PersonalRecordsPage() {
   }
 
   async function handleDelete(id: string) {
+    if (!window.confirm("Remover este PR? Se quer mesmo remover, confirme.")) return;
     await api.deletePersonalRecord(id);
     setRecords((prev) => prev.filter((r) => r.id !== id));
   }
@@ -105,20 +107,12 @@ export function PersonalRecordsPage() {
 
         <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-neutral-800 p-4">
           {formError && <p className="text-red-400 text-sm">{formError}</p>}
-          <input
-            list="movement-suggestions"
-            type="text"
-            required
-            placeholder="Movimento (ex: Back Squat, Fran)"
+          <MovementAutocomplete
             value={movementName}
-            onChange={(e) => setMovementName(e.target.value)}
-            className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3"
+            onChange={setMovementName}
+            suggestions={SUGGESTED_MOVEMENTS}
+            placeholder="Movimento (ex: Back Squat, Fran)"
           />
-          <datalist id="movement-suggestions">
-            {SUGGESTED_MOVEMENTS.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
 
           <div className="grid grid-cols-2 gap-2">
             <input
