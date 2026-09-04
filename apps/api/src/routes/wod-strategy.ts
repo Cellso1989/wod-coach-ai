@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@wod-coach-ai/database";
-import { createAnthropicClient } from "@wod-coach-ai/ai";
+import { createAnthropicClient, describeAnthropicApiError } from "@wod-coach-ai/ai";
 import {
   generateStrategy,
   StrategyGenerationError,
@@ -113,6 +113,11 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
       if (err instanceof StrategyGenerationError) {
         request.log.warn({ err: err.message, rawResponse: err.rawResponse }, "Strategy generation failed");
         return reply.code(502).send({ error: "Não foi possível gerar uma estratégia agora" });
+      }
+      const apiError = describeAnthropicApiError(err);
+      if (apiError) {
+        request.log.error({ err }, "Anthropic API error during strategy generation");
+        return reply.code(apiError.status).send({ error: apiError.message });
       }
       throw err;
     }

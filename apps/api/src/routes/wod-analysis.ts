@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@wod-coach-ai/database";
-import { createAnthropicClient } from "@wod-coach-ai/ai";
+import { createAnthropicClient, describeAnthropicApiError } from "@wod-coach-ai/ai";
 import { analyzeWod, WodAnalysisError } from "@wod-coach-ai/coach-engine";
 
 export default async function wodAnalysisRoutes(app: FastifyInstance) {
@@ -32,6 +32,11 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
       if (err instanceof WodAnalysisError) {
         request.log.warn({ err: err.message, rawResponse: err.rawResponse }, "WOD analysis failed");
         return reply.code(502).send({ error: "Não foi possível analisar este WOD agora" });
+      }
+      const apiError = describeAnthropicApiError(err);
+      if (apiError) {
+        request.log.error({ err }, "Anthropic API error during WOD analysis");
+        return reply.code(apiError.status).send({ error: apiError.message });
       }
       throw err;
     }
