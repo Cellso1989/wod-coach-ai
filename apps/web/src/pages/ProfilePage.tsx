@@ -4,6 +4,7 @@ import { api, ApiError } from "../lib/api.js";
 import { useAuth } from "../lib/auth-context.js";
 import { NavBar } from "../components/NavBar.js";
 import { LogoutButton } from "../components/LogoutButton.js";
+import { BrandHomeLink } from "../components/BrandHomeLink.js";
 
 interface ProfileFormState {
   birthDate: string;
@@ -86,9 +87,7 @@ export function ProfilePage() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Meu perfil</h1>
           <div className="flex items-center gap-3">
-            <Link to="/" className="text-sm text-neutral-400">
-              Início
-            </Link>
+            <BrandHomeLink />
             <LogoutButton />
           </div>
         </div>

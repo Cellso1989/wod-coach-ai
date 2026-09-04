@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { COMMON_LIFTS, COMMON_GYMNASTICS, COMMON_BENCHMARK_WODS } from "@wod-coach-ai/types";
 import { api, ApiError, type PersonalRecord } from "../lib/api.js";
 import { NavBar } from "../components/NavBar.js";
+import { BrandHomeLink } from "../components/BrandHomeLink.js";
 import { PrHistoryChart } from "../components/PrHistoryChart.js";
 
 const SUGGESTED_MOVEMENTS = [...COMMON_LIFTS, ...COMMON_GYMNASTICS, ...COMMON_BENCHMARK_WODS];
@@ -97,9 +98,7 @@ export function PersonalRecordsPage() {
       <div className="mx-auto max-w-md space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Meus PRs</h1>
-          <Link to="/" className="text-sm text-neutral-400">
-            Início
-          </Link>
+          <BrandHomeLink />
         </div>
 
         <NavBar />

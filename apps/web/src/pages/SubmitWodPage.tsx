@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api.js";
+import { BrandHomeLink } from "../components/BrandHomeLink.js";
 
 export function SubmitWodPage() {
   const navigate = useNavigate();
@@ -70,9 +71,7 @@ export function SubmitWodPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Enviar WOD</h1>
           <div className="flex items-center gap-3">
-            <Link to="/" className="text-sm text-neutral-400">
-              Início
-            </Link>
+            <BrandHomeLink />
             <Link to="/wods" className="text-sm text-neutral-400">
               Histórico
             </Link>

@@ -11,6 +11,7 @@ import {
 import { WodResultSection } from "../components/WodResultSection.js";
 import { AthleteContextSection } from "../components/AthleteContextSection.js";
 import { StrategySection } from "../components/StrategySection.js";
+import { BrandHomeLink } from "../components/BrandHomeLink.js";
 
 const FORMAT_LABEL: Record<NonNullable<WodAnalysis["format"]>, string> = {
   AMRAP: "AMRAP",
@@ -114,9 +115,12 @@ export function WodDetailPage() {
       <div className="mx-auto max-w-md space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">{wod?.name ?? "WOD"}</h1>
-          <Link to="/wods" className="text-sm text-neutral-400">
-            Voltar
-          </Link>
+          <div className="flex items-center gap-3">
+            <BrandHomeLink />
+            <Link to="/wods" className="text-sm text-neutral-400">
+              Voltar
+            </Link>
+          </div>
         </div>
 
         {loading && <p className="text-neutral-400">Carregando...</p>}

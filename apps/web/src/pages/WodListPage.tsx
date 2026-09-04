@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError, type Wod } from "../lib/api.js";
 import { NavBar } from "../components/NavBar.js";
+import { BrandHomeLink } from "../components/BrandHomeLink.js";
 
 const SOURCE_LABEL: Record<Wod["sourceType"], string> = {
   TEXT: "📝",
@@ -38,9 +39,7 @@ export function WodListPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Meus WODs</h1>
           <div className="flex items-center gap-3">
-            <Link to="/" className="text-sm text-neutral-400">
-              Início
-            </Link>
+            <BrandHomeLink />
             <Link to="/wods/new" className="text-sm text-orange-500">
               + Novo
             </Link>

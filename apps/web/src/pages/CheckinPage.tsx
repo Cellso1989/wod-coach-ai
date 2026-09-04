@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError, type DailyCheckin } from "../lib/api.js";
+import { BrandHomeLink } from "../components/BrandHomeLink.js";
 
 interface SliderFieldProps {
   label: string;
@@ -115,9 +116,7 @@ export function CheckinPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">Check-in de hoje</h1>
           <div className="flex gap-3">
-            <Link to="/" className="text-sm text-neutral-400">
-              Início
-            </Link>
+            <BrandHomeLink />
             <Link to="/wods" className="text-sm text-neutral-400">
               Meus WODs
             </Link>
