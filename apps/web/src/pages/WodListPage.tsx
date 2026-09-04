@@ -65,14 +65,14 @@ export function WodListPage() {
           {wods.map((wod) => (
             <li
               key={wod.id}
-              className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+              className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
             >
-              <Link to={`/wods/${wod.id}`} className="block">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">
+              <Link to={`/wods/${wod.id}`} className="block min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-medium">
                     {SOURCE_LABEL[wod.sourceType]} {wod.name ?? "WOD sem nome"}
                   </span>
-                  <span className="text-xs text-neutral-500">
+                  <span className="shrink-0 text-xs text-neutral-500">
                     {new Date(wod.date).toLocaleDateString("pt-BR")}
                   </span>
                 </div>
@@ -87,7 +87,7 @@ export function WodListPage() {
               </Link>
               <button
                 onClick={() => void handleDelete(wod.id)}
-                className="mt-2 text-xs text-neutral-500"
+                className="shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold"
               >
                 Apagar
               </button>
