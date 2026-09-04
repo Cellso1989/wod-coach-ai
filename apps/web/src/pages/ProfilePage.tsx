@@ -12,8 +12,6 @@ interface ProfileFormState {
   weightKg: string;
   sex: string;
   level: string;
-  competitionCategory: string;
-  weeklyFrequency: string;
 }
 
 const EMPTY_FORM: ProfileFormState = {
@@ -22,8 +20,6 @@ const EMPTY_FORM: ProfileFormState = {
   weightKg: "",
   sex: "",
   level: "",
-  competitionCategory: "",
-  weeklyFrequency: "",
 };
 
 export function ProfilePage() {
@@ -43,8 +39,6 @@ export function ProfilePage() {
           weightKg: profile.weightKg != null ? String(profile.weightKg) : "",
           sex: (profile.sex as string) ?? "",
           level: (profile.level as string) ?? "",
-          competitionCategory: (profile.competitionCategory as string) ?? "",
-          weeklyFrequency: profile.weeklyFrequency != null ? String(profile.weeklyFrequency) : "",
         });
       })
       .catch(() => {
@@ -64,8 +58,6 @@ export function ProfilePage() {
         weightKg: form.weightKg ? Number(form.weightKg) : undefined,
         sex: form.sex || undefined,
         level: form.level || undefined,
-        competitionCategory: form.competitionCategory || undefined,
-        weeklyFrequency: form.weeklyFrequency ? Number(form.weeklyFrequency) : undefined,
       });
       setSaved(true);
     } catch (err) {
@@ -146,25 +138,11 @@ export function ProfilePage() {
               className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3"
             >
               <option value="">Nível</option>
-              <option value="BEGINNER">Iniciante</option>
+              <option value="SCALED">Scaled</option>
               <option value="INTERMEDIATE">Intermediário</option>
-              <option value="ADVANCED">Avançado</option>
-              <option value="COMPETITOR">Competidor</option>
+              <option value="RX">RX</option>
+              <option value="ELITE">Elite</option>
             </select>
-            <input
-              type="text"
-              placeholder="Categoria de competição"
-              value={form.competitionCategory}
-              onChange={(e) => setForm({ ...form, competitionCategory: e.target.value })}
-              className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3"
-            />
-            <input
-              type="number"
-              placeholder="Frequência semanal"
-              value={form.weeklyFrequency}
-              onChange={(e) => setForm({ ...form, weeklyFrequency: e.target.value })}
-              className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3"
-            />
           </fieldset>
 
           <button type="submit" className="w-full rounded-lg bg-orange-600 py-3 font-semibold">

@@ -1,12 +1,7 @@
 import { z } from "zod";
 
 export const sexSchema = z.enum(["MALE", "FEMALE", "OTHER"]);
-export const crossfitLevelSchema = z.enum([
-  "BEGINNER",
-  "INTERMEDIATE",
-  "ADVANCED",
-  "COMPETITOR",
-]);
+export const crossfitLevelSchema = z.enum(["SCALED", "INTERMEDIATE", "RX", "ELITE"]);
 
 export const athleteProfileSchema = z.object({
   birthDate: z.coerce.date().optional(),

@@ -32,10 +32,10 @@ enum Sex {
 }
 
 enum CrossfitLevel {
-  BEGINNER
+  SCALED
   INTERMEDIATE
-  ADVANCED
-  COMPETITOR
+  RX
+  ELITE
 }
 
 model AthleteProfile {
