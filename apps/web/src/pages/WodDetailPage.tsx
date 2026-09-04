@@ -101,6 +101,13 @@ export function WodDetailPage() {
     try {
       const { analysis } = await api.analyzeWod(id);
       setAnalysis(analysis);
+      try {
+        const { strategy } = await api.generateStrategy(id);
+        setStrategy(strategy);
+      } catch {
+        // A análise deu certo, só a estratégia falhou — o usuário ainda
+        // consegue gerá-la manualmente pelo botão que aparece abaixo.
+      }
     } catch (err) {
       setAnalysisError(
         err instanceof ApiError ? err.message : "Não foi possível analisar este WOD.",
@@ -195,7 +202,7 @@ export function WodDetailPage() {
                   disabled={analyzing}
                   className="w-full rounded-lg bg-orange-600 py-3 font-semibold disabled:opacity-50"
                 >
-                  {analyzing ? "Analisando..." : "🔍 Analisar treino"}
+                  {analyzing ? "Analisando e montando estratégia..." : "🔍 Analisar treino"}
                 </button>
               </div>
             )}
