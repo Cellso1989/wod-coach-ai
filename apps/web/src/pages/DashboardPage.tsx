@@ -5,12 +5,6 @@ import { useAuth } from "../lib/auth-context.js";
 import { NavBar } from "../components/NavBar.js";
 import { LogoutButton } from "../components/LogoutButton.js";
 
-const READINESS_COLOR: Record<DailyCheckin["readinessBand"], string> = {
-  high: "text-green-400",
-  moderate: "text-yellow-400",
-  low: "text-red-400",
-};
-
 function isToday(dateStr: string): boolean {
   const d = new Date(dateStr);
   const now = new Date();
@@ -73,14 +67,8 @@ export function DashboardPage() {
         {/* Prontidão de hoje */}
         {checkin ? (
           <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 text-center">
-            <p className="text-sm text-neutral-400">Prontidão de hoje</p>
-            <p className="text-4xl font-bold">{checkin.readinessScore}</p>
-            <p className={`text-sm font-semibold ${READINESS_COLOR[checkin.readinessBand]}`}>
-              {checkin.readinessBand === "high"
-                ? "Alta"
-                : checkin.readinessBand === "moderate"
-                  ? "Moderada"
-                  : "Baixa"}
+            <p className="text-lg font-semibold">
+              🏋️ E aí, meu atleta! Me manda seu WOD pra análise.
             </p>
             {checkin.cautionFlags.length > 0 && (
               <ul className="mt-2 space-y-1 text-left text-xs text-yellow-300">
