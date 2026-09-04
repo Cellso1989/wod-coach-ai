@@ -1,8 +1,9 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { COMMON_LIFTS, COMMON_GYMNASTICS, COMMON_BENCHMARK_WODS } from "@wod-coach-ai/types";
 import { api, ApiError, type PersonalRecord } from "../lib/api.js";
 import { NavBar } from "../components/NavBar.js";
+import { PrHistoryChart } from "../components/PrHistoryChart.js";
 
 const SUGGESTED_MOVEMENTS = [...COMMON_LIFTS, ...COMMON_GYMNASTICS, ...COMMON_BENCHMARK_WODS];
 
@@ -25,6 +26,34 @@ export function PersonalRecordsPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedMovements, setExpandedMovements] = useState<Set<string>>(new Set());
+
+  const historyByMovement = useMemo(() => {
+    const groups = new Map<string, PersonalRecord[]>();
+    for (const record of records) {
+      const group = groups.get(record.movementName) ?? [];
+      group.push(record);
+      groups.set(record.movementName, group);
+    }
+    return Array.from(groups.entries())
+      .map(([name, recs]) => {
+        const sorted = [...recs].sort(
+          (a, b) => new Date(a.achievedAt).getTime() - new Date(b.achievedAt).getTime(),
+        );
+        const unit = sorted[sorted.length - 1]!.unit;
+        return { name, unit, history: sorted.filter((r) => r.unit === unit) };
+      })
+      .filter((group) => group.history.length > 1);
+  }, [records]);
+
+  function toggleMovement(name: string) {
+    setExpandedMovements((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
 
   function load() {
     api
@@ -133,6 +162,36 @@ export function PersonalRecordsPage() {
 
         {loading && <p className="text-neutral-400">Carregando...</p>}
         {error && <p className="text-red-400 text-sm">{error}</p>}
+
+        {historyByMovement.length > 0 && (
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold text-neutral-300">Evolução dos PRs</h2>
+            {historyByMovement.map((group) => {
+              const isOpen = expandedMovements.has(group.name);
+              return (
+                <div
+                  key={group.name}
+                  className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+                >
+                  <button
+                    onClick={() => toggleMovement(group.name)}
+                    className="flex w-full items-center justify-between text-left"
+                  >
+                    <span className="font-medium">{group.name}</span>
+                    <span className="text-xs text-orange-400">
+                      {isOpen ? "Ocultar" : "Ver evolução"}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="mt-3 border-t border-neutral-800 pt-3">
+                      <PrHistoryChart history={group.history} unit={group.unit} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <ul className="space-y-2">
           {records.map((record) => {
