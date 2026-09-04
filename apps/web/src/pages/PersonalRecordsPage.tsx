@@ -6,6 +6,13 @@ import { NavBar } from "../components/NavBar.js";
 
 const SUGGESTED_MOVEMENTS = [...COMMON_LIFTS, ...COMMON_GYMNASTICS, ...COMMON_BENCHMARK_WODS];
 
+const PERCENTAGE_STEPS = [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
+const WEIGHT_UNITS = new Set(["kg", "lb"]);
+
+function roundToHalf(n: number): number {
+  return Math.round(n * 2) / 2;
+}
+
 export function PersonalRecordsPage() {
   const [records, setRecords] = useState<PersonalRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,6 +24,7 @@ export function PersonalRecordsPage() {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   function load() {
     api
@@ -127,26 +135,58 @@ export function PersonalRecordsPage() {
         {error && <p className="text-red-400 text-sm">{error}</p>}
 
         <ul className="space-y-2">
-          {records.map((record) => (
-            <li
-              key={record.id}
-              className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
-            >
-              <div>
-                <p className="font-medium">{record.movementName}</p>
-                <p className="text-sm text-neutral-400">
-                  {record.value} {record.unit}
-                  {record.notes ? ` · ${record.notes}` : ""}
-                </p>
-              </div>
-              <button
-                onClick={() => void handleDelete(record.id)}
-                className="text-xs text-neutral-500"
+          {records.map((record) => {
+            const isWeight = WEIGHT_UNITS.has(record.unit);
+            const isExpanded = expandedId === record.id;
+            return (
+              <li
+                key={record.id}
+                className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
               >
-                Remover
-              </button>
-            </li>
-          ))}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{record.movementName}</p>
+                    <p className="text-sm text-neutral-400">
+                      {record.value} {record.unit}
+                      {record.notes ? ` · ${record.notes}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {isWeight && (
+                      <button
+                        onClick={() => setExpandedId(isExpanded ? null : record.id)}
+                        className="text-xs text-orange-400"
+                      >
+                        {isExpanded ? "Ocultar %" : "Ver %"}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => void handleDelete(record.id)}
+                      className="text-xs text-neutral-500"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                </div>
+
+                {isWeight && isExpanded && (
+                  <div className="mt-3 grid grid-cols-3 gap-2 border-t border-neutral-800 pt-3">
+                    {PERCENTAGE_STEPS.map((pct) => (
+                      <div
+                        key={pct}
+                        className="rounded-md bg-neutral-950 px-2 py-1.5 text-center"
+                      >
+                        <p className="text-xs text-neutral-500">{pct}%</p>
+                        <p className="text-sm font-semibold">
+                          {roundToHalf((record.value * pct) / 100)} {record.unit}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </div>
     </main>
