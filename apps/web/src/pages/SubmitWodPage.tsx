@@ -123,7 +123,6 @@ export function SubmitWodPage() {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 onChange={handleImageChange}
                 className="hidden"
               />
