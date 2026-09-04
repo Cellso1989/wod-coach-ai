@@ -49,8 +49,7 @@ export function CheckinPage() {
   const [sleep, setSleep] = useState(7);
   const [energy, setEnergy] = useState(7);
   const [stress, setStress] = useState(4);
-  const [muscleSoreness, setMuscleSoreness] = useState(3);
-  const [jointPain, setJointPain] = useState(2);
+  const [bodyPain, setBodyPain] = useState(3);
   const [motivation, setMotivation] = useState(7);
   const [weightKg, setWeightKg] = useState("");
   const [notes, setNotes] = useState("");
@@ -68,8 +67,7 @@ export function CheckinPage() {
         setSleep(checkin.sleep);
         setEnergy(checkin.energy);
         setStress(checkin.stress);
-        setMuscleSoreness(checkin.muscleSoreness);
-        setJointPain(checkin.jointPain);
+        setBodyPain(Math.round((checkin.muscleSoreness + checkin.jointPain) / 2));
         setMotivation(checkin.motivation);
         setWeightKg(checkin.weightKg != null ? String(checkin.weightKg) : "");
         setNotes(checkin.notes ?? "");
@@ -89,8 +87,8 @@ export function CheckinPage() {
         sleep,
         energy,
         stress,
-        muscleSoreness,
-        jointPain,
+        muscleSoreness: bodyPain,
+        jointPain: bodyPain,
         motivation,
         weightKg: weightKg ? Number(weightKg) : undefined,
         notes: notes || undefined,
@@ -181,16 +179,9 @@ export function CheckinPage() {
             helpHigh="Muito estressado"
           />
           <SliderField
-            label="Dor muscular"
-            value={muscleSoreness}
-            onChange={setMuscleSoreness}
-            helpLow="Sem dor"
-            helpHigh="Dor extrema"
-          />
-          <SliderField
-            label="Dor articular"
-            value={jointPain}
-            onChange={setJointPain}
+            label="Dor no corpo"
+            value={bodyPain}
+            onChange={setBodyPain}
             helpLow="Sem dor"
             helpHigh="Dor extrema"
           />
@@ -211,7 +202,7 @@ export function CheckinPage() {
             className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3"
           />
           <textarea
-            placeholder="Observações — opcional"
+            placeholder="Observações — opcional (ex: se a dor for numa articulação específica, pode contar aqui)"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
