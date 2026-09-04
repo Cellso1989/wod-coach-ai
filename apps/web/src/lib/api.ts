@@ -335,6 +335,8 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
+  deleteWod: (id: string) => request<void>(`/wods/${id}`, { method: "DELETE" }),
+
   analyzeWod: (id: string) =>
     request<{ analysis: WodAnalysis }>(`/wods/${id}/analyze`, { method: "POST" }),
 

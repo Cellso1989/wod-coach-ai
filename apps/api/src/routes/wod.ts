@@ -163,6 +163,21 @@ export default async function wodRoutes(app: FastifyInstance) {
 
     return reply.send({ wod });
   });
+
+  app.delete("/wods/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const existing = await prisma.wod.findFirst({
+      where: { id, userId: request.user.sub },
+    });
+    if (!existing) {
+      return reply.code(404).send({ error: "WOD não encontrado" });
+    }
+
+    await prisma.wod.delete({ where: { id } });
+
+    return reply.code(204).send();
+  });
 }
 
 // Nas listagens não retornamos imageData (base64 grande) para manter o

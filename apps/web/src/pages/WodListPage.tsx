@@ -22,6 +22,16 @@ export function WodListPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  async function handleDelete(id: string) {
+    if (!window.confirm("Apagar este WOD? Essa ação não pode ser desfeita.")) return;
+    try {
+      await api.deleteWod(id);
+      setWods((prev) => prev.filter((w) => w.id !== id));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível apagar o WOD.");
+    }
+  }
+
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100 px-4 py-8">
       <div className="mx-auto max-w-md space-y-6">
@@ -53,11 +63,11 @@ export function WodListPage() {
 
         <ul className="space-y-2">
           {wods.map((wod) => (
-            <li key={wod.id}>
-              <Link
-                to={`/wods/${wod.id}`}
-                className="block rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
-              >
+            <li
+              key={wod.id}
+              className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+            >
+              <Link to={`/wods/${wod.id}`} className="block">
                 <div className="flex items-center justify-between">
                   <span className="font-medium">
                     {SOURCE_LABEL[wod.sourceType]} {wod.name ?? "WOD sem nome"}
@@ -75,6 +85,12 @@ export function WodListPage() {
                   </p>
                 )}
               </Link>
+              <button
+                onClick={() => void handleDelete(wod.id)}
+                className="mt-2 text-xs text-neutral-500"
+              >
+                Apagar
+              </button>
             </li>
           ))}
         </ul>
