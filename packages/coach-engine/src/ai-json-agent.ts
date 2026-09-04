@@ -80,10 +80,18 @@ export async function callAiForJson<S extends z.ZodTypeAny>(
     const message = await params.sendMessage({
       model: params.model ?? DEFAULT_AI_MODEL,
       max_tokens: params.maxTokens ?? 4096,
-      system: params.systemPrompt,
+      // O prompt de sistema de cada agente é uma string fixa no código —
+      // marcá-lo como cacheável evita reprocessar (e pagar preço cheio por)
+      // os mesmos milhares de tokens em toda chamada.
+      system: [
+        { type: "text", text: params.systemPrompt, cache_control: { type: "ephemeral" } },
+      ],
       messages,
       output_config: { effort: params.effort ?? "medium" },
-    } as Anthropic.MessageCreateParamsNonStreaming);
+      // Cast via unknown: cache_control e output_config/effort são mais
+      // novos que os tipos do SDK instalado (@anthropic-ai/sdk 0.32.1),
+      // mas a API aceita esses campos normalmente.
+    } as unknown as Anthropic.MessageCreateParamsNonStreaming);
 
     const rawText = extractJsonText(message);
 

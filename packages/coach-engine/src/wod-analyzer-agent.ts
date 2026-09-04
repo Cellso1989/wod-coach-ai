@@ -109,6 +109,11 @@ export async function analyzeWod(
       userContent: buildUserContent(input),
       sendMessage,
       maxAttempts: options.maxAttempts,
+      // Extrair formato/movimentos de um WOD é classificação/extração
+      // estruturada — não precisa do modelo mais caro (Opus 5). O
+      // StrategyCoachAgent, que decide intensidade/segurança, continua
+      // no modelo padrão (mais forte).
+      model: "claude-sonnet-5",
     });
   } catch (err) {
     if (err instanceof AiJsonError) {
