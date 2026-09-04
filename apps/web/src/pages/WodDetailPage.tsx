@@ -40,6 +40,10 @@ export function WodDetailPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editedText, setEditedText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -63,6 +67,31 @@ export function WodDetailPage() {
         // Ainda sem estratégia — botão "Gerar estratégia" fica disponível.
       });
   }, [id]);
+
+  function startEditing() {
+    setEditedText(wod?.rawText ?? "");
+    setSaveError(null);
+    setEditing(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!id) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const { wod: updated } = await api.updateWod(id, { rawText: editedText.trim() });
+      setWod(updated);
+      if (updated.rawText !== wod?.rawText) {
+        setAnalysis(null);
+        setStrategy(null);
+      }
+      setEditing(false);
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : "Não foi possível salvar a edição.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function handleAnalyze() {
     if (!id) return;
@@ -107,10 +136,49 @@ export function WodDetailPage() {
               />
             )}
 
-            {wod.rawText && (
-              <pre className="whitespace-pre-wrap rounded-lg border border-neutral-800 bg-neutral-900 p-4 font-mono text-sm">
-                {wod.rawText}
-              </pre>
+            {wod.rawText && !editing && (
+              <div className="space-y-2">
+                <pre className="whitespace-pre-wrap rounded-lg border border-neutral-800 bg-neutral-900 p-4 font-mono text-sm">
+                  {wod.rawText}
+                </pre>
+                <button
+                  onClick={startEditing}
+                  className="w-full rounded-lg border border-neutral-700 py-2 text-sm text-neutral-300"
+                >
+                  ✏️ Editar
+                </button>
+              </div>
+            )}
+
+            {editing && (
+              <div className="space-y-2">
+                {saveError && <p className="text-red-400 text-sm">{saveError}</p>}
+                <textarea
+                  value={editedText}
+                  onChange={(e) => setEditedText(e.target.value)}
+                  rows={8}
+                  className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3 font-mono text-sm"
+                />
+                <p className="text-xs text-neutral-600">
+                  Editar o texto apaga a análise e a estratégia já geradas para este WOD.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEditing(false)}
+                    disabled={saving}
+                    className="flex-1 rounded-lg border border-neutral-700 py-2 text-sm text-neutral-300 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => void handleSaveEdit()}
+                    disabled={saving || !editedText.trim()}
+                    className="flex-1 rounded-lg bg-orange-600 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    {saving ? "Salvando..." : "Salvar"}
+                  </button>
+                </div>
+              </div>
             )}
 
             {wod.notes && <p className="text-sm text-neutral-400">Notas: {wod.notes}</p>}

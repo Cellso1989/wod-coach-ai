@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { prisma } from "@wod-coach-ai/database";
 import {
   wodSubmissionFieldsSchema,
+  wodUpdateFieldsSchema,
   WOD_IMAGE_ALLOWED_MIME_TYPES,
 } from "@wod-coach-ai/validation";
 
@@ -124,6 +125,41 @@ export default async function wodRoutes(app: FastifyInstance) {
     if (!wod) {
       return reply.code(404).send({ error: "WOD não encontrado" });
     }
+
+    return reply.send({ wod });
+  });
+
+  app.put("/wods/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const existing = await prisma.wod.findFirst({
+      where: { id, userId: request.user.sub },
+    });
+    if (!existing) {
+      return reply.code(404).send({ error: "WOD não encontrado" });
+    }
+
+    const parsed = wodUpdateFieldsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
+    }
+
+    const { rawText, name, notes } = parsed.data;
+    const rawTextChanged = rawText !== undefined && rawText !== existing.rawText;
+
+    const wod = await prisma.$transaction(async (tx) => {
+      if (rawTextChanged) {
+        // O texto mudou: a análise e a estratégia anteriores não valem mais.
+        await tx.wodAnalysis.deleteMany({ where: { wodId: id } });
+        await tx.wodStrategy.deleteMany({ where: { wodId: id } });
+      }
+
+      return tx.wod.update({
+        where: { id },
+        data: { rawText, name, notes },
+        select: wodListSelect,
+      });
+    });
 
     return reply.send({ wod });
   });

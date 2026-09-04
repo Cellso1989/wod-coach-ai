@@ -329,6 +329,12 @@ export const api = {
 
   getWod: (id: string) => request<{ wod: Wod }>(`/wods/${id}`),
 
+  updateWod: (id: string, input: { rawText?: string; name?: string; notes?: string }) =>
+    request<{ wod: Wod }>(`/wods/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+
   analyzeWod: (id: string) =>
     request<{ analysis: WodAnalysis }>(`/wods/${id}/analyze`, { method: "POST" }),
 
