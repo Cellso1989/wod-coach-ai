@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError, type DailyCheckin } from "../lib/api.js";
 import { BrandHomeLink } from "../components/BrandHomeLink.js";
 
@@ -47,6 +47,7 @@ const READINESS_COLOR: Record<DailyCheckin["readinessBand"], string> = {
 };
 
 export function CheckinPage() {
+  const navigate = useNavigate();
   const [sleep, setSleep] = useState(7);
   const [energy, setEnergy] = useState(7);
   const [stress, setStress] = useState(4);
@@ -84,7 +85,7 @@ export function CheckinPage() {
     setError(null);
     setSaving(true);
     try {
-      const { checkin } = await api.saveCheckin({
+      await api.saveCheckin({
         sleep,
         energy,
         stress,
@@ -94,7 +95,7 @@ export function CheckinPage() {
         weightKg: weightKg ? Number(weightKg) : undefined,
         notes: notes || undefined,
       });
-      setResult(checkin);
+      navigate("/");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Não foi possível salvar o check-in.");
     } finally {
@@ -117,6 +118,13 @@ export function CheckinPage() {
           <h1 className="text-xl font-bold">Check-in de hoje</h1>
           <div className="flex gap-3">
             <BrandHomeLink />
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="text-sm text-neutral-400"
+            >
+              Voltar
+            </button>
             <Link to="/wods" className="text-sm text-neutral-400">
               Meus WODs
             </Link>
