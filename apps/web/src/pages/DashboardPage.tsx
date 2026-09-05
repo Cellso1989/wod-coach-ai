@@ -68,7 +68,7 @@ export function DashboardPage() {
         {checkin ? (
           <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 text-center">
             <p className="text-lg font-semibold">
-              🏋️ E aí, meu atleta! Me manda seu WOD pra análise.
+              🏋️ Seu WOD, minha análise. Manda aí!
             </p>
             {checkin.cautionFlags.length > 0 && (
               <ul className="mt-2 space-y-1 text-left text-xs text-yellow-300">
