@@ -7,7 +7,22 @@ import { BrandHomeLink } from "../components/BrandHomeLink.js";
 import { PrHistoryChart } from "../components/PrHistoryChart.js";
 import { MovementAutocomplete } from "../components/MovementAutocomplete.js";
 
-const SUGGESTED_MOVEMENTS = [...COMMON_LIFTS, ...COMMON_GYMNASTICS, ...COMMON_BENCHMARK_WODS];
+// Intercalado (em vez de concatenado) para que o começo da lista já
+// misture levantamento, ginástica e benchmarks — o autocomplete só
+// mostra os primeiros itens quando o campo está vazio, então uma
+// concatenação simples deixava só os de LPO visíveis.
+function interleave(...lists: readonly (readonly string[])[]): string[] {
+  const result: string[] = [];
+  const maxLength = Math.max(...lists.map((list) => list.length));
+  for (let i = 0; i < maxLength; i++) {
+    for (const list of lists) {
+      if (i < list.length) result.push(list[i]!);
+    }
+  }
+  return result;
+}
+
+const SUGGESTED_MOVEMENTS = interleave(COMMON_LIFTS, COMMON_GYMNASTICS, COMMON_BENCHMARK_WODS);
 
 const PERCENTAGE_STEPS = [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
 const WEIGHT_UNITS = new Set(["kg", "lb"]);
