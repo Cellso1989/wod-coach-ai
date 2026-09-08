@@ -70,8 +70,7 @@ model AthleteProfile {
   @@map("athlete_profiles")
 }
 
-// Check-in diário (seção 8). O readinessScore é calculado por uma
-// fórmula determinística em @wod-coach-ai/coach-engine — nunca pela IA.
+// Registro diário simples do resultado do treino (tempo/rounds/reps).
 model DailyCheckin {
   id     String @id @default(uuid())
   userId String
@@ -80,18 +79,11 @@ model DailyCheckin {
   // Data do check-in, normalizada para meia-noite UTC (um por atleta por dia).
   date DateTime
 
-  sleep           Int
-  energy          Int
-  stress          Int
-  muscleSoreness  Int
-  jointPain       Int
-  motivation      Int
-  weightKg        Float?
-  notes           String?
-
-  readinessScore     Int
-  readinessBand      String
-  cautionFlags       String[]
+  timeSeconds Int?
+  rounds      Int?
+  reps        Int?
+  weightKg    Float?
+  notes       String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -13,10 +13,6 @@ import {
   WodNotAnalyzedError,
 } from "../services/athlete-context-service.js";
 
-function startOfDayUtc(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
 export default async function wodStrategyRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
@@ -43,12 +39,7 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
     });
     const analysis = wodWithAnalysis.analysis!;
 
-    const [athleteProfile, todayCheckin] = await Promise.all([
-      prisma.athleteProfile.findUnique({ where: { userId } }),
-      prisma.dailyCheckin.findUnique({
-        where: { userId_date: { userId, date: startOfDayUtc(new Date()) } },
-      }),
-    ]);
+    const athleteProfile = await prisma.athleteProfile.findUnique({ where: { userId } });
 
     let client: Anthropic;
     try {
@@ -82,19 +73,6 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
         warnings: analysis.warnings,
       },
       athleteContext: athleteContextResult.context,
-      checkin: todayCheckin
-        ? {
-            readinessScore: todayCheckin.readinessScore,
-            readinessBand: todayCheckin.readinessBand as "low" | "moderate" | "high",
-            cautionFlags: todayCheckin.cautionFlags,
-            sleep: todayCheckin.sleep,
-            energy: todayCheckin.energy,
-            stress: todayCheckin.stress,
-            muscleSoreness: todayCheckin.muscleSoreness,
-            jointPain: todayCheckin.jointPain,
-            motivation: todayCheckin.motivation,
-          }
-        : null,
       athleteProfile: athleteProfile
         ? {
             level: athleteProfile.level,
@@ -121,6 +99,10 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
       }
       throw err;
     }
+
+    // Clamp defensivo (belt-and-suspenders com o clamp em generateStrategy):
+    // recommendedIntensity nunca pode ser persistido abaixo de 9.
+    output.recommendedIntensity = Math.min(10, Math.max(9, output.recommendedIntensity));
 
     const strategy = await prisma.wodStrategy.upsert({
       where: { wodId: id },

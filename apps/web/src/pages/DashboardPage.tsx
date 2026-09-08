@@ -70,13 +70,6 @@ export function DashboardPage() {
             <p className="text-lg font-semibold">
               🏋️ Seu WOD, minha análise. Manda aí!
             </p>
-            {checkin.cautionFlags.length > 0 && (
-              <ul className="mt-2 space-y-1 text-left text-xs text-yellow-300">
-                {checkin.cautionFlags.map((flag) => (
-                  <li key={flag}>⚠ {flag}</li>
-                ))}
-              </ul>
-            )}
           </div>
         ) : (
           <Link

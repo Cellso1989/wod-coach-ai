@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "@wod-coach-ai/database";
 import { dailyCheckinSchema } from "@wod-coach-ai/validation";
-import { calculateReadinessScore } from "@wod-coach-ai/coach-engine";
 
 function startOfDayUtc(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -16,31 +15,23 @@ export default async function dailyCheckinRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
     }
 
-    const { date, weightKg, notes, ...metrics } = parsed.data;
+    const { date, weightKg, notes, ...result } = parsed.data;
     const userId = request.user.sub;
     const normalizedDate = startOfDayUtc(date ?? new Date());
-
-    const readiness = calculateReadinessScore(metrics);
 
     const checkin = await prisma.dailyCheckin.upsert({
       where: { userId_date: { userId, date: normalizedDate } },
       create: {
         userId,
         date: normalizedDate,
-        ...metrics,
+        ...result,
         weightKg,
         notes,
-        readinessScore: readiness.score,
-        readinessBand: readiness.band,
-        cautionFlags: readiness.cautionFlags,
       },
       update: {
-        ...metrics,
+        ...result,
         weightKg,
         notes,
-        readinessScore: readiness.score,
-        readinessBand: readiness.band,
-        cautionFlags: readiness.cautionFlags,
       },
     });
 

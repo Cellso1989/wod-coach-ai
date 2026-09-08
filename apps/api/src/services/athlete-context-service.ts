@@ -97,7 +97,7 @@ export async function getAthleteContextForWod(
   const context = buildAthleteContext({
     targetAnalysis,
     historicalWods: historyEntries,
-    checkins: checkins.map((c) => ({ date: c.date, readinessScore: c.readinessScore })),
+    checkins: checkins.map((c) => ({ date: c.date })),
     personalRecords: personalRecords.map((pr) => ({
       movementName: pr.movementName,
       value: pr.value,

@@ -1,13 +1,6 @@
 import { useState } from "react";
 import { api, ApiError, type AthleteContext } from "../lib/api.js";
 
-const TREND_LABEL: Record<AthleteContext["readinessTrend"], string> = {
-  improving: "📈 Melhorando",
-  stable: "➡️ Estável",
-  declining: "📉 Caindo",
-  insufficient_data: "Dados insuficientes",
-};
-
 const SUFFICIENCY_LABEL: Record<AthleteContext["dataSufficiency"], string> = {
   low: "Baixa (poucos dados históricos)",
   moderate: "Moderada",
@@ -72,10 +65,6 @@ export function AthleteContextSection({ wodId }: { wodId: string }) {
           </div>
         ))}
       </div>
-
-      <p className="text-sm text-neutral-400">
-        Tendência de readiness: <span className="font-medium">{TREND_LABEL[context.readinessTrend]}</span>
-      </p>
 
       {context.relevantPersonalRecords.length > 0 && (
         <div className="space-y-1">

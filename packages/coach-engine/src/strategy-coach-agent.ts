@@ -7,18 +7,6 @@ export type { SendMessage } from "./ai-json-agent.js";
 
 export class StrategyGenerationError extends AiJsonError {}
 
-export interface CheckinSummary {
-  readinessScore: number;
-  readinessBand: "low" | "moderate" | "high";
-  cautionFlags: string[];
-  sleep: number;
-  energy: number;
-  stress: number;
-  muscleSoreness: number;
-  jointPain: number;
-  motivation: number;
-}
-
 export interface AthleteProfileSummary {
   level: string | null;
   goals: string[];
@@ -30,7 +18,6 @@ export interface AthleteProfileSummary {
 export interface StrategyCoachInput {
   wodAnalysis: WodAnalysisOutput;
   athleteContext: AthleteContext;
-  checkin: CheckinSummary | null;
   athleteProfile: AthleteProfileSummary | null;
 }
 
@@ -41,14 +28,11 @@ o treino" — o treino já foi definido pelo box/coach do atleta).
 
 Você recebe, em uma única mensagem JSON:
 - wodAnalysis: interpretação do WOD (formato, duração, movimentos, demanda estimada).
-- athleteContext: carga de treino recente (7/14/28 dias), tendência de readiness,
+- athleteContext: carga de treino recente (7/14/28 dias),
   treinos parecidos que o atleta já fez — cada um com o resultado/RPE/onde quebrou E a
   estratégia que foi recomendada NAQUELE dia (athleteContext.similarWods[].previousStrategy,
   pode ser null se não houve estratégia gerada) —, PRs relevantes, e o quão confiável é
   esse histórico (dataSufficiency).
-- checkin: check-in de hoje (sono, energia, estresse, dor muscular, dor articular,
-  motivação, readiness score determinístico e sinalizações de cautela) — pode ser null
-  se o atleta não fez check-in hoje.
 - athleteProfile: nível, objetivos, lesões informadas, movimentos limitados — pode ser null.
 
 Determine a estratégia adaptando-a ao formato do treino:
@@ -60,8 +44,8 @@ Determine a estratégia adaptando-a ao formato do treino:
 - STRENGTH: qualidade técnica, RPE, velocidade da barra, carga adequada, evitar falha desnecessária.
 
 Padrões de pacing observados em atletas de elite do CrossFit (aplique como referência de
-PADRÃO DE EXECUÇÃO, nunca como intensidade-alvo — a intensidade real vem sempre do nível,
-histórico e readiness deste atleta específico, seção abaixo):
+PADRÃO DE EXECUÇÃO — a intensidade-alvo é sempre 9-10, conforme regra abaixo; use estes
+padrões apenas para moldar COMO o atleta executa, não para decidir intensidade):
 - Elites quebram ANTES da falha, não depois: séries curtas e previsíveis desde o início
   batem estratégias "ir até quebrar" em quase todo WOD de mais de ~3 minutos.
 - Nos primeiros 20-25% do treino, o ritmo fica deliberadamente abaixo do máximo sustentável
@@ -73,14 +57,13 @@ histórico e readiness deste atleta específico, seção abaixo):
 - Em treinos longos (>15min) ou com carga pesada, respiração e controle de frequência
   cardíaca nas transições importa tanto quanto a técnica do movimento em si.
 Use esses padrões para moldar COMO o atleta deve executar (quando quebrar, como não
-"queimar" cedo, onde economizar energia) — não para empurrar uma intensidade que os dados
-do atleta (athleteContext, checkin, athleteProfile) não sustentam.
+"queimar" cedo, onde economizar energia).
 
 Responda EXCLUSIVAMENTE com um JSON válido — sem markdown, sem crases, sem texto antes ou
 depois — com este formato exato:
 
 {
-  "recommendedIntensity": 1-10,
+  "recommendedIntensity": 9-10 (SEMPRE 9 ou 10, nunca menor — ver regra abaixo),
   "targetRpe": 1-10,
   "loadRecommendation": string ou null (só sugira carga se houver PR ou histórico de carga
     para o movimento em questão; caso contrário, oriente por RPE e null aqui. Se o treino
@@ -115,12 +98,16 @@ Regras críticas:
   Se athleteContext.dataSufficiency for "low", diga isso explicitamente em "warnings" e
   reduza "confidence" de acordo — não compense a falta de dados com suposições.
 - Segurança em primeiro lugar (seção 28): você NUNCA diagnostica lesões nem substitui
-  avaliação médica. Se o check-in trouxer "cautionFlags" (ex: dor articular alta, sono
-  muito baixo) ou o perfil listar lesões/movimentos limitados relevantes a este treino,
-  reduza a intensidade recomendada, sugira adaptações e explique isso em "warnings" —
-  nunca incentive o atleta a ignorar dor ou sinais físicos importantes.
-- Considere a carga de treino recente (athleteContext.trainingLoad) para não recomendar
-  intensidade máxima em cima de fadiga acumulada.
+  avaliação médica. Se o perfil listar lesões/movimentos limitados relevantes a este
+  treino, use isso para adaptar a seleção de movimentos (substituições, escalas) e
+  para gerar avisos claros em "warnings" — nunca incentive o atleta a ignorar dor ou
+  sinais físicos importantes. IMPORTANTE: "recommendedIntensity" deve SEMPRE ser 9 ou
+  10, independentemente de fadiga, dor ou lesões — nunca reduza esse valor. Em vez
+  disso, ajuste pacing, seleção de movimentos e estratégia de pausas/descanso para
+  tornar a execução segura mantendo a intensidade alta.
+- A carga de treino recente (athleteContext.trainingLoad) pode informar o texto de
+  pacing/estratégia de pausas (ex: sugerir mais cautela ou pausas mais frequentes em
+  cima de fadiga acumulada), mas NUNCA deve reduzir "recommendedIntensity".
 - Learning Loop (seção 17) — o mais importante desta análise: para cada treino parecido
   que tenha previousStrategy, compare o que foi recomendado com o resultado/feedback real.
   Se a estratégia anterior não funcionou (ex: "5+5 no Toes to Bar" mas o atleta quebrou
@@ -149,7 +136,7 @@ export async function generateStrategy(
   options: GenerateStrategyOptions = {},
 ): Promise<StrategyOutput> {
   try {
-    return await callAiForJson({
+    const result = await callAiForJson({
       schema: strategyOutputSchema,
       systemPrompt: SYSTEM_PROMPT,
       userContent: [{ type: "text", text: buildUserContent(input) }] as Anthropic.MessageParam["content"],
@@ -157,6 +144,10 @@ export async function generateStrategy(
       maxAttempts: options.maxAttempts,
       effort: "high",
     });
+    // Clamp defensivo: recommendedIntensity deve SEMPRE ser 9 ou 10, mesmo que a
+    // IA não siga a instrução do prompt à risca (garantia em nível de código).
+    result.recommendedIntensity = Math.min(10, Math.max(9, result.recommendedIntensity));
+    return result;
   } catch (err) {
     if (err instanceof AiJsonError) {
       throw new StrategyGenerationError(err.message, err.rawResponse);

@@ -56,7 +56,6 @@ export interface HistoricalWodEntry {
 
 export interface CheckinEntry {
   date: Date;
-  readinessScore: number;
 }
 
 export interface PersonalRecordEntry {
@@ -80,10 +79,8 @@ export interface TrainingLoadWindow {
   days: number;
   sessionCount: number;
   averageRpe: number | null;
-  averageReadiness: number | null;
 }
 
-export type ReadinessTrend = "improving" | "stable" | "declining" | "insufficient_data";
 export type DataSufficiency = "low" | "moderate" | "high";
 
 export interface AthleteContext {
@@ -92,7 +89,6 @@ export interface AthleteContext {
     last14Days: TrainingLoadWindow;
     last28Days: TrainingLoadWindow;
   };
-  readinessTrend: ReadinessTrend;
   similarWods: SimilarWodMatch[];
   relevantPersonalRecords: PersonalRecordEntry[];
   dataSufficiency: DataSufficiency;
@@ -178,11 +174,9 @@ function withinLastDays(date: Date, days: number, now: Date): boolean {
 function trainingLoadWindow(
   days: number,
   wods: HistoricalWodEntry[],
-  checkins: CheckinEntry[],
   now: Date,
 ): TrainingLoadWindow {
   const wodsInWindow = wods.filter((w) => withinLastDays(w.date, days, now));
-  const checkinsInWindow = checkins.filter((c) => withinLastDays(c.date, days, now));
 
   return {
     days,
@@ -190,28 +184,7 @@ function trainingLoadWindow(
     averageRpe: average(
       wodsInWindow.map((w) => w.result?.rpe).filter((rpe): rpe is number => rpe != null),
     ),
-    averageReadiness: average(checkinsInWindow.map((c) => c.readinessScore)),
   };
-}
-
-function computeReadinessTrend(checkins: CheckinEntry[], now: Date): ReadinessTrend {
-  const recent7 = checkins.filter((c) => withinLastDays(c.date, 7, now));
-  const previous7 = checkins.filter((c) => {
-    const daysAgo = (now.getTime() - c.date.getTime()) / (24 * 60 * 60 * 1000);
-    return daysAgo > 7 && daysAgo <= 14;
-  });
-
-  if (recent7.length < 2 || previous7.length < 2) {
-    return "insufficient_data";
-  }
-
-  const recentAvg = average(recent7.map((c) => c.readinessScore))!;
-  const previousAvg = average(previous7.map((c) => c.readinessScore))!;
-  const diff = recentAvg - previousAvg;
-
-  if (diff >= 5) return "improving";
-  if (diff <= -5) return "declining";
-  return "stable";
 }
 
 function computeDataSufficiency(
@@ -246,11 +219,10 @@ export function buildAthleteContext(input: BuildAthleteContextInput): AthleteCon
 
   return {
     trainingLoad: {
-      last7Days: trainingLoadWindow(7, input.historicalWods, input.checkins, now),
-      last14Days: trainingLoadWindow(14, input.historicalWods, input.checkins, now),
-      last28Days: trainingLoadWindow(28, input.historicalWods, input.checkins, now),
+      last7Days: trainingLoadWindow(7, input.historicalWods, now),
+      last14Days: trainingLoadWindow(14, input.historicalWods, now),
+      last28Days: trainingLoadWindow(28, input.historicalWods, now),
     },
-    readinessTrend: computeReadinessTrend(input.checkins, now),
     similarWods: findSimilarWods(input.targetAnalysis, input.historicalWods),
     relevantPersonalRecords: findRelevantPersonalRecords(
       input.targetAnalysis,

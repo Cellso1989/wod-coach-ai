@@ -58,26 +58,17 @@ export interface PublicUser {
 export interface DailyCheckin {
   id: string;
   date: string;
-  sleep: number;
-  energy: number;
-  stress: number;
-  muscleSoreness: number;
-  jointPain: number;
-  motivation: number;
+  timeSeconds: number | null;
+  rounds: number | null;
+  reps: number | null;
   weightKg: number | null;
   notes: string | null;
-  readinessScore: number;
-  readinessBand: "low" | "moderate" | "high";
-  cautionFlags: string[];
 }
 
 export interface DailyCheckinInput {
-  sleep: number;
-  energy: number;
-  stress: number;
-  muscleSoreness: number;
-  jointPain: number;
-  motivation: number;
+  timeSeconds?: number;
+  rounds?: number;
+  reps?: number;
   weightKg?: number;
   notes?: string;
 }
@@ -217,10 +208,8 @@ export interface TrainingLoadWindow {
   days: number;
   sessionCount: number;
   averageRpe: number | null;
-  averageReadiness: number | null;
 }
 
-export type ReadinessTrend = "improving" | "stable" | "declining" | "insufficient_data";
 export type DataSufficiency = "low" | "moderate" | "high";
 
 export interface SimilarWodMatch {
@@ -248,7 +237,6 @@ export interface AthleteContext {
     last14Days: TrainingLoadWindow;
     last28Days: TrainingLoadWindow;
   };
-  readinessTrend: ReadinessTrend;
   similarWods: SimilarWodMatch[];
   relevantPersonalRecords: Array<{
     movementName: string;
