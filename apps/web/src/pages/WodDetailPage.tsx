@@ -147,16 +147,18 @@ export function WodDetailPage() {
               />
             )}
 
-            {wod.rawText && !editing && (
+            {!editing && (
               <div className="space-y-2">
-                <pre className="whitespace-pre-wrap rounded-lg border border-neutral-800 bg-neutral-900 p-4 font-mono text-sm">
-                  {wod.rawText}
-                </pre>
+                {wod.rawText && (
+                  <pre className="whitespace-pre-wrap rounded-lg border border-neutral-800 bg-neutral-900 p-4 font-mono text-sm">
+                    {wod.rawText}
+                  </pre>
+                )}
                 <button
                   onClick={startEditing}
                   className="w-full rounded-lg border border-neutral-700 py-2 text-sm text-neutral-300"
                 >
-                  ✏️ Editar
+                  {wod.rawText ? "✏️ Editar" : "✏️ Adicionar texto do treino"}
                 </button>
               </div>
             )}
