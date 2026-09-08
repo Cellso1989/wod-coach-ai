@@ -330,6 +330,12 @@ export const api = {
 
   getWodAnalysis: (id: string) => request<{ analysis: WodAnalysis }>(`/wods/${id}/analysis`),
 
+  updateWodAnalysis: (id: string, input: { durationMinutes: number | null }) =>
+    request<{ analysis: WodAnalysis }>(`/wods/${id}/analysis`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+
   saveWodResult: (wodId: string, input: WodResultInput) =>
     request<{ result: WodResult }>(`/wods/${wodId}/result`, {
       method: "POST",

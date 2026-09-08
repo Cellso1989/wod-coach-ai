@@ -3,6 +3,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@wod-coach-ai/database";
 import { createAnthropicClient, describeAnthropicApiError } from "@wod-coach-ai/ai";
 import { analyzeWod, WodAnalysisError } from "@wod-coach-ai/coach-engine";
+import { wodAnalysisUpdateSchema } from "@wod-coach-ai/validation";
 
 export default async function wodAnalysisRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
@@ -97,6 +98,36 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
       },
       include: { movements: { orderBy: { order: "asc" } } },
     });
+
+    return reply.send({ analysis });
+  });
+
+  app.patch("/wods/:id/analysis", async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const wod = await prisma.wod.findFirst({ where: { id, userId: request.user.sub } });
+    if (!wod) {
+      return reply.code(404).send({ error: "WOD não encontrado" });
+    }
+
+    const parsed = wodAnalysisUpdateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
+    }
+
+    const existing = await prisma.wodAnalysis.findUnique({ where: { wodId: id } });
+    if (!existing) {
+      return reply.code(404).send({ error: "Este WOD ainda não foi analisado" });
+    }
+
+    const [analysis] = await prisma.$transaction([
+      prisma.wodAnalysis.update({
+        where: { wodId: id },
+        data: { durationMinutes: parsed.data.durationMinutes },
+        include: { movements: { orderBy: { order: "asc" } } },
+      }),
+      prisma.wodStrategy.deleteMany({ where: { wodId: id } }),
+    ]);
 
     return reply.send({ analysis });
   });

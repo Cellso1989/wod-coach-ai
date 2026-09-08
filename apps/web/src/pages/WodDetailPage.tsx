@@ -45,6 +45,10 @@ export function WodDetailPage() {
   const [editedText, setEditedText] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [editingDuration, setEditingDuration] = useState(false);
+  const [editedDuration, setEditedDuration] = useState("");
+  const [savingDuration, setSavingDuration] = useState(false);
+  const [durationError, setDurationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -91,6 +95,36 @@ export function WodDetailPage() {
       setSaveError(err instanceof ApiError ? err.message : "Não foi possível salvar a edição.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function startEditingDuration() {
+    setEditedDuration(analysis?.durationMinutes != null ? String(analysis.durationMinutes) : "");
+    setDurationError(null);
+    setEditingDuration(true);
+  }
+
+  async function handleSaveDuration() {
+    if (!id) return;
+    const trimmed = editedDuration.trim();
+    const parsedValue = trimmed ? Number(trimmed) : null;
+    if (trimmed && (!Number.isFinite(parsedValue) || parsedValue! < 0 || parsedValue! > 180)) {
+      setDurationError("Informe um tempo entre 0 e 180 minutos.");
+      return;
+    }
+    setSavingDuration(true);
+    setDurationError(null);
+    try {
+      const { analysis: updated } = await api.updateWodAnalysis(id, {
+        durationMinutes: parsedValue,
+      });
+      setAnalysis(updated);
+      setStrategy(null);
+      setEditingDuration(false);
+    } catch (err) {
+      setDurationError(err instanceof ApiError ? err.message : "Não foi possível salvar o tempo.");
+    } finally {
+      setSavingDuration(false);
     }
   }
 
@@ -215,12 +249,56 @@ export function WodDetailPage() {
                   <span className="rounded-full bg-orange-600/20 px-3 py-1 text-sm font-semibold text-orange-400">
                     {analysis.format ? FORMAT_LABEL[analysis.format] : "Formato não identificado"}
                   </span>
-                  {analysis.durationMinutes != null && (
-                    <span className="text-sm text-neutral-400">
-                      {analysis.durationMinutes} min
-                    </span>
+                  {!editingDuration && (
+                    <button
+                      onClick={startEditingDuration}
+                      className="text-sm text-neutral-400 underline decoration-dotted"
+                    >
+                      {analysis.durationMinutes != null
+                        ? `${analysis.durationMinutes} min ✏️`
+                        : "Definir tempo ✏️"}
+                    </button>
                   )}
                 </div>
+
+                {editingDuration && (
+                  <div className="space-y-2">
+                    {durationError && <p className="text-red-400 text-sm">{durationError}</p>}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={180}
+                        placeholder="min"
+                        value={editedDuration}
+                        onChange={(e) => setEditedDuration(e.target.value)}
+                        className="w-24 rounded-lg bg-neutral-950 border border-neutral-800 px-3 py-2 text-sm"
+                      />
+                      <span className="text-sm text-neutral-500">
+                        minutos (time cap para FOR_TIME/CHIPPER, ou duração do AMRAP)
+                      </span>
+                    </div>
+                    <p className="text-xs text-neutral-600">
+                      Alterar o tempo apaga a estratégia já gerada, já que ela depende dele.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setEditingDuration(false)}
+                        disabled={savingDuration}
+                        className="flex-1 rounded-lg border border-neutral-700 py-2 text-sm text-neutral-300 disabled:opacity-50"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => void handleSaveDuration()}
+                        disabled={savingDuration}
+                        className="flex-1 rounded-lg bg-orange-600 py-2 text-sm font-semibold disabled:opacity-50"
+                      >
+                        {savingDuration ? "Salvando..." : "Salvar"}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {analysis.stimulus && (
                   <p className="text-sm text-neutral-400">Estímulo: {analysis.stimulus}</p>

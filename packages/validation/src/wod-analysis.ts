@@ -38,3 +38,13 @@ export const wodAnalysisOutputSchema = z.object({
 });
 
 export type WodAnalysisOutput = z.infer<typeof wodAnalysisOutputSchema>;
+
+/**
+ * Permite ao atleta sobrescrever manualmente o tempo/time cap do WOD quando
+ * a IA não conseguiu inferi-lo do texto (ou inferiu errado).
+ */
+export const wodAnalysisUpdateSchema = z.object({
+  durationMinutes: z.number().int().min(0).max(180).nullable(),
+});
+
+export type WodAnalysisUpdateInput = z.infer<typeof wodAnalysisUpdateSchema>;
