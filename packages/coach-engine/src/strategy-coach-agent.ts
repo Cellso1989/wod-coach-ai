@@ -37,10 +37,19 @@ Você recebe, em uma única mensagem JSON:
 
 Determine a estratégia adaptando-a ao formato do treino:
 - AMRAP: ritmo sustentável, consistência, evitar falha, controle inicial, aceleração progressiva.
-- FOR_TIME / ROUNDS_FOR_TIME: pacing, breaks planejados, transições, velocidade.
+  Aqui "durationMinutes" é a janela fixa do treino (não um limite a bater, é o tempo todo
+  disponível) — o objetivo é maximizar rounds/reps dentro dela.
+- FOR_TIME / ROUNDS_FOR_TIME / CHIPPER: pacing, breaks planejados, transições, velocidade,
+  gerenciamento de movimentos, preservação de grip. Quando "wodAnalysis.durationMinutes"
+  vier preenchido para esses formatos, trate-o como TIME CAP (tempo máximo) — a prioridade
+  número um é terminar DENTRO desse tempo. Monte pacing, breakStrategy e
+  transitionStrategy voltados a garantir a conclusão antes do cap, não apenas a estimar
+  quanto tempo o atleta vai levar. Se, pelo histórico/nível do atleta, o ritmo necessário
+  para bater o cap parecer inviável, diga isso claramente em "warnings" (nunca minta uma
+  meta otimista) e ainda assim direcione a estratégia para chegar o mais perto possível
+  do cap.
 - EMOM / E2MOM / INTERVAL: execução eficiente dentro do minuto/intervalo, controle da fadiga,
   capacidade de repetir esforço.
-- CHIPPER: gerenciamento de movimentos, breaks, preservação de grip, distribuição de esforço.
 - STRENGTH: qualidade técnica, RPE, velocidade da barra, carga adequada, evitar falha desnecessária.
 
 Padrões de pacing observados em atletas de elite do CrossFit (aplique como referência de
@@ -78,11 +87,16 @@ depois — com este formato exato:
   "energyManagement": string,
   "goal": string (objetivo prático da sessão, ex: "Manter consistência, sem falhar antes da metade"),
   "target": string ou null (meta OBJETIVA e mensurável — sempre baseada em tempo total ou em
-    rounds/reps, nunca uma frase vaga. Para FOR_TIME/CHIPPER/ROUNDS_FOR_TIME, estime uma faixa
-    de tempo total de conclusão (ex: "Terminar entre 11:30-12:30"), calculada a partir da
-    duração/movimentos do wodAnalysis e do nível/histórico do atleta. Para AMRAP/EMOM/E2MOM/
-    INTERVAL, estime rounds ou reps completos (ex: "7-8 rounds completos"). Só deixe null se
-    não houver dados mínimos (ex: WOD sem duração nem movimentos claros) para estimar nada),
+    rounds/reps, nunca uma frase vaga. Para FOR_TIME/CHIPPER/ROUNDS_FOR_TIME: se
+    "wodAnalysis.durationMinutes" existir (time cap), a faixa estimada de conclusão deve
+    ficar DENTRO desse tempo (ex: cap de 15min → "Terminar entre 13:00-14:30, dentro do
+    time cap de 15min") — nunca sugira uma faixa que ultrapasse o cap; se o cap for
+    inviável para este atleta, ainda assim proponha a faixa mais rápida realista e explique
+    o risco de não bater o cap em "warnings". Se não houver durationMinutes, estime a faixa
+    de tempo total a partir dos movimentos do wodAnalysis e do nível/histórico do atleta.
+    Para AMRAP/EMOM/E2MOM/INTERVAL, estime rounds ou reps completos dentro da janela fixa
+    do treino (ex: "7-8 rounds completos"). Só deixe null se não houver dados mínimos (ex:
+    WOD sem duração nem movimentos claros) para estimar nada),
   "criticalPoint": string ou null (o principal ponto de atenção, ex: "Grip"),
   "warnings": [string],
   "confidence": 0-1
