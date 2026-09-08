@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api.js";
 import { BrandHomeLink } from "../components/BrandHomeLink.js";
 
@@ -84,7 +84,7 @@ export function CheckinPage() {
     <main className="min-h-screen bg-neutral-950 text-neutral-100 px-4 py-8">
       <div className="mx-auto max-w-md space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">Registrar resultado do treino</h1>
+          <h1 className="text-xl font-bold">Resultado do treino</h1>
           <div className="flex gap-3">
             <BrandHomeLink />
             <button
@@ -94,24 +94,8 @@ export function CheckinPage() {
             >
               Voltar
             </button>
-            <Link to="/wods" className="text-sm text-neutral-400">
-              Meus WODs
-            </Link>
-            <Link to="/personal-records" className="text-sm text-neutral-400">
-              PRs
-            </Link>
-            <Link to="/profile" className="text-sm text-neutral-400">
-              Meu perfil
-            </Link>
           </div>
         </div>
-
-        <Link
-          to="/wods/new"
-          className="block rounded-lg bg-orange-600 py-3 text-center font-semibold"
-        >
-          Enviar WOD de hoje
-        </Link>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {error && <p className="text-red-400 text-sm">{error}</p>}
