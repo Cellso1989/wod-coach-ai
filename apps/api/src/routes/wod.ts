@@ -118,7 +118,7 @@ export default async function wodRoutes(app: FastifyInstance) {
     const wod = await prisma.wod.findFirst({
       where: { id, userId: request.user.sub },
       include: {
-        result: { include: { feedback: true } },
+        result: true,
       },
     });
 
@@ -193,5 +193,5 @@ const wodListSelect = {
   notes: true,
   createdAt: true,
   updatedAt: true,
-  result: { select: { score: true, rpe: true } },
+  result: { select: { score: true } },
 } as const;

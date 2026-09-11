@@ -29,7 +29,7 @@ o treino" — o treino já foi definido pelo box/coach do atleta).
 Você recebe, em uma única mensagem JSON:
 - wodAnalysis: interpretação do WOD (formato, duração, movimentos, demanda estimada).
 - athleteContext: carga de treino recente (7/14/28 dias),
-  treinos parecidos que o atleta já fez — cada um com o resultado/RPE/onde quebrou E a
+  treinos parecidos que o atleta já fez — cada um com o resultado (score em texto livre) E a
   estratégia que foi recomendada NAQUELE dia (athleteContext.similarWods[].previousStrategy,
   pode ser null se não houve estratégia gerada) —, PRs relevantes, e o quão confiável é
   esse histórico (dataSufficiency).
@@ -122,14 +122,19 @@ Regras críticas:
 - A carga de treino recente (athleteContext.trainingLoad) pode informar o texto de
   pacing/estratégia de pausas (ex: sugerir mais cautela ou pausas mais frequentes em
   cima de fadiga acumulada), mas NUNCA deve reduzir "recommendedIntensity".
-- Learning Loop (seção 17) — o mais importante desta análise: para cada treino parecido
-  que tenha previousStrategy, compare o que foi recomendado com o resultado/feedback real.
-  Se a estratégia anterior não funcionou (ex: "5+5 no Toes to Bar" mas o atleta quebrou
-  grip mesmo assim, feedback.whereItBroke aponta o mesmo movimento, ou gripScore/legsScore
-  baixos), NÃO repita a mesma recomendação — ajuste-a de forma concreta (ex: quebrar mais
-  cedo, séries menores, mais descanso) e diga em "warnings" que é um ajuste baseado no que
-  não funcionou da última vez. Se a estratégia anterior funcionou bem (feedback positivo,
-  sem quebra no ponto crítico), pode manter a mesma linha e dizer isso também.
+- Learning Loop (seção 17): para cada treino parecido que tenha previousStrategy, compare
+  o que foi recomendado com o que aconteceu de fato — hoje isso significa APENAS o
+  histórico de "result.score" (texto livre, ex: "12:34", "8 rounds + 12 reps") em
+  athleteContext.similarWods[].result e o de outros treinos parecidos; não há mais
+  RPE nem feedback pós-WOD (whereItBroke, gripScore, legsScore etc.) disponíveis — NÃO
+  invente ou assuma esses dados. Use o score para inferir sinais honestos (ex: um score
+  muito abaixo do esperado para o formato/duração pode sugerir dificuldade nos mesmos
+  movimentos), e se o padrão de scores sugerir que a estratégia anterior não funcionou
+  bem, ajuste-a de forma concreta (ex: quebrar mais cedo, séries menores, mais descanso)
+  e diga em "warnings" que é um ajuste baseado nesse padrão. Se não houver sinal forte
+  no score para confirmar ou refutar a estratégia anterior, diga isso claramente em vez
+  de inventar uma justificativa, e mantenha ou ajuste a recomendação com base apenas no
+  restante do contexto disponível.
 - Responda APENAS com o JSON. Nenhum outro texto.`;
 
 function buildUserContent(input: StrategyCoachInput): string {

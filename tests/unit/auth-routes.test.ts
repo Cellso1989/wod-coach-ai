@@ -77,11 +77,6 @@ describe("auth routes input validation", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("rejects registering WOD feedback without a valid session", async () => {
-    const response = await app.inject({ method: "POST", url: "/api/wods/some-id/feedback" });
-    expect(response.statusCode).toBe(401);
-  });
-
   it("rejects access to /personal-records without a valid session", async () => {
     const response = await app.inject({ method: "GET", url: "/api/personal-records" });
     expect(response.statusCode).toBe(401);

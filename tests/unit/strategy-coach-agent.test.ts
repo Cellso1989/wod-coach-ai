@@ -57,25 +57,13 @@ const MINIMAL_INPUT: StrategyCoachInput = {
   },
   athleteContext: {
     trainingLoad: {
-      last7Days: { days: 7, sessionCount: 2, averageRpe: 8, averageReadiness: 70 },
-      last14Days: { days: 14, sessionCount: 4, averageRpe: 7.5, averageReadiness: 68 },
-      last28Days: { days: 28, sessionCount: 8, averageRpe: 7.5, averageReadiness: 65 },
+      last7Days: { days: 7, sessionCount: 2 },
+      last14Days: { days: 14, sessionCount: 4 },
+      last28Days: { days: 28, sessionCount: 8 },
     },
-    readinessTrend: "stable",
     similarWods: [],
     relevantPersonalRecords: [],
     dataSufficiency: "moderate",
-  },
-  checkin: {
-    readinessScore: 75,
-    readinessBand: "high",
-    cautionFlags: [],
-    sleep: 8,
-    energy: 7,
-    stress: 3,
-    muscleSoreness: 3,
-    jointPain: 1,
-    motivation: 8,
   },
   athleteProfile: {
     level: "INTERMEDIATE",
@@ -94,7 +82,7 @@ describe("generateStrategy", () => {
 
     const result = await generateStrategy(MINIMAL_INPUT, sendMessage);
 
-    expect(result.recommendedIntensity).toBe(8);
+    expect(result.recommendedIntensity).toBe(9);
     expect(result.criticalPoint).toBe("Grip");
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
@@ -108,7 +96,7 @@ describe("generateStrategy", () => {
 
     const result = await generateStrategy(MINIMAL_INPUT, sendMessage);
 
-    expect(result.recommendedIntensity).toBe(8);
+    expect(result.recommendedIntensity).toBe(9);
     expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 

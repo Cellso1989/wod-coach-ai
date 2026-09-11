@@ -89,9 +89,7 @@ export function DashboardPage() {
             <p className="text-xs uppercase tracking-wide text-neutral-500">Treino de hoje</p>
             <p className="text-lg font-semibold">{todayWod.name ?? "WOD sem nome"}</p>
             {todayWod.result ? (
-              <p className="text-sm text-orange-400">
-                {todayWod.result.score} · RPE {todayWod.result.rpe}
-              </p>
+              <p className="text-sm text-orange-400">{todayWod.result.score}</p>
             ) : (
               <p className="text-sm text-neutral-400">Ver estratégia e registrar resultado →</p>
             )}
@@ -122,9 +120,7 @@ export function DashboardPage() {
                       </span>
                     </div>
                     {wod.result && (
-                      <p className="mt-1 text-xs text-orange-400">
-                        {wod.result.score} · RPE {wod.result.rpe}
-                      </p>
+                      <p className="mt-1 text-xs text-orange-400">{wod.result.score}</p>
                     )}
                   </Link>
                 </li>

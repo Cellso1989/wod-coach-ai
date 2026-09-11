@@ -61,7 +61,6 @@ export function AthleteContextSection({ wodId }: { wodId: string }) {
             <p className="text-neutral-500">{label}</p>
             <p className="text-lg font-bold">{window.sessionCount}</p>
             <p className="text-neutral-500">treinos</p>
-            {window.averageRpe != null && <p className="text-neutral-400">RPE {window.averageRpe.toFixed(1)}</p>}
           </div>
         ))}
       </div>
@@ -87,14 +86,7 @@ export function AthleteContextSection({ wodId }: { wodId: string }) {
                   <span>{new Date(match.date).toLocaleDateString("pt-BR")}</span>
                   <span>{Math.round(match.similarityScore * 100)}% parecido</span>
                 </div>
-                {match.result && (
-                  <p>
-                    {match.result.score} · RPE {match.result.rpe}
-                  </p>
-                )}
-                {match.feedback?.whereItBroke && (
-                  <p className="text-yellow-400">Quebrou em: {match.feedback.whereItBroke}</p>
-                )}
+                {match.result && <p>{match.result.score}</p>}
                 {match.previousStrategy && (
                   <p className="mt-1 text-neutral-500">
                     Estratégia daquele dia: RPE alvo {match.previousStrategy.targetRpe}

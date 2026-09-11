@@ -62,8 +62,7 @@ describe("findSimilarWods", () => {
       wodId: "similar-1",
       date: daysAgo(10),
       analysis: AMRAP_ANALYSIS,
-      result: { score: "8 rounds", rpe: 9 },
-      feedback: { gripScore: 6, legsScore: 7, overallDifficulty: 9, whereItBroke: "Toes to Bar" },
+      result: { score: "8 rounds" },
       previousStrategy: {
         recommendedIntensity: 8,
         targetRpe: 8,
@@ -80,8 +79,7 @@ describe("findSimilarWods", () => {
         stimulus: "heavy strength",
         movements: [{ name: "Deadlift", category: "weightlifting" }],
       },
-      result: { score: "150kg", rpe: 8 },
-      feedback: null,
+      result: { score: "150kg" },
       previousStrategy: null,
     },
     {
@@ -89,7 +87,6 @@ describe("findSimilarWods", () => {
       date: daysAgo(3),
       analysis: null,
       result: null,
-      feedback: null,
       previousStrategy: null,
     },
   ];
@@ -121,7 +118,6 @@ describe("findSimilarWods", () => {
       date: daysAgo(i + 1),
       analysis: AMRAP_ANALYSIS,
       result: null,
-      feedback: null,
       previousStrategy: null,
     }));
     const matches = findSimilarWods(AMRAP_ANALYSIS, manySimilar, 3);
@@ -130,42 +126,22 @@ describe("findSimilarWods", () => {
 });
 
 describe("buildAthleteContext", () => {
-  it("reports insufficient_data readiness trend with too few checkins", () => {
+  it("reports low data sufficiency with too few historical wods and checkins", () => {
     const context = buildAthleteContext({
       targetAnalysis: AMRAP_ANALYSIS,
       historicalWods: [],
-      checkins: [{ date: daysAgo(1), readinessScore: 80 }],
+      checkins: [{ date: daysAgo(1) }],
       personalRecords: [],
       now: NOW,
     });
-    expect(context.readinessTrend).toBe("insufficient_data");
     expect(context.dataSufficiency).toBe("low");
   });
 
-  it("detects an improving readiness trend", () => {
-    const checkins = [
-      { date: daysAgo(1), readinessScore: 85 },
-      { date: daysAgo(2), readinessScore: 82 },
-      { date: daysAgo(3), readinessScore: 80 },
-      { date: daysAgo(9), readinessScore: 60 },
-      { date: daysAgo(10), readinessScore: 58 },
-      { date: daysAgo(11), readinessScore: 55 },
-    ];
-    const context = buildAthleteContext({
-      targetAnalysis: AMRAP_ANALYSIS,
-      historicalWods: [],
-      checkins,
-      personalRecords: [],
-      now: NOW,
-    });
-    expect(context.readinessTrend).toBe("improving");
-  });
-
-  it("computes training load windows from session count and average RPE", () => {
+  it("computes training load windows from session count", () => {
     const historicalWods: HistoricalWodEntry[] = [
-      { wodId: "a", date: daysAgo(2), analysis: AMRAP_ANALYSIS, result: { score: "x", rpe: 8 }, feedback: null, previousStrategy: null },
-      { wodId: "b", date: daysAgo(5), analysis: AMRAP_ANALYSIS, result: { score: "y", rpe: 6 }, feedback: null, previousStrategy: null },
-      { wodId: "c", date: daysAgo(20), analysis: AMRAP_ANALYSIS, result: { score: "z", rpe: 9 }, feedback: null, previousStrategy: null },
+      { wodId: "a", date: daysAgo(2), analysis: AMRAP_ANALYSIS, result: { score: "x" }, previousStrategy: null },
+      { wodId: "b", date: daysAgo(5), analysis: AMRAP_ANALYSIS, result: { score: "y" }, previousStrategy: null },
+      { wodId: "c", date: daysAgo(20), analysis: AMRAP_ANALYSIS, result: { score: "z" }, previousStrategy: null },
     ];
     const context = buildAthleteContext({
       targetAnalysis: AMRAP_ANALYSIS,
@@ -175,7 +151,6 @@ describe("buildAthleteContext", () => {
       now: NOW,
     });
     expect(context.trainingLoad.last7Days.sessionCount).toBe(2);
-    expect(context.trainingLoad.last7Days.averageRpe).toBe(7);
     expect(context.trainingLoad.last28Days.sessionCount).toBe(3);
   });
 

@@ -75,19 +75,6 @@ export interface DailyCheckinInput {
 
 export type WodSourceType = "TEXT" | "IMAGE" | "TEXT_AND_IMAGE";
 
-export type StrategyOutcome = "YES" | "PARTIALLY" | "NO";
-
-export interface WodFeedback {
-  id: string;
-  strategyWorked: StrategyOutcome | null;
-  gripScore: number | null;
-  legsScore: number | null;
-  breathingScore: number | null;
-  overallDifficulty: number | null;
-  whereItBroke: string | null;
-  notes: string | null;
-}
-
 export interface WodResult {
   id: string;
   score: string;
@@ -96,8 +83,6 @@ export interface WodResult {
   reps: number | null;
   load: number | null;
   distance: number | null;
-  rpe: number;
-  feedback: WodFeedback | null;
 }
 
 export interface WodResultInput {
@@ -107,17 +92,6 @@ export interface WodResultInput {
   reps?: number;
   load?: number;
   distance?: number;
-  rpe: number;
-}
-
-export interface WodFeedbackInput {
-  strategyWorked?: StrategyOutcome;
-  gripScore?: number;
-  legsScore?: number;
-  breathingScore?: number;
-  overallDifficulty?: number;
-  whereItBroke?: string;
-  notes?: string;
 }
 
 export interface Wod {
@@ -132,7 +106,7 @@ export interface Wod {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
-  result?: WodResult | { score: string; rpe: number } | null;
+  result?: WodResult | { score: string } | null;
 }
 
 export interface WodSubmissionInput {
@@ -207,7 +181,6 @@ export interface PersonalRecordInput {
 export interface TrainingLoadWindow {
   days: number;
   sessionCount: number;
-  averageRpe: number | null;
 }
 
 export type DataSufficiency = "low" | "moderate" | "high";
@@ -216,13 +189,7 @@ export interface SimilarWodMatch {
   wodId: string;
   date: string;
   similarityScore: number;
-  result: { score: string; rpe: number } | null;
-  feedback: {
-    gripScore: number | null;
-    legsScore: number | null;
-    overallDifficulty: number | null;
-    whereItBroke: string | null;
-  } | null;
+  result: { score: string } | null;
   previousStrategy: {
     recommendedIntensity: number;
     targetRpe: number;
@@ -338,12 +305,6 @@ export const api = {
 
   saveWodResult: (wodId: string, input: WodResultInput) =>
     request<{ result: WodResult }>(`/wods/${wodId}/result`, {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
-
-  saveWodFeedback: (wodId: string, input: WodFeedbackInput) =>
-    request<{ feedback: WodFeedback }>(`/wods/${wodId}/feedback`, {
       method: "POST",
       body: JSON.stringify(input),
     }),

@@ -23,20 +23,12 @@ export interface WodAnalysisSummary {
 
 export interface HistoricalResultSummary {
   score: string;
-  rpe: number;
-}
-
-export interface HistoricalFeedbackSummary {
-  gripScore: number | null;
-  legsScore: number | null;
-  overallDifficulty: number | null;
-  whereItBroke: string | null;
 }
 
 /**
  * Resumo da estratégia recomendada da última vez (Fase 8) para este WOD
  * histórico — a peça que fecha o Learning Loop (seção 17): comparar o
- * que foi recomendado com o que realmente aconteceu (result/feedback).
+ * que foi recomendado com o que realmente aconteceu (result).
  */
 export interface HistoricalStrategySummary {
   recommendedIntensity: number;
@@ -50,7 +42,6 @@ export interface HistoricalWodEntry {
   date: Date;
   analysis: WodAnalysisSummary | null;
   result: HistoricalResultSummary | null;
-  feedback: HistoricalFeedbackSummary | null;
   previousStrategy: HistoricalStrategySummary | null;
 }
 
@@ -71,14 +62,12 @@ export interface SimilarWodMatch {
   similarityScore: number;
   analysis: WodAnalysisSummary;
   result: HistoricalResultSummary | null;
-  feedback: HistoricalFeedbackSummary | null;
   previousStrategy: HistoricalStrategySummary | null;
 }
 
 export interface TrainingLoadWindow {
   days: number;
   sessionCount: number;
-  averageRpe: number | null;
 }
 
 export type DataSufficiency = "low" | "moderate" | "high";
@@ -153,17 +142,11 @@ export function findSimilarWods(
       similarityScore: computeWodSimilarity(target, entry.analysis),
       analysis: entry.analysis,
       result: entry.result,
-      feedback: entry.feedback,
       previousStrategy: entry.previousStrategy,
     }))
     .filter((match) => match.similarityScore >= MIN_SIMILARITY_SCORE)
     .sort((a, b) => b.similarityScore - a.similarityScore)
     .slice(0, limit);
-}
-
-function average(values: number[]): number | null {
-  if (values.length === 0) return null;
-  return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
 function withinLastDays(date: Date, days: number, now: Date): boolean {
@@ -181,9 +164,6 @@ function trainingLoadWindow(
   return {
     days,
     sessionCount: wodsInWindow.length,
-    averageRpe: average(
-      wodsInWindow.map((w) => w.result?.rpe).filter((rpe): rpe is number => rpe != null),
-    ),
   };
 }
 

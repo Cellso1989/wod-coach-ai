@@ -219,40 +219,10 @@ model WodResult {
   load        Float?
   distance    Float?
 
-  rpe Int
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  feedback WodFeedback?
 
   @@map("wod_results")
-}
-
-enum StrategyOutcome {
-  YES
-  PARTIALLY
-  NO
-}
-
-// Feedback pós-WOD (seção 16/23) — insumo do Learning Loop (Fase 9).
-model WodFeedback {
-  id          String    @id @default(uuid())
-  wodResultId String    @unique
-  wodResult   WodResult @relation(fields: [wodResultId], references: [id], onDelete: Cascade)
-
-  strategyWorked    StrategyOutcome?
-  gripScore         Int?
-  legsScore         Int?
-  breathingScore    Int?
-  overallDifficulty Int?
-  whereItBroke      String?
-  notes             String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("wod_feedbacks")
 }
 
 // PRs de CrossFit (seção 24). movementName é texto livre para permitir

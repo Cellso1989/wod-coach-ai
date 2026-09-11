@@ -43,7 +43,7 @@ export async function getAthleteContextForWod(
       where: { userId, id: { not: wodId }, date: { gte: historyCutoff } },
       include: {
         analysis: { include: { movements: true } },
-        result: { include: { feedback: true } },
+        result: true,
         strategy: true,
       },
       orderBy: { date: "desc" },
@@ -74,15 +74,7 @@ export async function getAthleteContextForWod(
           movements: w.analysis.movements.map((m) => ({ name: m.name, category: m.category })),
         }
       : null,
-    result: w.result ? { score: w.result.score, rpe: w.result.rpe } : null,
-    feedback: w.result?.feedback
-      ? {
-          gripScore: w.result.feedback.gripScore,
-          legsScore: w.result.feedback.legsScore,
-          overallDifficulty: w.result.feedback.overallDifficulty,
-          whereItBroke: w.result.feedback.whereItBroke,
-        }
-      : null,
+    result: w.result ? { score: w.result.score } : null,
     previousStrategy: w.strategy
       ? {
           recommendedIntensity: w.strategy.recommendedIntensity,

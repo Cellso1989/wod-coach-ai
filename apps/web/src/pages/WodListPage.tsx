@@ -79,9 +79,7 @@ export function WodListPage() {
                   <p className="mt-1 truncate text-sm text-neutral-400">{wod.rawText}</p>
                 )}
                 {wod.result && (
-                  <p className="mt-1 text-xs text-orange-400">
-                    {wod.result.score} · RPE {wod.result.rpe}
-                  </p>
+                  <p className="mt-1 text-xs text-orange-400">{wod.result.score}</p>
                 )}
               </Link>
               <button
