@@ -21,6 +21,7 @@ model User {
   dailyCheckins  DailyCheckin[]
   wods           Wod[]
   personalRecords PersonalRecord[]
+  treadmillSessions TreadmillSession[]
 
   @@map("users")
 }
@@ -279,4 +280,26 @@ model WodStrategy {
   updatedAt DateTime @updatedAt
 
   @@map("wod_strategies")
+}
+
+// Sessão de treino de esteira: protocolo gerado deterministicamente pelo
+// TreadmillAgent (sem IA — ver treadmill-agent.ts) e registrado pelo
+// atleta após a execução.
+model TreadmillSession {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  level           Int
+  durationMinutes Int
+  blocks          Json
+  distanceKm      Float?
+  notes           String?
+
+  date DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("treadmill_sessions")
 }

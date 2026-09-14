@@ -10,6 +10,7 @@ import { WodListPage } from "./pages/WodListPage.js";
 import { WodDetailPage } from "./pages/WodDetailPage.js";
 import { PersonalRecordsPage } from "./pages/PersonalRecordsPage.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
+import { TreadmillPage } from "./pages/TreadmillPage.js";
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
             <Route path="/wods/:id" element={<WodDetailPage />} />
             <Route path="/wods" element={<WodListPage />} />
             <Route path="/personal-records" element={<PersonalRecordsPage />} />
+            <Route path="/treadmill" element={<TreadmillPage />} />
           </Route>
         </Routes>
       </AuthProvider>

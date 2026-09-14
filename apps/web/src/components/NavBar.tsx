@@ -8,6 +8,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/wods", icon: "🏋️", label: "Meus WODs" },
+  { to: "/treadmill", icon: "🏃", label: "Esteira" },
   { to: "/personal-records", icon: "🏆", label: "PRs" },
   { to: "/profile", icon: "👤", label: "Perfil" },
 ];

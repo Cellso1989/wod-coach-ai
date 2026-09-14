@@ -238,6 +238,39 @@ export interface WodStrategy {
   warnings: string[];
 }
 
+export type TreadmillEffort = "leve" | "moderado" | "moderado_alto" | "forte" | "maximo";
+
+export interface TreadmillBlock {
+  startMinute: number;
+  endMinute: number;
+  speedRange: string;
+  effort: TreadmillEffort;
+}
+
+export interface TreadmillWorkout {
+  level: number;
+  durationMinutes: number;
+  blocks: TreadmillBlock[];
+}
+
+export interface TreadmillSession {
+  id: string;
+  level: number;
+  durationMinutes: number;
+  blocks: TreadmillBlock[];
+  distanceKm: number | null;
+  notes: string | null;
+  date: string;
+}
+
+export interface TreadmillSessionInput {
+  level: number;
+  durationMinutes: number;
+  blocks: TreadmillBlock[];
+  distanceKm?: number;
+  notes?: string;
+}
+
 export const api = {
   register: (input: { name: string; email: string; password: string }) =>
     request<{ user: PublicUser }>("/auth/register", {
@@ -327,4 +360,19 @@ export const api = {
     request<{ strategy: WodStrategy }>(`/wods/${wodId}/strategy`, { method: "POST" }),
 
   getStrategy: (wodId: string) => request<{ strategy: WodStrategy }>(`/wods/${wodId}/strategy`),
+
+  generateTreadmillWorkout: (input: { level: number; durationMinutes: number }) =>
+    request<{ workout: TreadmillWorkout }>("/treadmill/generate", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  saveTreadmillSession: (input: TreadmillSessionInput) =>
+    request<{ session: TreadmillSession }>("/treadmill/sessions", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  listTreadmillSessions: (limit?: number) =>
+    request<{ sessions: TreadmillSession[] }>(`/treadmill/sessions${limit ? `?limit=${limit}` : ""}`),
 };

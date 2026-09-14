@@ -10,3 +10,4 @@ export * from "./wod-analysis.js";
 export * from "./wod-result.js";
 export * from "./personal-record.js";
 export * from "./strategy.js";
+export * from "./treadmill.js";
