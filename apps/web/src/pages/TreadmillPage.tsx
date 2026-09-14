@@ -129,6 +129,27 @@ export function TreadmillPage() {
     }
   }
 
+  async function handleDeleteSession(id: string) {
+    if (!window.confirm("Apagar esta sessão do histórico? Essa ação não pode ser desfeita.")) {
+      return;
+    }
+    try {
+      await api.deleteTreadmillSession(id);
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível apagar a sessão.");
+    }
+  }
+
+  // Sugestão de progressão: últimas 3 sessões salvas no mesmo nível (mais
+  // recente) sugerem tentar o próximo nível hoje.
+  const levelUpSuggestion =
+    sessions.length >= 3 &&
+    sessions.slice(0, 3).every((s) => s.level === sessions[0]!.level) &&
+    sessions[0]!.level < 5
+      ? sessions[0]!.level + 1
+      : null;
+
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100 px-4 py-8">
       <div className="mx-auto max-w-md space-y-6">
@@ -147,6 +168,22 @@ export function TreadmillPage() {
         </div>
 
         {error && <p className="text-red-400 text-sm">{error}</p>}
+
+        {levelUpSuggestion && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-orange-900/50 bg-orange-600/10 px-4 py-3">
+            <p className="text-sm text-orange-300">
+              Você já fez os últimos 3 treinos no nível {sessions[0]!.level}. Que tal tentar o
+              nível {levelUpSuggestion} hoje?
+            </p>
+            <button
+              type="button"
+              onClick={() => setLevel(levelUpSuggestion)}
+              className="shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold"
+            >
+              Usar nível {levelUpSuggestion}
+            </button>
+          </div>
+        )}
 
         <div className="space-y-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
           <div className="space-y-1">
@@ -267,15 +304,21 @@ export function TreadmillPage() {
               {sessions.map((session) => (
                 <li
                   key={session.id}
-                  className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm"
+                  className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
                     <span>{new Date(session.date).toLocaleDateString("pt-BR")}</span>
                     <span className="text-neutral-400">
                       Nível {session.level} · {session.durationMinutes} min
                       {session.distanceKm != null ? ` · ${session.distanceKm} km` : ""}
                     </span>
                   </div>
+                  <button
+                    onClick={() => void handleDeleteSession(session.id)}
+                    className="shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold"
+                  >
+                    Apagar
+                  </button>
                 </li>
               ))}
             </ul>

@@ -271,6 +271,12 @@ export interface TreadmillSessionInput {
   notes?: string;
 }
 
+export interface TrainingFrequencyWeek {
+  weekStart: string;
+  wodCount: number;
+  treadmillCount: number;
+}
+
 export const api = {
   register: (input: { name: string; email: string; password: string }) =>
     request<{ user: PublicUser }>("/auth/register", {
@@ -375,4 +381,12 @@ export const api = {
 
   listTreadmillSessions: (limit?: number) =>
     request<{ sessions: TreadmillSession[] }>(`/treadmill/sessions${limit ? `?limit=${limit}` : ""}`),
+
+  deleteTreadmillSession: (id: string) =>
+    request<void>(`/treadmill/sessions/${id}`, { method: "DELETE" }),
+
+  getTrainingFrequency: (weeks?: number) =>
+    request<{ weeks: TrainingFrequencyWeek[] }>(
+      `/stats/training-frequency${weeks ? `?weeks=${weeks}` : ""}`,
+    ),
 };

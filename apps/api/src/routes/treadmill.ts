@@ -51,4 +51,17 @@ export default async function treadmillRoutes(app: FastifyInstance) {
 
     return reply.send({ sessions });
   });
+
+  app.delete("/treadmill/sessions/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const userId = request.user.sub;
+
+    const existing = await prisma.treadmillSession.findFirst({ where: { id, userId } });
+    if (!existing) {
+      return reply.code(404).send({ error: "Sessão não encontrada" });
+    }
+
+    await prisma.treadmillSession.delete({ where: { id } });
+    return reply.code(204).send();
+  });
 }

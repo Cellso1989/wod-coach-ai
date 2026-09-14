@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type DailyCheckin, type PersonalRecord, type Wod } from "../lib/api.js";
+import {
+  api,
+  type DailyCheckin,
+  type PersonalRecord,
+  type TrainingFrequencyWeek,
+  type Wod,
+} from "../lib/api.js";
 import { useAuth } from "../lib/auth-context.js";
 import { NavBar } from "../components/NavBar.js";
 import { LogoutButton } from "../components/LogoutButton.js";
+import { TrainingFrequencyChart } from "../components/TrainingFrequencyChart.js";
 
 function isToday(dateStr: string): boolean {
   const d = new Date(dateStr);
@@ -20,6 +27,7 @@ export function DashboardPage() {
   const [checkin, setCheckin] = useState<DailyCheckin | null>(null);
   const [recentWods, setRecentWods] = useState<Wod[]>([]);
   const [records, setRecords] = useState<PersonalRecord[]>([]);
+  const [frequency, setFrequency] = useState<TrainingFrequencyWeek[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,6 +40,11 @@ export function DashboardPage() {
       .listWods()
       .then(({ wods }) => setRecentWods(wods))
       .catch(() => setRecentWods([]));
+
+    api
+      .getTrainingFrequency(8)
+      .then(({ weeks }) => setFrequency(weeks))
+      .catch(() => setFrequency([]));
 
     api
       .listPersonalRecords()
@@ -128,6 +141,8 @@ export function DashboardPage() {
             </ul>
           </div>
         )}
+
+        {frequency.length > 0 && <TrainingFrequencyChart weeks={frequency} />}
 
         {/* PRs */}
         <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
