@@ -168,7 +168,7 @@ export function TreadmillPage() {
 
         {workout && (
           <div className="space-y-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-            <h2 className="text-sm font-semibold text-neutral-300">
+            <h2 className="text-center text-sm font-semibold text-neutral-300">
               Nível {workout.level} — {workout.durationMinutes} min
             </h2>
 
@@ -176,13 +176,15 @@ export function TreadmillPage() {
               {workout.blocks.map((block, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2"
+                  className="grid grid-cols-3 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2"
                 >
-                  <span className="text-sm text-neutral-300 whitespace-nowrap">
+                  <span className="text-sm text-neutral-300 whitespace-nowrap text-center">
                     {block.startMinute}&apos;-{block.endMinute}&apos;
                   </span>
-                  <span className="text-sm font-medium">{block.speedRange} km/h</span>
-                  <EffortBadge effort={block.effort} />
+                  <span className="text-sm font-medium text-center">{block.speedRange} km/h</span>
+                  <span className="flex justify-center">
+                    <EffortBadge effort={block.effort} />
+                  </span>
                 </div>
               ))}
             </div>
