@@ -8,6 +8,7 @@ import {
   type TreadmillWorkout,
 } from "../lib/api.js";
 import { BrandHomeLink } from "../components/BrandHomeLink.js";
+import { TreadmillTimer } from "../components/TreadmillTimer.js";
 
 const EFFORT_LABELS: Record<TreadmillEffort, string> = {
   leve: "Leve",
@@ -52,6 +53,9 @@ export function TreadmillPage() {
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [running, setRunning] = useState(false);
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+
   function loadHistory() {
     api
       .listTreadmillSessions(10)
@@ -65,9 +69,16 @@ export function TreadmillPage() {
     loadHistory();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      void audioContext?.close();
+    };
+  }, [audioContext]);
+
   async function handleGenerate() {
     setError(null);
     setSavedMessage(null);
+    setRunning(false);
     setGenerating(true);
     try {
       const duration = Number(durationMinutes);
@@ -78,6 +89,20 @@ export function TreadmillPage() {
     } finally {
       setGenerating(false);
     }
+  }
+
+  function handleStart() {
+    if (!audioContext) {
+      const AudioContextClass =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      setAudioContext(AudioContextClass ? new AudioContextClass() : null);
+    }
+    setRunning(true);
+  }
+
+  function handleExitRun() {
+    setRunning(false);
   }
 
   async function handleSave() {
@@ -166,11 +191,23 @@ export function TreadmillPage() {
           </button>
         </div>
 
-        {workout && (
+        {workout && running && (
+          <TreadmillTimer workout={workout} audioContext={audioContext} onExit={handleExitRun} />
+        )}
+
+        {workout && !running && (
           <div className="space-y-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
             <h2 className="text-center text-sm font-semibold text-neutral-300">
               Nível {workout.level} — {workout.durationMinutes} min
             </h2>
+
+            <button
+              type="button"
+              onClick={handleStart}
+              className="w-full rounded-lg bg-orange-600 py-3 font-semibold transition-colors duration-150 hover:bg-orange-700 active:bg-orange-800"
+            >
+              ▶ Iniciar treino
+            </button>
 
             <div className="space-y-2">
               {workout.blocks.map((block, index) => (
