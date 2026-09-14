@@ -83,6 +83,7 @@ describe("generateStrategy", () => {
     const result = await generateStrategy(MINIMAL_INPUT, sendMessage);
 
     expect(result.recommendedIntensity).toBe(9);
+    expect(result.targetRpe).toBe(10);
     expect(result.criticalPoint).toBe("Grip");
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });

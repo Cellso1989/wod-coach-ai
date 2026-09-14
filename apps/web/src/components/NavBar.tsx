@@ -17,14 +17,14 @@ export function NavBar() {
   const { pathname } = useLocation();
 
   return (
-    <nav className="flex gap-2">
+    <nav className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {NAV_ITEMS.map((item) => {
         const active = pathname.startsWith(item.to);
         return (
           <Link
             key={item.to}
             to={item.to}
-            className={`flex h-10 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-sm font-medium transition-colors duration-150 ${
+            className={`flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-sm font-medium transition-colors duration-150 ${
               active
                 ? "border-orange-600 bg-orange-600/10 text-orange-400"
                 : "border-[#303030] bg-[#181818] text-neutral-100 hover:border-orange-900/60 hover:bg-[#202020]"

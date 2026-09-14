@@ -101,8 +101,10 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
     }
 
     // Clamp defensivo (belt-and-suspenders com o clamp em generateStrategy):
-    // recommendedIntensity nunca pode ser persistido abaixo de 9.
+    // recommendedIntensity nunca pode ser persistido abaixo de 9, e targetRpe
+    // sempre deve ser 10.
     output.recommendedIntensity = Math.min(10, Math.max(9, output.recommendedIntensity));
+    output.targetRpe = 10;
 
     const strategy = await prisma.wodStrategy.upsert({
       where: { wodId: id },

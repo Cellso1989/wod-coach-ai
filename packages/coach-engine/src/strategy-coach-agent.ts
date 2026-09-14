@@ -73,7 +73,7 @@ depois — com este formato exato:
 
 {
   "recommendedIntensity": 9-10 (SEMPRE 9 ou 10, nunca menor — ver regra abaixo),
-  "targetRpe": 1-10,
+  "targetRpe": 10 (SEMPRE 10 — ver regra abaixo),
   "loadRecommendation": string ou null (só sugira carga se houver PR ou histórico de carga
     para o movimento em questão; caso contrário, oriente por RPE e null aqui. Se o treino
     tiver múltiplos blocos com % diferentes do PR — ex: "2x 70-75%, 2x 75-80%, 4x 80-85%" —
@@ -116,9 +116,10 @@ Regras críticas:
   treino, use isso para adaptar a seleção de movimentos (substituições, escalas) e
   para gerar avisos claros em "warnings" — nunca incentive o atleta a ignorar dor ou
   sinais físicos importantes. IMPORTANTE: "recommendedIntensity" deve SEMPRE ser 9 ou
-  10, independentemente de fadiga, dor ou lesões — nunca reduza esse valor. Em vez
-  disso, ajuste pacing, seleção de movimentos e estratégia de pausas/descanso para
-  tornar a execução segura mantendo a intensidade alta.
+  10, e "targetRpe" deve SEMPRE ser 10, independentemente de fadiga, dor ou lesões —
+  nunca reduza esses valores. Em vez disso, ajuste pacing, seleção de movimentos e
+  estratégia de pausas/descanso para tornar a execução segura mantendo a intensidade
+  alta.
 - A carga de treino recente (athleteContext.trainingLoad) pode informar o texto de
   pacing/estratégia de pausas (ex: sugerir mais cautela ou pausas mais frequentes em
   cima de fadiga acumulada), mas NUNCA deve reduzir "recommendedIntensity".
@@ -163,9 +164,11 @@ export async function generateStrategy(
       maxAttempts: options.maxAttempts,
       effort: "high",
     });
-    // Clamp defensivo: recommendedIntensity deve SEMPRE ser 9 ou 10, mesmo que a
-    // IA não siga a instrução do prompt à risca (garantia em nível de código).
+    // Clamp defensivo: recommendedIntensity deve SEMPRE ser 9 ou 10, e targetRpe
+    // deve SEMPRE ser 10, mesmo que a IA não siga a instrução do prompt à risca
+    // (garantia em nível de código).
     result.recommendedIntensity = Math.min(10, Math.max(9, result.recommendedIntensity));
+    result.targetRpe = 10;
     return result;
   } catch (err) {
     if (err instanceof AiJsonError) {
