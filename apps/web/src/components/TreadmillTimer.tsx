@@ -68,6 +68,7 @@ export function TreadmillTimer({ workout, audioContext, onExit }: TreadmillTimer
   const startTimeRef = useRef(Date.now());
   const baseElapsedRef = useRef(0);
   const prevBlockIndexRef = useRef<number | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   const totalSeconds = workout.durationMinutes * 60;
 
@@ -81,6 +82,43 @@ export function TreadmillTimer({ workout, audioContext, onExit }: TreadmillTimer
 
     return () => clearInterval(interval);
   }, [paused, finished, totalSeconds]);
+
+  useEffect(() => {
+    if (!("wakeLock" in navigator)) return;
+
+    async function requestWakeLock() {
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request("screen");
+      } catch {
+        // Bloqueado (ex: pouca bateria) — segue sem travar a tela.
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible" && !paused && !finished) {
+        void requestWakeLock();
+      }
+    }
+
+    if (!paused && !finished) {
+      void requestWakeLock();
+    } else {
+      void wakeLockRef.current?.release();
+      wakeLockRef.current = null;
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [paused, finished]);
+
+  useEffect(() => {
+    return () => {
+      void wakeLockRef.current?.release();
+      wakeLockRef.current = null;
+    };
+  }, []);
 
   const currentBlockIndex = workout.blocks.findIndex(
     (block) => elapsedSeconds < block.endMinute * 60,
