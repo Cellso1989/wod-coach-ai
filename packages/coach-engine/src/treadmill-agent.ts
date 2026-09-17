@@ -64,7 +64,7 @@ const LEVEL_CONFIGS: Record<number, LevelConfig> = {
     cycle: [
       { minutes: 2, speedRange: "8-9", effort: "moderado" },
       { minutes: 2, speedRange: "10-12", effort: "moderado_alto" },
-      { minutes: 2, speedRange: "13-14", effort: "forte" },
+      { minutes: 1, speedRange: "13-14", effort: "forte" },
     ],
     cooldownMinutes: 2,
     cooldownSpeedRange: WARMUP_COOLDOWN_SPEED,
