@@ -7,6 +7,7 @@ import {
   StrategyGenerationError,
   type StrategyCoachInput,
 } from "@wod-coach-ai/coach-engine";
+import type { WodRoundOutput } from "@wod-coach-ai/validation";
 import {
   getAthleteContextForWod,
   WodNotFoundError,
@@ -71,6 +72,7 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
         estimatedIntensity: analysis.estimatedIntensity,
         confidence: analysis.confidence,
         warnings: analysis.warnings,
+        rounds: (analysis.roundBreakdown as WodRoundOutput[] | null) ?? null,
       },
       athleteContext: athleteContextResult.context,
       athleteProfile: athleteProfile

@@ -35,6 +35,22 @@ Você recebe, em uma única mensagem JSON:
   esse histórico (dataSufficiency).
 - athleteProfile: nível, objetivos, lesões informadas, movimentos limitados — pode ser null.
 
+Estrutura por round (wodAnalysis.rounds): quando presente, é a fonte de verdade sobre
+como cada round do WOD realmente é — reps/carga que mudam round a round (ex: 3 rounds de
+30-20-10 HSPU / 15 Thrusters / 10 Bar M.U., onde o HSPU desce mas Thruster/BMU ficam
+fixos). NUNCA trate um WOD assim como um bloco único e agregado (não gere pacing/quebras
+como se fossem "60 HSPU corridos" quando na verdade são 30, depois 20, depois 10, cada um
+seguido de Thruster e BMU). Quando "rounds" existir:
+- Monte "breakStrategy" e "movementStrategy" por round: identifique cada entrada de
+  movimento com o round a que pertence (ex: "movement": "HSPU (round 1 - 30 reps)",
+  "HSPU (round 2 - 20 reps)"), usando as reps/carga reais daquele round, não o total.
+- "pacing", "goal" e "energyManagement" devem descrever a progressão round a round (o
+  que muda de round 1 pro 2 pro 3), não uma média genérica do treino todo.
+- Se "wodAnalysis.movements" (o total agregado) e "wodAnalysis.rounds" existirem juntos,
+  use "rounds" para toda a lógica de pacing/quebras e "movements" só como contexto de
+  volume total (ex: para estimar demanda geral), nunca ambos incorporados. Se "rounds"
+  for null, o WOD é uniforme — aí sim use os totais de "movements" normalmente.
+
 Determine a estratégia adaptando-a ao formato do treino:
 - AMRAP: ritmo sustentável, consistência, evitar falha, controle inicial, aceleração progressiva.
   Aqui "durationMinutes" é a janela fixa do treino (não um limite a bater, é o tempo todo

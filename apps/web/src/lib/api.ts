@@ -144,6 +144,20 @@ export interface WodMovementResult {
   calories: number | null;
 }
 
+export interface WodRoundMovement {
+  name: string;
+  category: MovementCategory;
+  reps: number | null;
+  distanceMeters: number | null;
+  loadDescription: string | null;
+  calories: number | null;
+}
+
+export interface WodRound {
+  roundNumber: number;
+  movements: WodRoundMovement[];
+}
+
 export interface WodAnalysis {
   id: string;
   wodId: string;
@@ -159,6 +173,7 @@ export interface WodAnalysis {
   confidence: number;
   warnings: string[];
   movements: WodMovementResult[];
+  roundBreakdown: WodRound[] | null;
 }
 
 export interface PersonalRecord {

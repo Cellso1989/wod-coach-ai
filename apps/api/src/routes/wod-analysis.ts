@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type Anthropic from "@anthropic-ai/sdk";
-import { prisma } from "@wod-coach-ai/database";
+import { Prisma, prisma } from "@wod-coach-ai/database";
 import { createAnthropicClient, describeAnthropicApiError } from "@wod-coach-ai/ai";
 import { analyzeWod, WodAnalysisError } from "@wod-coach-ai/coach-engine";
 import { wodAnalysisUpdateSchema } from "@wod-coach-ai/validation";
@@ -57,6 +57,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
         technicalDemand: output.estimatedDemand.technical,
         confidence: output.confidence,
         warnings: output.warnings,
+        roundBreakdown: output.rounds ?? Prisma.DbNull,
         rawResponse: output,
         movements: {
           create: output.movements.map((movement, index) => ({
@@ -82,6 +83,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
         technicalDemand: output.estimatedDemand.technical,
         confidence: output.confidence,
         warnings: output.warnings,
+        roundBreakdown: output.rounds ?? Prisma.DbNull,
         rawResponse: output,
         movements: {
           deleteMany: {},

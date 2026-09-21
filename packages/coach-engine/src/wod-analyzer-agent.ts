@@ -27,10 +27,16 @@ com este formato exato:
     {
       "name": string,
       "category": ${JSON.stringify(MOVEMENT_CATEGORIES)},
-      "reps": number ou null,
+      "reps": number ou null (total somado de todos os rounds, quando o WOD tiver rounds),
       "distanceMeters": number ou null,
       "loadDescription": string ou null (ex: "60/40kg", "75% do 1RM"),
       "calories": number ou null
+    }
+  ],
+  "rounds": null OU array de rounds (ver regra abaixo) [
+    {
+      "roundNumber": number (1, 2, 3...),
+      "movements": [ mesmo formato de um item de "movements" acima ]
     }
   ],
   "estimatedDemand": {
@@ -44,6 +50,22 @@ com este formato exato:
   "confidence": 0-1,
   "warnings": [string]
 }
+
+Regra crítica sobre "rounds" (WODs com estrutura por round):
+- Muitos WODs são vários rounds em que a reps/carga de um ou mais movimentos MUDA de
+  round para round (ex: 3 rounds de 30-20-10 HSPU / 15 Thrusters / 10 Bar M.U. — o HSPU
+  desce 30→20→10 mas Thruster e BMU ficam fixos por round; ou escadas ascendentes/
+  descendentes; ou carga que aumenta a cada round). Nesses casos, SEMPRE preencha
+  "rounds" com um item por round, cada um com as reps/carga REAIS daquele round
+  específico — nunca deixe essa variação escondida só no total agregado de "movements".
+- Se o WOD for simples e uniforme (todo round com as mesmas reps/carga, ex: "5 rounds de
+  10 pull-ups + 15 air squats"), "rounds" pode ficar null — o total em "movements" já
+  representa bem o treino, não precisa repetir round a round.
+- Quando preencher "rounds", o campo "movements" no nível raiz continua obrigatório e
+  deve conter o TOTAL somado de cada movimento (soma de todos os rounds) — "rounds" é
+  informação adicional para pacing, não substitui o resumo agregado.
+- Leia o WOD com atenção para não confundir "rounds" (a estrutura de repetição do treino)
+  com "sets" dentro de um único movimento — só use "rounds" para a estrutura macro do WOD.
 
 Regras críticas:
 - Seja OBJETIVO E CONCISO. O atleta lê isso no celular, no meio do treino. "stimulus"
