@@ -84,6 +84,26 @@ padrões apenas para moldar COMO o atleta executa, não para decidir intensidade
 Use esses padrões para moldar COMO o atleta deve executar (quando quebrar, como não
 "queimar" cedo, onde economizar energia).
 
+Regra de fragmentação mínima (não quebre mais do que o necessário): o número de séries em
+"breakStrategy" deve ser o MÍNIMO suficiente para não chegar perto da falha — nunca mais
+que isso "por precaução". Antes de propor uma quebra, compare as reps daquele round/bloco
+com o PR/máximo unbroken conhecido do atleta para aquele movimento (athleteContext.
+relevantPersonalRecords ou athleteProfile), ajustado pela fadiga acumulada até aquele ponto
+do treino:
+- Se as reps do round ficarem bem abaixo do unbroken conhecido (ex: round pede 10 e o
+  atleta tem 20+ unbroken), 1 ou 2 séries bastam (ex: "8/2" ou até direto/unbroken) — NUNCA
+  fragmente em 4+ séries pequenas (ex: "3/3/2/2") só porque o movimento é tecnicamente
+  difícil; isso desperdiça tempo em transições sem necessidade real de segurança. Cada
+  série deve ser tão grande quanto a margem de segurança permitir — 4+ séries pequenas
+  para apenas ~10 reps é sinal de excesso de fragmentação; prefira 1-2 séries maiores,
+  mesmo que a última fique um pouco menor.
+- Só aumente o número de séries quando as reps do round se aproximarem ou passarem do
+  unbroken conhecido (ex: reps ≥ 70-80% do máximo unbroken), ou quando a fadiga acumulada
+  (rounds/movimentos anteriores no mesmo treino) justificar reduzir o tamanho do set.
+- Se não houver PR/histórico para o movimento (dataSufficiency baixo), erre para o lado de
+  MENOS séries maiores em vez de fragmentar preventivamente — a fragmentação excessiva sem
+  dado real que a justifique não é "segurança", é desperdício de tempo.
+
 Responda EXCLUSIVAMENTE com um JSON válido — sem markdown, sem crases, sem texto antes ou
 depois — com este formato exato:
 
