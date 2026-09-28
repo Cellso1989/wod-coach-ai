@@ -1,9 +1,13 @@
-import type Anthropic from "@anthropic-ai/sdk";
-import { wodAnalysisOutputSchema, type WodAnalysisOutput } from "@wod-coach-ai/validation";
-import { WOD_FORMATS, MOVEMENT_CATEGORIES } from "@wod-coach-ai/types";
-import { callAiForJson, AiJsonError, type SendMessage } from "./ai-json-agent.js";
+import { wodAnalysisOutputSchema, type WodAnalysisOutput } from '@wod-coach-ai/validation';
+import { WOD_FORMATS, MOVEMENT_CATEGORIES } from '@wod-coach-ai/types';
+import {
+  callAiForJson,
+  AiJsonError,
+  type AiMessageContent,
+  type SendMessage,
+} from './ai-json-agent.js';
 
-export type { SendMessage } from "./ai-json-agent.js";
+export type { SendMessage } from './ai-json-agent.js';
 
 export interface WodAnalyzerInput {
   rawText?: string | null;
@@ -80,29 +84,22 @@ Regras críticas:
 - Se receber uma imagem, leia o quadro/tela com atenção antes de responder.
 - Responda APENAS com o JSON. Nenhum outro texto.`;
 
-function buildUserContent(input: WodAnalyzerInput): Anthropic.MessageParam["content"] {
-  const content: Anthropic.MessageParam["content"] = [];
+function buildUserContent(input: WodAnalyzerInput): AiMessageContent {
+  const content: AiMessageContent = [];
 
   if (input.imageBase64 && input.imageMimeType) {
     content.push({
-      type: "image",
-      source: {
-        type: "base64",
-        media_type: input.imageMimeType as
-          | "image/jpeg"
-          | "image/png"
-          | "image/webp"
-          | "image/gif",
-        data: input.imageBase64,
-      },
+      type: 'image',
+      imageBase64: input.imageBase64,
+      imageMimeType: input.imageMimeType,
     });
   }
 
   content.push({
-    type: "text",
+    type: 'text',
     text: input.rawText?.trim()
       ? `Treino recebido (texto):\n\n${input.rawText.trim()}`
-      : "Treino recebido apenas como imagem (ver acima).",
+      : 'Treino recebido apenas como imagem (ver acima).',
   });
 
   return content;
@@ -121,7 +118,7 @@ export async function analyzeWod(
   options: AnalyzeWodOptions = {},
 ): Promise<WodAnalysisOutput> {
   if (!input.rawText?.trim() && !input.imageBase64) {
-    throw new WodAnalysisError("Nenhum texto ou imagem de WOD fornecido para análise");
+    throw new WodAnalysisError('Nenhum texto ou imagem de WOD fornecido para análise');
   }
 
   try {
@@ -132,10 +129,10 @@ export async function analyzeWod(
       sendMessage,
       maxAttempts: options.maxAttempts,
       // Extrair formato/movimentos de um WOD é classificação/extração
-      // estruturada — não precisa do modelo mais caro (Opus 5). O
-      // StrategyCoachAgent, que decide intensidade/segurança, continua
-      // no modelo padrão (mais forte).
-      model: "claude-sonnet-5",
+      // estruturada — não precisa do modelo mais caro. O StrategyCoachAgent,
+      // que decide intensidade/segurança, continua no modelo padrão
+      // mais forte.
+      model: 'gpt-5-mini',
     });
   } catch (err) {
     if (err instanceof AiJsonError) {

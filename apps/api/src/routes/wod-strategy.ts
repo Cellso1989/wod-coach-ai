@@ -1,23 +1,22 @@
-import type { FastifyInstance } from "fastify";
-import type Anthropic from "@anthropic-ai/sdk";
-import { prisma } from "@wod-coach-ai/database";
-import { createAnthropicClient, describeAnthropicApiError } from "@wod-coach-ai/ai";
+import type { FastifyInstance } from 'fastify';
+import { prisma, type WodMovement } from '@wod-coach-ai/database';
+import { createOpenAiMessageSender, describeOpenAiApiError } from '@wod-coach-ai/ai';
 import {
   generateStrategy,
   StrategyGenerationError,
   type StrategyCoachInput,
-} from "@wod-coach-ai/coach-engine";
-import type { WodRoundOutput } from "@wod-coach-ai/validation";
+} from '@wod-coach-ai/coach-engine';
+import type { WodRoundOutput } from '@wod-coach-ai/validation';
 import {
   getAthleteContextForWod,
   WodNotFoundError,
   WodNotAnalyzedError,
-} from "../services/athlete-context-service.js";
+} from '../services/athlete-context-service.js';
 
 export default async function wodStrategyRoutes(app: FastifyInstance) {
-  app.addHook("onRequest", app.authenticate);
+  app.addHook('onRequest', app.authenticate);
 
-  app.post("/wods/:id/strategy", async (request, reply) => {
+  app.post('/wods/:id/strategy', async (request, reply) => {
     const { id } = request.params as { id: string };
     const userId = request.user.sub;
 
@@ -26,10 +25,10 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
       athleteContextResult = await getAthleteContextForWod(userId, id);
     } catch (err) {
       if (err instanceof WodNotFoundError) {
-        return reply.code(404).send({ error: "WOD não encontrado" });
+        return reply.code(404).send({ error: 'WOD não encontrado' });
       }
       if (err instanceof WodNotAnalyzedError) {
-        return reply.code(409).send({ error: "Analise este WOD antes de gerar uma estratégia" });
+        return reply.code(409).send({ error: 'Analise este WOD antes de gerar uma estratégia' });
       }
       throw err;
     }
@@ -42,11 +41,13 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
 
     const athleteProfile = await prisma.athleteProfile.findUnique({ where: { userId } });
 
-    let client: Anthropic;
+    let sendMessage;
     try {
-      client = createAnthropicClient();
+      sendMessage = createOpenAiMessageSender();
     } catch {
-      return reply.code(503).send({ error: "A geração de estratégia por IA ainda não foi configurada" });
+      return reply
+        .code(503)
+        .send({ error: 'A geração de estratégia por IA ainda não foi configurada' });
     }
 
     const strategyInput: StrategyCoachInput = {
@@ -54,7 +55,7 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
         format: analysis.format,
         durationMinutes: analysis.durationMinutes,
         stimulus: analysis.stimulus,
-        movements: analysis.movements.map((m) => ({
+        movements: analysis.movements.map((m: WodMovement) => ({
           name: m.name,
           category: m.category,
           reps: m.reps,
@@ -88,15 +89,18 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
 
     let output;
     try {
-      output = await generateStrategy(strategyInput, (params) => client.messages.create(params));
+      output = await generateStrategy(strategyInput, sendMessage);
     } catch (err) {
       if (err instanceof StrategyGenerationError) {
-        request.log.warn({ err: err.message, rawResponse: err.rawResponse }, "Strategy generation failed");
-        return reply.code(502).send({ error: "Não foi possível gerar uma estratégia agora" });
+        request.log.warn(
+          { err: err.message, rawResponse: err.rawResponse },
+          'Strategy generation failed',
+        );
+        return reply.code(502).send({ error: 'Não foi possível gerar uma estratégia agora' });
       }
-      const apiError = describeAnthropicApiError(err);
+      const apiError = describeOpenAiApiError(err);
       if (apiError) {
-        request.log.error({ err }, "Anthropic API error during strategy generation");
+        request.log.error({ err }, 'OpenAI API error during strategy generation');
         return reply.code(apiError.status).send({ error: apiError.message });
       }
       throw err;
@@ -150,17 +154,17 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
     return reply.send({ strategy });
   });
 
-  app.get("/wods/:id/strategy", async (request, reply) => {
+  app.get('/wods/:id/strategy', async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const wod = await prisma.wod.findFirst({ where: { id, userId: request.user.sub } });
     if (!wod) {
-      return reply.code(404).send({ error: "WOD não encontrado" });
+      return reply.code(404).send({ error: 'WOD não encontrado' });
     }
 
     const strategy = await prisma.wodStrategy.findUnique({ where: { wodId: id } });
     if (!strategy) {
-      return reply.code(404).send({ error: "Este WOD ainda não tem estratégia" });
+      return reply.code(404).send({ error: 'Este WOD ainda não tem estratégia' });
     }
 
     return reply.send({ strategy });

@@ -1,10 +1,10 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
-import { prisma } from "@wod-coach-ai/database";
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { prisma, type Prisma } from '@wod-coach-ai/database';
 import {
   wodSubmissionFieldsSchema,
   wodUpdateFieldsSchema,
   WOD_IMAGE_ALLOWED_MIME_TYPES,
-} from "@wod-coach-ai/validation";
+} from '@wod-coach-ai/validation';
 
 interface ParsedSubmission {
   fields: Record<string, string>;
@@ -18,7 +18,7 @@ async function parseMultipart(request: FastifyRequest): Promise<ParsedSubmission
   let imageMimeType: string | null = null;
 
   for await (const part of request.parts()) {
-    if (part.type === "file") {
+    if (part.type === 'file') {
       if (!WOD_IMAGE_ALLOWED_MIME_TYPES.includes(part.mimetype)) {
         // Drain the stream so the request doesn't hang, then reject.
         await part.toBuffer().catch(() => undefined);
@@ -45,14 +45,14 @@ class UnsupportedImageTypeError extends Error {
 
 class ImageTooLargeError extends Error {
   constructor() {
-    super("A imagem excede o tamanho máximo permitido");
+    super('A imagem excede o tamanho máximo permitido');
   }
 }
 
 export default async function wodRoutes(app: FastifyInstance) {
-  app.addHook("onRequest", app.authenticate);
+  app.addHook('onRequest', app.authenticate);
 
-  app.post("/wods", async (request, reply) => {
+  app.post('/wods', async (request, reply) => {
     let parsed: ParsedSubmission;
     try {
       parsed = await parseMultipart(request);
@@ -67,19 +67,17 @@ export default async function wodRoutes(app: FastifyInstance) {
     if (!fieldsResult.success) {
       return reply
         .code(400)
-        .send({ error: "Dados inválidos", details: fieldsResult.error.flatten() });
+        .send({ error: 'Dados inválidos', details: fieldsResult.error.flatten() });
     }
 
     const { rawText, name, notes, date } = fieldsResult.data;
     const hasImage = parsed.imageBuffer != null;
 
     if (!rawText && !hasImage) {
-      return reply
-        .code(400)
-        .send({ error: "Envie o texto do WOD ou uma imagem do treino" });
+      return reply.code(400).send({ error: 'Envie o texto do WOD ou uma imagem do treino' });
     }
 
-    const sourceType = rawText && hasImage ? "TEXT_AND_IMAGE" : hasImage ? "IMAGE" : "TEXT";
+    const sourceType = rawText && hasImage ? 'TEXT_AND_IMAGE' : hasImage ? 'IMAGE' : 'TEXT';
 
     const wod = await prisma.wod.create({
       data: {
@@ -87,7 +85,7 @@ export default async function wodRoutes(app: FastifyInstance) {
         date: date ?? new Date(),
         sourceType,
         rawText,
-        imageData: parsed.imageBuffer?.toString("base64"),
+        imageData: parsed.imageBuffer?.toString('base64'),
         imageMimeType: parsed.imageMimeType ?? undefined,
         name,
         notes,
@@ -98,13 +96,13 @@ export default async function wodRoutes(app: FastifyInstance) {
     return reply.code(201).send({ wod });
   });
 
-  app.get("/wods", async (request, reply) => {
+  app.get('/wods', async (request, reply) => {
     const query = request.query as { limit?: string };
     const limit = Math.min(Math.max(Number(query.limit ?? 20), 1), 100);
 
     const wods = await prisma.wod.findMany({
       where: { userId: request.user.sub },
-      orderBy: { date: "desc" },
+      orderBy: { date: 'desc' },
       take: limit,
       select: wodListSelect,
     });
@@ -112,7 +110,7 @@ export default async function wodRoutes(app: FastifyInstance) {
     return reply.send({ wods });
   });
 
-  app.get("/wods/:id", async (request, reply) => {
+  app.get('/wods/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const wod = await prisma.wod.findFirst({
@@ -123,31 +121,31 @@ export default async function wodRoutes(app: FastifyInstance) {
     });
 
     if (!wod) {
-      return reply.code(404).send({ error: "WOD não encontrado" });
+      return reply.code(404).send({ error: 'WOD não encontrado' });
     }
 
     return reply.send({ wod });
   });
 
-  app.put("/wods/:id", async (request, reply) => {
+  app.put('/wods/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const existing = await prisma.wod.findFirst({
       where: { id, userId: request.user.sub },
     });
     if (!existing) {
-      return reply.code(404).send({ error: "WOD não encontrado" });
+      return reply.code(404).send({ error: 'WOD não encontrado' });
     }
 
     const parsed = wodUpdateFieldsSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
+      return reply.code(400).send({ error: 'Dados inválidos', details: parsed.error.flatten() });
     }
 
     const { rawText, name, notes } = parsed.data;
     const rawTextChanged = rawText !== undefined && rawText !== existing.rawText;
 
-    const wod = await prisma.$transaction(async (tx) => {
+    const wod = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       if (rawTextChanged) {
         // O texto mudou: a análise e a estratégia anteriores não valem mais.
         await tx.wodAnalysis.deleteMany({ where: { wodId: id } });
@@ -164,14 +162,14 @@ export default async function wodRoutes(app: FastifyInstance) {
     return reply.send({ wod });
   });
 
-  app.delete("/wods/:id", async (request, reply) => {
+  app.delete('/wods/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const existing = await prisma.wod.findFirst({
       where: { id, userId: request.user.sub },
     });
     if (!existing) {
-      return reply.code(404).send({ error: "WOD não encontrado" });
+      return reply.code(404).send({ error: 'WOD não encontrado' });
     }
 
     await prisma.wod.delete({ where: { id } });

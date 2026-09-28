@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   api,
   ApiError,
@@ -7,33 +7,34 @@ import {
   type WodAnalysis,
   type WodResult,
   type WodStrategy,
-} from "../lib/api.js";
-import { WodResultSection } from "../components/WodResultSection.js";
-import { AthleteContextSection } from "../components/AthleteContextSection.js";
-import { StrategySection } from "../components/StrategySection.js";
-import { BrandHomeLink } from "../components/BrandHomeLink.js";
+} from '../lib/api.js';
+import { WodResultSection } from '../components/WodResultSection.js';
+import { AthleteContextSection } from '../components/AthleteContextSection.js';
+import { StrategySection } from '../components/StrategySection.js';
+import { BrandHomeLink } from '../components/BrandHomeLink.js';
 
-const FORMAT_LABEL: Record<NonNullable<WodAnalysis["format"]>, string> = {
-  AMRAP: "AMRAP",
-  FOR_TIME: "For Time",
-  EMOM: "EMOM",
-  E2MOM: "E2MOM",
-  CHIPPER: "Chipper",
-  ROUNDS_FOR_TIME: "Rounds For Time",
-  STRENGTH: "Strength",
-  INTERVAL: "Intervalos",
+const FORMAT_LABEL: Record<NonNullable<WodAnalysis['format']>, string> = {
+  AMRAP: 'AMRAP',
+  FOR_TIME: 'For Time',
+  EMOM: 'EMOM',
+  E2MOM: 'E2MOM',
+  CHIPPER: 'Chipper',
+  ROUNDS_FOR_TIME: 'Rounds For Time',
+  STRENGTH: 'Strength',
+  INTERVAL: 'Intervalos',
 };
 
 const CATEGORY_ICON: Record<string, string> = {
-  gymnastics: "🤸",
-  weightlifting: "🏋️",
-  conditioning: "🔥",
-  monostructural: "🏃",
-  mixed_modal: "⚙️",
+  gymnastics: '🤸',
+  weightlifting: '🏋️',
+  conditioning: '🔥',
+  monostructural: '🏃',
+  mixed_modal: '⚙️',
 };
 
 export function WodDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [wod, setWod] = useState<Wod | null>(null);
   const [analysis, setAnalysis] = useState<WodAnalysis | null>(null);
   const [strategy, setStrategy] = useState<WodStrategy | null>(null);
@@ -42,20 +43,22 @@ export function WodDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const [editedText, setEditedText] = useState("");
+  const [editedText, setEditedText] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [editingDuration, setEditingDuration] = useState(false);
-  const [editedDuration, setEditedDuration] = useState("");
+  const [editedDuration, setEditedDuration] = useState('');
   const [savingDuration, setSavingDuration] = useState(false);
   const [durationError, setDurationError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
     api
       .getWod(id)
       .then(({ wod }) => setWod(wod))
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Erro ao carregar."))
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'Erro ao carregar.'))
       .finally(() => setLoading(false));
 
     api
@@ -74,7 +77,7 @@ export function WodDetailPage() {
   }, [id]);
 
   function startEditing() {
-    setEditedText(wod?.rawText ?? "");
+    setEditedText(wod?.rawText ?? '');
     setSaveError(null);
     setEditing(true);
   }
@@ -92,14 +95,14 @@ export function WodDetailPage() {
       }
       setEditing(false);
     } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : "Não foi possível salvar a edição.");
+      setSaveError(err instanceof ApiError ? err.message : 'Não foi possível salvar a edição.');
     } finally {
       setSaving(false);
     }
   }
 
   function startEditingDuration() {
-    setEditedDuration(analysis?.durationMinutes != null ? String(analysis.durationMinutes) : "");
+    setEditedDuration(analysis?.durationMinutes != null ? String(analysis.durationMinutes) : '');
     setDurationError(null);
     setEditingDuration(true);
   }
@@ -109,7 +112,7 @@ export function WodDetailPage() {
     const trimmed = editedDuration.trim();
     const parsedValue = trimmed ? Number(trimmed) : null;
     if (trimmed && (!Number.isFinite(parsedValue) || parsedValue! < 0 || parsedValue! > 180)) {
-      setDurationError("Informe um tempo entre 0 e 180 minutos.");
+      setDurationError('Informe um tempo entre 0 e 180 minutos.');
       return;
     }
     setSavingDuration(true);
@@ -122,9 +125,28 @@ export function WodDetailPage() {
       setStrategy(null);
       setEditingDuration(false);
     } catch (err) {
-      setDurationError(err instanceof ApiError ? err.message : "Não foi possível salvar o tempo.");
+      setDurationError(err instanceof ApiError ? err.message : 'Não foi possível salvar o tempo.');
     } finally {
       setSavingDuration(false);
+    }
+  }
+
+  async function handleDeleteWod() {
+    if (!id) return;
+    const confirmed = window.confirm(
+      'Apagar este WOD? Essa acao nao pode ser desfeita e tambem remove analise, estrategia e resultado.',
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteWod(id);
+      navigate('/wods', { replace: true });
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : 'Nao foi possivel apagar o WOD.');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -144,7 +166,7 @@ export function WodDetailPage() {
       }
     } catch (err) {
       setAnalysisError(
-        err instanceof ApiError ? err.message : "Não foi possível analisar este WOD.",
+        err instanceof ApiError ? err.message : 'Não foi possível analisar este WOD.',
       );
     } finally {
       setAnalyzing(false);
@@ -155,7 +177,7 @@ export function WodDetailPage() {
     <main className="min-h-screen bg-neutral-950 text-neutral-100 px-4 py-8">
       <div className="mx-auto max-w-md space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">{wod?.name ?? "WOD"}</h1>
+          <h1 className="text-xl font-bold">{wod?.name ?? 'WOD'}</h1>
           <div className="flex items-center gap-3">
             <BrandHomeLink />
             <Link to="/wods" className="text-sm text-neutral-400">
@@ -170,7 +192,7 @@ export function WodDetailPage() {
         {wod && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-500">
-              {new Date(wod.date).toLocaleDateString("pt-BR")}
+              {new Date(wod.date).toLocaleDateString('pt-BR')}
             </p>
 
             {wod.imageData && wod.imageMimeType && (
@@ -188,12 +210,23 @@ export function WodDetailPage() {
                     {wod.rawText}
                   </pre>
                 )}
-                <button
-                  onClick={startEditing}
-                  className="w-full rounded-lg border border-neutral-700 py-2 text-sm text-neutral-300"
-                >
-                  {wod.rawText ? "✏️ Editar" : "✏️ Adicionar texto do treino"}
-                </button>
+                {deleteError && <p className="text-red-400 text-sm">{deleteError}</p>}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={startEditing}
+                    disabled={deleting}
+                    className="rounded-lg border border-neutral-700 py-2 text-sm text-neutral-300 disabled:opacity-50"
+                  >
+                    {wod.rawText ? 'Editar' : 'Adicionar texto'}
+                  </button>
+                  <button
+                    onClick={() => void handleDeleteWod()}
+                    disabled={deleting}
+                    className="rounded-lg border border-red-900/70 py-2 text-sm font-semibold text-red-400 disabled:opacity-50"
+                  >
+                    {deleting ? 'Apagando...' : 'Apagar'}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -222,7 +255,7 @@ export function WodDetailPage() {
                     disabled={saving || !editedText.trim()}
                     className="flex-1 rounded-lg bg-orange-600 py-2 text-sm font-semibold disabled:opacity-50"
                   >
-                    {saving ? "Salvando..." : "Salvar"}
+                    {saving ? 'Salvando...' : 'Salvar'}
                   </button>
                 </div>
               </div>
@@ -238,7 +271,7 @@ export function WodDetailPage() {
                   disabled={analyzing}
                   className="w-full rounded-lg bg-orange-600 py-3 font-semibold disabled:opacity-50"
                 >
-                  {analyzing ? "Analisando e montando estratégia..." : "🔍 Analisar treino"}
+                  {analyzing ? 'Analisando e montando estratégia...' : '🔍 Analisar treino'}
                 </button>
               </div>
             )}
@@ -247,7 +280,7 @@ export function WodDetailPage() {
               <div className="space-y-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
                 <div className="flex items-center justify-between">
                   <span className="rounded-full bg-orange-600/20 px-3 py-1 text-sm font-semibold text-orange-400">
-                    {analysis.format ? FORMAT_LABEL[analysis.format] : "Formato não identificado"}
+                    {analysis.format ? FORMAT_LABEL[analysis.format] : 'Formato não identificado'}
                   </span>
                   {!editingDuration && (
                     <button
@@ -256,7 +289,7 @@ export function WodDetailPage() {
                     >
                       {analysis.durationMinutes != null
                         ? `${analysis.durationMinutes} min ✏️`
-                        : "Definir tempo ✏️"}
+                        : 'Definir tempo ✏️'}
                     </button>
                   )}
                 </div>
@@ -294,7 +327,7 @@ export function WodDetailPage() {
                         disabled={savingDuration}
                         className="flex-1 rounded-lg bg-orange-600 py-2 text-sm font-semibold disabled:opacity-50"
                       >
-                        {savingDuration ? "Salvando..." : "Salvar"}
+                        {savingDuration ? 'Salvando...' : 'Salvar'}
                       </button>
                     </div>
                   </div>
@@ -315,7 +348,7 @@ export function WodDetailPage() {
                         <ul className="space-y-1">
                           {round.movements.map((movement, index) => (
                             <li key={index} className="flex items-center gap-2 text-sm">
-                              <span>{CATEGORY_ICON[movement.category] ?? "•"}</span>
+                              <span>{CATEGORY_ICON[movement.category] ?? '•'}</span>
                               <span>{movement.name}</span>
                               {movement.reps != null && (
                                 <span className="text-neutral-500">{movement.reps} reps</span>
@@ -331,7 +364,10 @@ export function WodDetailPage() {
                         </ul>
                       </div>
                     ))}
-                    <p className="text-xs text-neutral-600">Total: {analysis.movements.map((m) => `${m.name} ${m.reps ?? ""}`).join(" · ")}</p>
+                    <p className="text-xs text-neutral-600">
+                      Total:{' '}
+                      {analysis.movements.map((m) => `${m.name} ${m.reps ?? ''}`).join(' · ')}
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -339,7 +375,7 @@ export function WodDetailPage() {
                     <ul className="space-y-1">
                       {analysis.movements.map((movement) => (
                         <li key={movement.id} className="flex items-center gap-2 text-sm">
-                          <span>{CATEGORY_ICON[movement.category] ?? "•"}</span>
+                          <span>{CATEGORY_ICON[movement.category] ?? '•'}</span>
                           <span>{movement.name}</span>
                           {movement.reps != null && (
                             <span className="text-neutral-500">{movement.reps} reps</span>

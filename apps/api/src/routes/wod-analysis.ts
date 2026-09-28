@@ -1,42 +1,41 @@
-import type { FastifyInstance } from "fastify";
-import type Anthropic from "@anthropic-ai/sdk";
-import { Prisma, prisma } from "@wod-coach-ai/database";
-import { createAnthropicClient, describeAnthropicApiError } from "@wod-coach-ai/ai";
-import { analyzeWod, WodAnalysisError } from "@wod-coach-ai/coach-engine";
-import { wodAnalysisUpdateSchema } from "@wod-coach-ai/validation";
+import type { FastifyInstance } from 'fastify';
+import { Prisma, prisma } from '@wod-coach-ai/database';
+import { createOpenAiMessageSender, describeOpenAiApiError } from '@wod-coach-ai/ai';
+import { analyzeWod, WodAnalysisError } from '@wod-coach-ai/coach-engine';
+import { wodAnalysisUpdateSchema } from '@wod-coach-ai/validation';
 
 export default async function wodAnalysisRoutes(app: FastifyInstance) {
-  app.addHook("onRequest", app.authenticate);
+  app.addHook('onRequest', app.authenticate);
 
-  app.post("/wods/:id/analyze", async (request, reply) => {
+  app.post('/wods/:id/analyze', async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const wod = await prisma.wod.findFirst({ where: { id, userId: request.user.sub } });
     if (!wod) {
-      return reply.code(404).send({ error: "WOD não encontrado" });
+      return reply.code(404).send({ error: 'WOD não encontrado' });
     }
 
-    let client: Anthropic;
+    let sendMessage;
     try {
-      client = createAnthropicClient();
+      sendMessage = createOpenAiMessageSender();
     } catch {
-      return reply.code(503).send({ error: "A análise por IA ainda não foi configurada" });
+      return reply.code(503).send({ error: 'A análise por IA ainda não foi configurada' });
     }
 
     let output;
     try {
       output = await analyzeWod(
         { rawText: wod.rawText, imageBase64: wod.imageData, imageMimeType: wod.imageMimeType },
-        (params) => client.messages.create(params),
+        sendMessage,
       );
     } catch (err) {
       if (err instanceof WodAnalysisError) {
-        request.log.warn({ err: err.message, rawResponse: err.rawResponse }, "WOD analysis failed");
-        return reply.code(502).send({ error: "Não foi possível analisar este WOD agora" });
+        request.log.warn({ err: err.message, rawResponse: err.rawResponse }, 'WOD analysis failed');
+        return reply.code(502).send({ error: 'Não foi possível analisar este WOD agora' });
       }
-      const apiError = describeAnthropicApiError(err);
+      const apiError = describeOpenAiApiError(err);
       if (apiError) {
-        request.log.error({ err }, "Anthropic API error during WOD analysis");
+        request.log.error({ err }, 'OpenAI API error during WOD analysis');
         return reply.code(apiError.status).send({ error: apiError.message });
       }
       throw err;
@@ -57,7 +56,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
         technicalDemand: output.estimatedDemand.technical,
         confidence: output.confidence,
         warnings: output.warnings,
-        roundBreakdown: output.rounds ?? Prisma.DbNull,
+        roundBreakdown: output.rounds ?? Prisma.JsonNull,
         rawResponse: output,
         movements: {
           create: output.movements.map((movement, index) => ({
@@ -83,7 +82,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
         technicalDemand: output.estimatedDemand.technical,
         confidence: output.confidence,
         warnings: output.warnings,
-        roundBreakdown: output.rounds ?? Prisma.DbNull,
+        roundBreakdown: output.rounds ?? Prisma.JsonNull,
         rawResponse: output,
         movements: {
           deleteMany: {},
@@ -98,35 +97,35 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
           })),
         },
       },
-      include: { movements: { orderBy: { order: "asc" } } },
+      include: { movements: { orderBy: { order: 'asc' } } },
     });
 
     return reply.send({ analysis });
   });
 
-  app.patch("/wods/:id/analysis", async (request, reply) => {
+  app.patch('/wods/:id/analysis', async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const wod = await prisma.wod.findFirst({ where: { id, userId: request.user.sub } });
     if (!wod) {
-      return reply.code(404).send({ error: "WOD não encontrado" });
+      return reply.code(404).send({ error: 'WOD não encontrado' });
     }
 
     const parsed = wodAnalysisUpdateSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
+      return reply.code(400).send({ error: 'Dados inválidos', details: parsed.error.flatten() });
     }
 
     const existing = await prisma.wodAnalysis.findUnique({ where: { wodId: id } });
     if (!existing) {
-      return reply.code(404).send({ error: "Este WOD ainda não foi analisado" });
+      return reply.code(404).send({ error: 'Este WOD ainda não foi analisado' });
     }
 
     const [analysis] = await prisma.$transaction([
       prisma.wodAnalysis.update({
         where: { wodId: id },
         data: { durationMinutes: parsed.data.durationMinutes },
-        include: { movements: { orderBy: { order: "asc" } } },
+        include: { movements: { orderBy: { order: 'asc' } } },
       }),
       prisma.wodStrategy.deleteMany({ where: { wodId: id } }),
     ]);
@@ -134,21 +133,21 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
     return reply.send({ analysis });
   });
 
-  app.get("/wods/:id/analysis", async (request, reply) => {
+  app.get('/wods/:id/analysis', async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const wod = await prisma.wod.findFirst({ where: { id, userId: request.user.sub } });
     if (!wod) {
-      return reply.code(404).send({ error: "WOD não encontrado" });
+      return reply.code(404).send({ error: 'WOD não encontrado' });
     }
 
     const analysis = await prisma.wodAnalysis.findUnique({
       where: { wodId: id },
-      include: { movements: { orderBy: { order: "asc" } } },
+      include: { movements: { orderBy: { order: 'asc' } } },
     });
 
     if (!analysis) {
-      return reply.code(404).send({ error: "Este WOD ainda não foi analisado" });
+      return reply.code(404).send({ error: 'Este WOD ainda não foi analisado' });
     }
 
     return reply.send({ analysis });

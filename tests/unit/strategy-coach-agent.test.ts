@@ -1,55 +1,37 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from 'vitest';
 import {
   generateStrategy,
   StrategyGenerationError,
   type SendMessage,
   type StrategyCoachInput,
-} from "@wod-coach-ai/coach-engine";
-import type Anthropic from "@anthropic-ai/sdk";
-
-function textMessage(text: string): Anthropic.Message {
-  return {
-    id: "msg_test",
-    type: "message",
-    role: "assistant",
-    model: "claude-opus-5",
-    content: [{ type: "text", text, citations: null }],
-    stop_reason: "end_turn",
-    stop_sequence: null,
-    usage: {
-      input_tokens: 10,
-      output_tokens: 10,
-      cache_creation_input_tokens: null,
-      cache_read_input_tokens: null,
-      server_tool_use: null,
-      service_tier: null,
-    },
-  } as unknown as Anthropic.Message;
+} from '@wod-coach-ai/coach-engine';
+function textMessage(text: string) {
+  return { text };
 }
 
 const VALID_STRATEGY = {
   recommendedIntensity: 8,
   targetRpe: 8,
   loadRecommendation: null,
-  pacing: "Ritmo controlado no início, acelerar nos últimos 3 minutos.",
-  breakStrategy: [{ movement: "Toes to Bar", strategy: "5 + 5 desde o início." }],
-  restStrategy: "Descansos curtos entre rodadas.",
-  movementStrategy: [{ movement: "Wall Ball", strategy: "Unbroken." }],
-  transitionStrategy: "Minimizar tempo parado.",
-  energyManagement: "Controlar esforço no início.",
-  goal: "Manter consistência.",
-  target: "8-9 rounds",
-  criticalPoint: "Grip",
+  pacing: 'Ritmo controlado no início, acelerar nos últimos 3 minutos.',
+  breakStrategy: [{ movement: 'Toes to Bar', strategy: '5 + 5 desde o início.' }],
+  restStrategy: 'Descansos curtos entre rodadas.',
+  movementStrategy: [{ movement: 'Wall Ball', strategy: 'Unbroken.' }],
+  transitionStrategy: 'Minimizar tempo parado.',
+  energyManagement: 'Controlar esforço no início.',
+  goal: 'Manter consistência.',
+  target: '8-9 rounds',
+  criticalPoint: 'Grip',
   warnings: [],
   confidence: 0.85,
 };
 
 const MINIMAL_INPUT: StrategyCoachInput = {
   wodAnalysis: {
-    format: "AMRAP",
+    format: 'AMRAP',
     durationMinutes: 15,
-    stimulus: "mixed_modal",
-    movements: [{ name: "Toes to Bar", category: "gymnastics" }],
+    stimulus: 'mixed_modal',
+    movements: [{ name: 'Toes to Bar', category: 'gymnastics' }],
     estimatedDemand: { engine: 8, grip: 7, legs: 7, gymnastics: 6, technical: 5 },
     estimatedIntensity: 8,
     confidence: 0.9,
@@ -63,19 +45,19 @@ const MINIMAL_INPUT: StrategyCoachInput = {
     },
     similarWods: [],
     relevantPersonalRecords: [],
-    dataSufficiency: "moderate",
+    dataSufficiency: 'moderate',
   },
   athleteProfile: {
-    level: "INTERMEDIATE",
-    goals: ["performance"],
+    level: 'INTERMEDIATE',
+    goals: ['performance'],
     injuries: [],
     limitedMovements: [],
     weeklyFrequency: 5,
   },
 };
 
-describe("generateStrategy", () => {
-  it("parses and validates a well-formed strategy on the first attempt", async () => {
+describe('generateStrategy', () => {
+  it('parses and validates a well-formed strategy on the first attempt', async () => {
     const sendMessage: SendMessage = vi
       .fn()
       .mockResolvedValue(textMessage(JSON.stringify(VALID_STRATEGY)));
@@ -84,11 +66,11 @@ describe("generateStrategy", () => {
 
     expect(result.recommendedIntensity).toBe(9);
     expect(result.targetRpe).toBe(10);
-    expect(result.criticalPoint).toBe("Grip");
+    expect(result.criticalPoint).toBe('Grip');
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 
-  it("retries once when the first response fails validation, then succeeds", async () => {
+  it('retries once when the first response fails validation, then succeeds', async () => {
     const invalid = { ...VALID_STRATEGY, recommendedIntensity: 99 };
     const sendMessage: SendMessage = vi
       .fn()
@@ -101,8 +83,8 @@ describe("generateStrategy", () => {
     expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 
-  it("throws StrategyGenerationError without returning invalid data after exhausting retries", async () => {
-    const sendMessage: SendMessage = vi.fn().mockResolvedValue(textMessage("not json"));
+  it('throws StrategyGenerationError without returning invalid data after exhausting retries', async () => {
+    const sendMessage: SendMessage = vi.fn().mockResolvedValue(textMessage('not json'));
 
     await expect(generateStrategy(MINIMAL_INPUT, sendMessage)).rejects.toBeInstanceOf(
       StrategyGenerationError,

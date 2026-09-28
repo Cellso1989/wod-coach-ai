@@ -13,7 +13,7 @@ O objetivo não é programar treinos — é dizer **como executar** o treino que
 - **Backend:** Node.js + Fastify + TypeScript
 - **Banco de dados:** PostgreSQL + Prisma ORM
 - **Validação:** Zod
-- **IA:** Claude API (Anthropic)
+- **IA:** OpenAI API (GPT)
 - **Testes:** Vitest (unit/integration), Playwright (e2e)
 - **Monorepo:** pnpm workspaces + Turborepo
 
@@ -28,7 +28,7 @@ packages/
   types/          Tipos compartilhados
   validation/     Schemas Zod compartilhados
   coach-engine/   Orquestração dos agentes de IA (WodAnalyzer, AthletePerformance, StrategyCoach)
-  ai/             Cliente Claude API
+  ai/             Cliente OpenAI API
 prisma/
   schema.prisma   Schema do banco
 tests/
@@ -63,8 +63,8 @@ pnpm dev                       # roda web + api em paralelo
 
 ## Scripts
 
-| Script            | Descrição                              |
-| ----------------- | --------------------------------------- |
+| Script             | Descrição                               |
+| ------------------ | --------------------------------------- |
 | `pnpm dev`         | Roda todos os apps em modo dev          |
 | `pnpm build`       | Build de todos os apps/packages         |
 | `pnpm lint`        | Lint em todo o monorepo                 |
@@ -79,9 +79,10 @@ pnpm dev                       # roda web + api em paralelo
 
 Os testes em `tests/e2e/positive` e `tests/e2e/negative` sobem a aplicação real (web + API)
 contra um banco de dados também real — precisam do PostgreSQL rodando (`docker compose up -d`
-+ `pnpm db:migrate`). Chamadas à Claude API (`/analyze`, `/strategy`) são interceptadas via
-`page.route` com fixtures determinísticas (`tests/e2e/support/ai-mocks.ts`) para que a suíte
-nunca gaste créditos reais nem dependa da não-determinística da IA.
+
+- `pnpm db:migrate`). Chamadas à OpenAI API (`/analyze`, `/strategy`) são interceptadas via
+  `page.route` com fixtures determinísticas (`tests/e2e/support/ai-mocks.ts`) para que a suíte
+  nunca gaste créditos reais nem dependa da não-determinística da IA.
 
 ```bash
 pnpm exec playwright install chromium   # primeira vez apenas

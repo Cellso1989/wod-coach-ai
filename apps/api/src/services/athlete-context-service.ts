@@ -1,11 +1,20 @@
-import { prisma } from "@wod-coach-ai/database";
+import {
+  prisma,
+  type DailyCheckin,
+  type PersonalRecord,
+  type Wod,
+  type WodAnalysis,
+  type WodMovement,
+  type WodResult,
+  type WodStrategy,
+} from '@wod-coach-ai/database';
 import {
   buildAthleteContext,
   type AthleteContext,
   type HistoricalStrategySummary,
   type HistoricalWodEntry,
   type WodAnalysisSummary,
-} from "@wod-coach-ai/coach-engine";
+} from '@wod-coach-ai/coach-engine';
 
 const HISTORY_WINDOW_DAYS = 90;
 const CHECKIN_WINDOW_DAYS = 28;
@@ -46,51 +55,65 @@ export async function getAthleteContextForWod(
         result: true,
         strategy: true,
       },
-      orderBy: { date: "desc" },
+      orderBy: { date: 'desc' },
       take: 100,
     }),
     prisma.dailyCheckin.findMany({
       where: { userId, date: { gte: checkinCutoff } },
-      orderBy: { date: "desc" },
+      orderBy: { date: 'desc' },
     }),
     prisma.personalRecord.findMany({ where: { userId } }),
   ]);
+
+  type HistoricalWodWithRelations = Wod & {
+    analysis: (WodAnalysis & { movements: WodMovement[] }) | null;
+    result: WodResult | null;
+    strategy: WodStrategy | null;
+  };
 
   const targetAnalysis: WodAnalysisSummary = {
     format: targetWod.analysis.format,
     durationMinutes: targetWod.analysis.durationMinutes,
     stimulus: targetWod.analysis.stimulus,
-    movements: targetWod.analysis.movements.map((m) => ({ name: m.name, category: m.category })),
+    movements: targetWod.analysis.movements.map((m: WodMovement) => ({
+      name: m.name,
+      category: m.category,
+    })),
   };
 
-  const historyEntries: HistoricalWodEntry[] = historicalWods.map((w) => ({
-    wodId: w.id,
-    date: w.date,
-    analysis: w.analysis
-      ? {
-          format: w.analysis.format,
-          durationMinutes: w.analysis.durationMinutes,
-          stimulus: w.analysis.stimulus,
-          movements: w.analysis.movements.map((m) => ({ name: m.name, category: m.category })),
-        }
-      : null,
-    result: w.result ? { score: w.result.score } : null,
-    previousStrategy: w.strategy
-      ? {
-          recommendedIntensity: w.strategy.recommendedIntensity,
-          targetRpe: w.strategy.targetRpe,
-          criticalPoint: w.strategy.criticalPoint,
-          // Validado com Zod na criação (Fase 8) — confiável para reler aqui.
-          breakStrategy: w.strategy.breakStrategy as HistoricalStrategySummary["breakStrategy"],
-        }
-      : null,
-  }));
+  const historyEntries: HistoricalWodEntry[] = (historicalWods as HistoricalWodWithRelations[]).map(
+    (w) => ({
+      wodId: w.id,
+      date: w.date,
+      analysis: w.analysis
+        ? {
+            format: w.analysis.format,
+            durationMinutes: w.analysis.durationMinutes,
+            stimulus: w.analysis.stimulus,
+            movements: w.analysis.movements.map((m: WodMovement) => ({
+              name: m.name,
+              category: m.category,
+            })),
+          }
+        : null,
+      result: w.result ? { score: w.result.score } : null,
+      previousStrategy: w.strategy
+        ? {
+            recommendedIntensity: w.strategy.recommendedIntensity,
+            targetRpe: w.strategy.targetRpe,
+            criticalPoint: w.strategy.criticalPoint,
+            // Validado com Zod na criação (Fase 8) — confiável para reler aqui.
+            breakStrategy: w.strategy.breakStrategy as HistoricalStrategySummary['breakStrategy'],
+          }
+        : null,
+    }),
+  );
 
   const context = buildAthleteContext({
     targetAnalysis,
     historicalWods: historyEntries,
-    checkins: checkins.map((c) => ({ date: c.date })),
-    personalRecords: personalRecords.map((pr) => ({
+    checkins: (checkins as DailyCheckin[]).map((c) => ({ date: c.date })),
+    personalRecords: (personalRecords as PersonalRecord[]).map((pr) => ({
       movementName: pr.movementName,
       value: pr.value,
       unit: pr.unit,

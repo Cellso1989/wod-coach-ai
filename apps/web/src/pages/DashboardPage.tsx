@@ -1,16 +1,16 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   api,
   type DailyCheckin,
   type PersonalRecord,
   type TrainingFrequencyWeek,
   type Wod,
-} from "../lib/api.js";
-import { useAuth } from "../lib/auth-context.js";
-import { NavBar } from "../components/NavBar.js";
-import { LogoutButton } from "../components/LogoutButton.js";
-import { TrainingFrequencyChart } from "../components/TrainingFrequencyChart.js";
+} from '../lib/api.js';
+import { useAuth } from '../lib/auth-context.js';
+import { NavBar } from '../components/NavBar.js';
+import { LogoutButton } from '../components/LogoutButton.js';
+import { TrainingFrequencyChart } from '../components/TrainingFrequencyChart.js';
 
 function isToday(dateStr: string): boolean {
   const d = new Date(dateStr);
@@ -69,7 +69,7 @@ export function DashboardPage() {
       <div className="mx-auto max-w-md space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold">WOD Coach AI</h1>
+            <h1 className="text-xl font-bold">WOD Coach AI - GPT</h1>
             <p className="text-sm text-neutral-500">Olá, {user?.name}</p>
           </div>
           <LogoutButton />
@@ -80,15 +80,10 @@ export function DashboardPage() {
         {/* Prontidão de hoje */}
         {checkin ? (
           <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 text-center">
-            <p className="text-lg font-semibold">
-              🏋️ Seu WOD, minha análise. Manda aí!
-            </p>
+            <p className="text-lg font-semibold">🏋️ Seu WOD, minha análise. Manda aí!</p>
           </div>
         ) : (
-          <Link
-            to="/checkin"
-            className="block rounded-lg bg-orange-600 py-4 text-center font-bold"
-          >
+          <Link to="/checkin" className="block rounded-lg bg-orange-600 py-4 text-center font-bold">
             📋 Fazer check-in de hoje
           </Link>
         )}
@@ -100,7 +95,7 @@ export function DashboardPage() {
             className="block rounded-lg border border-orange-900/50 bg-neutral-900 p-4"
           >
             <p className="text-xs uppercase tracking-wide text-neutral-500">Treino de hoje</p>
-            <p className="text-lg font-semibold">{todayWod.name ?? "WOD sem nome"}</p>
+            <p className="text-lg font-semibold">{todayWod.name ?? 'WOD sem nome'}</p>
             {todayWod.result ? (
               <p className="text-sm text-orange-400">{todayWod.result.score}</p>
             ) : (
@@ -108,7 +103,10 @@ export function DashboardPage() {
             )}
           </Link>
         ) : (
-          <Link to="/wods/new" className="block rounded-lg bg-orange-600 py-4 text-center font-bold">
+          <Link
+            to="/wods/new"
+            className="block rounded-lg bg-orange-600 py-4 text-center font-bold"
+          >
             💪 Enviar o WOD de hoje
           </Link>
         )}
@@ -127,9 +125,9 @@ export function DashboardPage() {
                     className="block rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium">{wod.name ?? "WOD sem nome"}</span>
+                      <span className="font-medium">{wod.name ?? 'WOD sem nome'}</span>
                       <span className="text-xs text-neutral-500">
-                        {new Date(wod.date).toLocaleDateString("pt-BR")}
+                        {new Date(wod.date).toLocaleDateString('pt-BR')}
                       </span>
                     </div>
                     {wod.result && (

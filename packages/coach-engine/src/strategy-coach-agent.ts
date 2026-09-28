@@ -1,9 +1,12 @@
-import type Anthropic from "@anthropic-ai/sdk";
-import { strategyOutputSchema, type StrategyOutput, type WodAnalysisOutput } from "@wod-coach-ai/validation";
-import { callAiForJson, AiJsonError, type SendMessage } from "./ai-json-agent.js";
-import type { AthleteContext } from "./athlete-performance-agent.js";
+import {
+  strategyOutputSchema,
+  type StrategyOutput,
+  type WodAnalysisOutput,
+} from '@wod-coach-ai/validation';
+import { callAiForJson, AiJsonError, type SendMessage } from './ai-json-agent.js';
+import type { AthleteContext } from './athlete-performance-agent.js';
 
-export type { SendMessage } from "./ai-json-agent.js";
+export type { SendMessage } from './ai-json-agent.js';
 
 export class StrategyGenerationError extends AiJsonError {}
 
@@ -195,10 +198,10 @@ export async function generateStrategy(
     const result = await callAiForJson({
       schema: strategyOutputSchema,
       systemPrompt: SYSTEM_PROMPT,
-      userContent: [{ type: "text", text: buildUserContent(input) }] as Anthropic.MessageParam["content"],
+      userContent: [{ type: 'text', text: buildUserContent(input) }],
       sendMessage,
       maxAttempts: options.maxAttempts,
-      effort: "high",
+      effort: 'high',
     });
     // Clamp defensivo: recommendedIntensity deve SEMPRE ser 9 ou 10, e targetRpe
     // deve SEMPRE ser 10, mesmo que a IA não siga a instrução do prompt à risca

@@ -1,24 +1,42 @@
-import type Anthropic from "@anthropic-ai/sdk";
-import type { z } from "zod";
+﻿import type { z } from 'zod';
 
 /**
- * Shared plumbing for agents that ask Claude for structured JSON
+ * Shared plumbing for agents that ask an AI model for structured JSON
  * (WodAnalyzerAgent, StrategyCoachAgent, ...): send a message, extract
  * the text, strip stray markdown fences, validate with Zod, and retry
  * once with a corrective follow-up if the response doesn't parse or
  * validate. Never returns (or lets the caller persist) data that
- * failed validation (seção 30).
+ * failed validation (secao 30).
  */
 
-export const DEFAULT_AI_MODEL = "claude-opus-5";
+export const DEFAULT_AI_MODEL = 'gpt-5';
+
+export type AiMessageContent = Array<
+  { type: 'text'; text: string } | { type: 'image'; imageBase64: string; imageMimeType: string }
+>;
+
+export interface AiMessage {
+  role: 'user';
+  content: AiMessageContent;
+}
+
+export interface SendMessageParams {
+  model: string;
+  maxTokens: number;
+  systemPrompt: string;
+  messages: AiMessage[];
+  effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+}
+
+export interface AiTextMessage {
+  text: string;
+}
 
 /**
- * Thin seam over the Anthropic SDK call so agent parsing/retry logic
+ * Thin seam over the AI provider call so agent parsing/retry logic
  * can be unit tested without spending real API credits.
  */
-export type SendMessage = (
-  params: Anthropic.MessageCreateParamsNonStreaming,
-) => Promise<Anthropic.Message>;
+export type SendMessage = (params: SendMessageParams) => Promise<AiTextMessage>;
 
 export class AiJsonError extends Error {
   constructor(
@@ -29,29 +47,32 @@ export class AiJsonError extends Error {
   }
 }
 
-function extractJsonText(message: Anthropic.Message): string {
-  const textBlock = message.content.find(
-    (block): block is Anthropic.TextBlock => block.type === "text",
-  );
-  if (!textBlock) {
-    throw new AiJsonError("A resposta da IA não contém um bloco de texto");
+function extractJsonText(message: AiTextMessage): string {
+  if (!message.text) {
+    throw new AiJsonError('A resposta da IA nao contem um bloco de texto');
   }
-  return textBlock.text;
+  return message.text;
 }
 
 function parseAndValidate<S extends z.ZodTypeAny>(schema: S, rawText: string): z.output<S> {
   let parsedJson: unknown;
   try {
-    // Remove eventuais cercas de código, caso a IA as inclua por engano.
-    const stripped = rawText.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+    // Remove eventuais cercas de codigo, caso a IA as inclua por engano.
+    const stripped = rawText
+      .trim()
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/```\s*$/, '');
     parsedJson = JSON.parse(stripped);
   } catch {
-    throw new AiJsonError("Resposta da IA não é um JSON válido", rawText);
+    throw new AiJsonError('Resposta da IA nao e um JSON valido', rawText);
   }
 
   const result = schema.safeParse(parsedJson);
   if (!result.success) {
-    throw new AiJsonError(`Resposta da IA não passou na validação: ${result.error.message}`, rawText);
+    throw new AiJsonError(
+      `Resposta da IA nao passou na validacao: ${result.error.message}`,
+      rawText,
+    );
   }
 
   return result.data;
@@ -60,11 +81,11 @@ function parseAndValidate<S extends z.ZodTypeAny>(schema: S, rawText: string): z
 export interface CallAiForJsonParams<S extends z.ZodTypeAny> {
   schema: S;
   systemPrompt: string;
-  userContent: Anthropic.MessageParam["content"];
+  userContent: AiMessageContent;
   sendMessage: SendMessage;
   model?: string;
   maxTokens?: number;
-  effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   maxAttempts?: number;
 }
 
@@ -72,26 +93,18 @@ export async function callAiForJson<S extends z.ZodTypeAny>(
   params: CallAiForJsonParams<S>,
 ): Promise<z.output<S>> {
   const maxAttempts = params.maxAttempts ?? 2;
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: params.userContent }];
+  const messages: AiMessage[] = [{ role: 'user', content: params.userContent }];
 
   let lastError: AiJsonError | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const message = await params.sendMessage({
       model: params.model ?? DEFAULT_AI_MODEL,
-      max_tokens: params.maxTokens ?? 4096,
-      // O prompt de sistema de cada agente é uma string fixa no código —
-      // marcá-lo como cacheável evita reprocessar (e pagar preço cheio por)
-      // os mesmos milhares de tokens em toda chamada.
-      system: [
-        { type: "text", text: params.systemPrompt, cache_control: { type: "ephemeral" } },
-      ],
+      maxTokens: params.maxTokens ?? 4096,
+      systemPrompt: params.systemPrompt,
       messages,
-      output_config: { effort: params.effort ?? "medium" },
-      // Cast via unknown: cache_control e output_config/effort são mais
-      // novos que os tipos do SDK instalado (@anthropic-ai/sdk 0.32.1),
-      // mas a API aceita esses campos normalmente.
-    } as unknown as Anthropic.MessageCreateParamsNonStreaming);
+      effort: params.effort ?? 'medium',
+    });
 
     const rawText = extractJsonText(message);
 
@@ -101,14 +114,18 @@ export async function callAiForJson<S extends z.ZodTypeAny>(
       lastError = err instanceof AiJsonError ? err : new AiJsonError(String(err));
 
       if (attempt < maxAttempts) {
-        messages.push({ role: "assistant", content: rawText });
         messages.push({
-          role: "user",
-          content: `Sua resposta anterior não era um JSON válido no formato exigido (${lastError.message}). Responda novamente APENAS com o JSON correto, sem nenhum outro texto.`,
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `Sua resposta anterior nao era um JSON valido no formato exigido (${lastError.message}). Resposta anterior:\n\n${rawText}\n\nResponda novamente APENAS com o JSON correto, sem nenhum outro texto.`,
+            },
+          ],
         });
       }
     }
   }
 
-  throw lastError ?? new AiJsonError("Falha desconhecida ao chamar a IA");
+  throw lastError ?? new AiJsonError('Falha desconhecida ao chamar a IA');
 }
