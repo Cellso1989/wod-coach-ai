@@ -107,6 +107,12 @@ do treino:
   MENOS séries maiores em vez de fragmentar preventivamente — a fragmentação excessiva sem
   dado real que a justifique não é "segurança", é desperdício de tempo.
 
+Quando houver PR unbroken claramente acima das reps do round/bloco (ex: WOD pede 10 BMU
+por round e o atleta tem PR de 22 BMU), trate esse movimento como oportunidade de ataque
+controlado: recomende series maiores, menos quebras e transicoes agressivas nele. Nao
+marque esse movimento como ponto critico principal a menos que fadiga acumulada, lesao,
+perfil ou historico contradiga o PR.
+
 Responda EXCLUSIVAMENTE com um JSON válido — sem markdown, sem crases, sem texto antes ou
 depois — com este formato exato:
 

@@ -91,4 +91,45 @@ describe('generateStrategy', () => {
     );
     expect(sendMessage).toHaveBeenCalledTimes(2);
   });
+
+  it('instructs the model to attack movements when PR is clearly above round reps', async () => {
+    const sendMessage: SendMessage = vi
+      .fn()
+      .mockResolvedValue(textMessage(JSON.stringify(VALID_STRATEGY)));
+
+    await generateStrategy(
+      {
+        ...MINIMAL_INPUT,
+        wodAnalysis: {
+          ...MINIMAL_INPUT.wodAnalysis,
+          movements: [{ name: 'Bar muscle-up', category: 'gymnastics', reps: 30 }],
+          rounds: [
+            {
+              roundNumber: 1,
+              movements: [{ name: 'Bar muscle-up', category: 'gymnastics', reps: 10 }],
+            },
+          ],
+        },
+        athleteContext: {
+          ...MINIMAL_INPUT.athleteContext,
+          relevantPersonalRecords: [
+            {
+              movementName: 'Bar muscle-up',
+              value: 22,
+              unit: 'reps',
+              achievedAt: new Date('2026-09-01T00:00:00.000Z'),
+            },
+          ],
+        },
+      },
+      sendMessage,
+    );
+
+    const params = vi.mocked(sendMessage).mock.calls[0]?.[0];
+    expect(params?.systemPrompt).toContain('oportunidade de ataque');
+    expect(params?.messages[0]?.content[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('"movementName": "Bar muscle-up"'),
+    });
+  });
 });
