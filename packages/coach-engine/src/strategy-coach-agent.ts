@@ -148,6 +148,11 @@ depois — com este formato exato:
 }
 
 Regras críticas:
+- Modo celular: escreva como instrucoes de treino, nao como explicacao. Use frases curtas,
+  comandos diretos e numeros. Evite "porque", justificativas longas e repeticoes. Se uma
+  ideia ja apareceu em outro campo, nao repita.
+- Limites de texto: pacing/restStrategy/energyManagement ate ~120 caracteres; cada item de
+  breakStrategy/movementStrategy ate ~90 caracteres; warnings ate ~120 caracteres.
 - Seja OBJETIVO E CONCISO. O atleta lê isso no celular, no meio do treino — não é um
   texto de coach. Cada campo de texto ("pacing", "restStrategy", "transitionStrategy",
   "energyManagement", "goal", cada "strategy" dentro de breakStrategy/movementStrategy)
