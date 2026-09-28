@@ -98,7 +98,10 @@ export function createOpenAiMessageSender(
         instructions: params.systemPrompt,
         input: params.messages.map((message) => ({
           role: message.role,
-          content: toOpenAiContent(message.content),
+          content: [
+            ...toOpenAiContent(message.content),
+            { type: 'input_text', text: 'Return JSON only.' },
+          ],
         })),
         max_output_tokens: params.maxTokens,
         reasoning: { effort: normalizeReasoningEffort(params.effort) },
