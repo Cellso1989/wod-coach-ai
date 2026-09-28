@@ -137,6 +137,8 @@ export async function analyzeWod(
       // que decide intensidade/segurança, continua no modelo padrão
       // mais forte.
       model: 'gpt-5-mini',
+      maxTokens: 2500,
+      effort: 'low',
     });
   } catch (err) {
     if (err instanceof AiJsonError) {

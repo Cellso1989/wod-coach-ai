@@ -94,7 +94,7 @@ export function createOpenAiMessageSender(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: process.env.OPENAI_MODEL ?? params.model,
+        model: params.model,
         instructions: params.systemPrompt,
         input: params.messages.map((message) => ({
           role: message.role,
