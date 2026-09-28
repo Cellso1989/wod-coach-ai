@@ -157,6 +157,7 @@ export function WodDetailPage() {
     try {
       const { analysis, wod: updatedWod } = await api.analyzeWod(id);
       setAnalysis(analysis);
+      setStrategy(null);
       if (updatedWod) setWod(updatedWod);
       try {
         const { strategy } = await api.generateStrategy(id);
@@ -340,35 +341,39 @@ export function WodDetailPage() {
 
                 {analysis.roundBreakdown && analysis.roundBreakdown.length > 0 ? (
                   <div className="space-y-3">
-                    <h2 className="text-sm font-semibold text-neutral-300">Movimentos por round</h2>
-                    {analysis.roundBreakdown.map((round) => (
-                      <div key={round.roundNumber} className="space-y-1">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-orange-400">
-                          Round {round.roundNumber}
-                        </p>
-                        <ul className="space-y-1">
-                          {round.movements.map((movement, index) => (
-                            <li key={index} className="flex items-center gap-2 text-sm">
-                              <span>{CATEGORY_ICON[movement.category] ?? '•'}</span>
-                              <span>{movement.name}</span>
-                              {movement.reps != null && (
-                                <span className="text-neutral-500">{movement.reps} reps</span>
-                              )}
-                              {movement.distanceMeters != null && (
-                                <span className="text-neutral-500">{movement.distanceMeters}m</span>
-                              )}
-                              {movement.loadDescription && (
-                                <span className="text-neutral-500">{movement.loadDescription}</span>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                    <p className="text-xs text-neutral-600">
-                      Total:{' '}
-                      {analysis.movements.map((m) => `${m.name} ${m.reps ?? ''}`).join(' · ')}
-                    </p>
+                    <h2 className="text-sm font-semibold text-neutral-300">Sequência do treino</h2>
+                    {analysis.roundBreakdown.map((round) => {
+                      const roundLabel = round.label?.trim() || `Bloco ${round.roundNumber}`;
+
+                      return (
+                        <div key={`${round.roundNumber}-${roundLabel}`} className="space-y-1">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-orange-400">
+                            {roundLabel}
+                          </p>
+                          <ul className="space-y-1">
+                            {round.movements.map((movement, index) => (
+                              <li key={index} className="flex items-center gap-2 text-sm">
+                                <span>{CATEGORY_ICON[movement.category] ?? '•'}</span>
+                                <span>{movement.name}</span>
+                                {movement.reps != null && (
+                                  <span className="text-neutral-500">{movement.reps} reps</span>
+                                )}
+                                {movement.distanceMeters != null && (
+                                  <span className="text-neutral-500">
+                                    {movement.distanceMeters}m
+                                  </span>
+                                )}
+                                {movement.loadDescription && (
+                                  <span className="text-neutral-500">
+                                    {movement.loadDescription}
+                                  </span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -396,6 +401,14 @@ export function WodDetailPage() {
                 <p className="text-xs text-neutral-600">
                   Confiança da análise: {Math.round(analysis.confidence * 100)}%
                 </p>
+                {analysisError && <p className="text-red-400 text-sm">{analysisError}</p>}
+                <button
+                  onClick={() => void handleAnalyze()}
+                  disabled={analyzing}
+                  className="w-full rounded-lg border border-neutral-700 py-2 text-sm font-semibold text-neutral-300 disabled:opacity-50"
+                >
+                  {analyzing ? 'Reanalisando...' : 'Reanalisar treino'}
+                </button>
               </div>
             )}
 

@@ -41,6 +41,7 @@ com este formato exato:
   "rounds": null OU array de rounds (ver regra abaixo) [
     {
       "roundNumber": number (1, 2, 3...),
+      "label": string opcional (ex: "Buy-in", "Round 1", "Round 2", "Buy-out"),
       "movements": [ mesmo formato de um item de "movements" acima ]
     }
   ],
@@ -57,6 +58,11 @@ com este formato exato:
 }
 
 Regra crítica sobre "rounds" (WODs com estrutura por round):
+- "rounds" representa a SEQUENCIA REAL DE EXECUCAO do treino, nao apenas rounds formais.
+  Sempre preserve a ordem recebida. Se houver buy-in, bloco principal e buy-out, inclua
+  tudo em ordem com "label" claro. Ex: "Buy-in: 25 thrusters; 3 rounds de 55 DU + 10 BMU;
+  Buy-out: 25 thrusters" deve virar 5 blocos: Buy-in, Round 1, Round 2, Round 3, Buy-out.
+  NUNCA esconda buy-in/buy-out somando no total agregado.
 - Muitos WODs são vários rounds em que a reps/carga de um ou mais movimentos MUDA de
   round para round (ex: 3 rounds de 30-20-10 HSPU / 15 Thrusters / 10 Bar M.U. — o HSPU
   desce 30→20→10 mas Thruster e BMU ficam fixos por round; ou escadas ascendentes/

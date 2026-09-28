@@ -55,4 +55,42 @@ describe("wodAnalysisOutputSchema", () => {
     const result = wodAnalysisOutputSchema.parse(rest);
     expect(result.warnings).toEqual([]);
   });
+
+  it("accepts ordered execution blocks with labels", () => {
+    const result = wodAnalysisOutputSchema.safeParse({
+      ...VALID,
+      format: "ROUNDS_FOR_TIME",
+      movements: [
+        { name: "Thrusters", category: "weightlifting", reps: 50, loadDescription: "43kg" },
+        { name: "Double-unders", category: "conditioning", reps: 165 },
+        { name: "Bar muscle-ups", category: "gymnastics", reps: 30 },
+      ],
+      rounds: [
+        {
+          roundNumber: 1,
+          label: "Buy-in",
+          movements: [
+            { name: "Thrusters", category: "weightlifting", reps: 25, loadDescription: "43kg" },
+          ],
+        },
+        {
+          roundNumber: 2,
+          label: "Round 1",
+          movements: [
+            { name: "Double-unders", category: "conditioning", reps: 55 },
+            { name: "Bar muscle-ups", category: "gymnastics", reps: 10 },
+          ],
+        },
+        {
+          roundNumber: 5,
+          label: "Buy-out",
+          movements: [
+            { name: "Thrusters", category: "weightlifting", reps: 25, loadDescription: "43kg" },
+          ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
 });

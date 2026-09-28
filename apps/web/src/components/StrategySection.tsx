@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, ApiError, type WodStrategy } from "../lib/api.js";
 
 export function StrategySection({
@@ -11,6 +11,10 @@ export function StrategySection({
   const [strategy, setStrategy] = useState<WodStrategy | null>(initialStrategy);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStrategy(initialStrategy);
+  }, [initialStrategy]);
 
   async function handleGenerate() {
     setGenerating(true);

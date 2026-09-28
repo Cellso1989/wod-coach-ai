@@ -155,6 +155,7 @@ export interface WodRoundMovement {
 
 export interface WodRound {
   roundNumber: number;
+  label?: string | null;
   movements: WodRoundMovement[];
 }
 

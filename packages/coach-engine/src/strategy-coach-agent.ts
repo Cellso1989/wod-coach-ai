@@ -44,6 +44,9 @@ como cada round do WOD realmente é — reps/carga que mudam round a round (ex: 
 fixos). NUNCA trate um WOD assim como um bloco único e agregado (não gere pacing/quebras
 como se fossem "60 HSPU corridos" quando na verdade são 30, depois 20, depois 10, cada um
 seguido de Thruster e BMU). Quando "rounds" existir:
+- "rounds" tambem inclui buy-in, buy-out e blocos em sequencia. Use "label" quando existir.
+  NUNCA transforme buy-in + buy-out em uma quebra agregada (ex: nao diga "Thrusters 50:
+  5x10" se o treino tem 25 no inicio e 25 no final). Estrategia deve seguir a ordem real.
 - Monte "breakStrategy" e "movementStrategy" por round: identifique cada entrada de
   movimento com o round a que pertence (ex: "movement": "HSPU (round 1 - 30 reps)",
   "HSPU (round 2 - 20 reps)"), usando as reps/carga reais daquele round, não o total.

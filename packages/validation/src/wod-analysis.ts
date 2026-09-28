@@ -24,6 +24,7 @@ export type WodMovementOutput = z.infer<typeof wodMovementOutputSchema>;
  */
 export const wodRoundOutputSchema = z.object({
   roundNumber: z.number().int().min(1).max(50),
+  label: z.string().trim().min(1).max(80).optional(),
   movements: z.array(wodMovementOutputSchema).max(30),
 });
 
