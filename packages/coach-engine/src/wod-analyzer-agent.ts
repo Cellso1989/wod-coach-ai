@@ -24,6 +24,7 @@ e devolver EXCLUSIVAMENTE um JSON válido — sem markdown, sem crases, sem text
 com este formato exato:
 
 {
+  "extractedText": string ou null,
   "format": ${JSON.stringify(WOD_FORMATS)} ou null,
   "durationMinutes": number ou null,
   "stimulus": string curto (ex: "mixed_modal", "heavy strength") ou null,
@@ -75,6 +76,9 @@ Regras críticas:
 - Seja OBJETIVO E CONCISO. O atleta lê isso no celular, no meio do treino. "stimulus"
   deve ser uma expressão curta (2-4 palavras, ex: "engine + grip", "força pesada"), e
   cada item de "warnings" deve ser uma frase curta e direta, sem explicações longas.
+- "extractedText" deve conter a transcricao limpa do WOD quando a entrada tiver imagem.
+  Preserve quebras de linha, numeros, unidades e abreviacoes importantes. Se a entrada ja
+  tiver texto suficiente e nenhuma imagem, use null.
 - Trate SOMENTE de CrossFit: AMRAP, EMOM, E2MOM, For Time, Chipper, Rounds For Time,
   Strength, Weightlifting, Gymnastics, Conditioning, Monostructural, Benchmark/Hero WODs.
 - NUNCA invente números que não conseguir inferir do treino (seção 38). Se não souber,

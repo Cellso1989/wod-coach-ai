@@ -347,7 +347,9 @@ export const api = {
   deleteWod: (id: string) => request<void>(`/wods/${id}`, { method: "DELETE" }),
 
   analyzeWod: (id: string) =>
-    request<{ analysis: WodAnalysis }>(`/wods/${id}/analyze`, { method: "POST" }),
+    request<{ analysis: WodAnalysis; wod?: Wod | null }>(`/wods/${id}/analyze`, {
+      method: "POST",
+    }),
 
   getWodAnalysis: (id: string) => request<{ analysis: WodAnalysis }>(`/wods/${id}/analysis`),
 

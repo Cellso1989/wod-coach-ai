@@ -36,6 +36,7 @@ export type WodRoundOutput = z.infer<typeof wodRoundOutputSchema>;
  * deve ser inventado quando a informação não está no WOD (seção 38).
  */
 export const wodAnalysisOutputSchema = z.object({
+  extractedText: z.string().trim().max(10_000).nullable().optional(),
   format: wodFormatSchema.nullable(),
   durationMinutes: z.number().int().min(0).max(180).nullable(),
   stimulus: z.string().trim().max(200).nullable(),

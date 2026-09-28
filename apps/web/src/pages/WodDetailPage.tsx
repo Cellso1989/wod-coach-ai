@@ -155,8 +155,9 @@ export function WodDetailPage() {
     setAnalyzing(true);
     setAnalysisError(null);
     try {
-      const { analysis } = await api.analyzeWod(id);
+      const { analysis, wod: updatedWod } = await api.analyzeWod(id);
       setAnalysis(analysis);
+      if (updatedWod) setWod(updatedWod);
       try {
         const { strategy } = await api.generateStrategy(id);
         setStrategy(strategy);

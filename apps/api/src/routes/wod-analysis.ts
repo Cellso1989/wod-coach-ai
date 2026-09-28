@@ -100,7 +100,20 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
       include: { movements: { orderBy: { order: 'asc' } } },
     });
 
-    return reply.send({ analysis });
+    const extractedText = output.extractedText?.trim();
+    const updatedWod =
+      extractedText && !wod.rawText?.trim()
+        ? await prisma.wod.update({
+            where: { id: wod.id },
+            data: {
+              rawText: extractedText,
+              sourceType: wod.imageData ? 'TEXT_AND_IMAGE' : 'TEXT',
+            },
+            include: { result: true },
+          })
+        : null;
+
+    return reply.send({ analysis, wod: updatedWod });
   });
 
   app.patch('/wods/:id/analysis', async (request, reply) => {

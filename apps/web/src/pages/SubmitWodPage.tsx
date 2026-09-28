@@ -17,6 +17,7 @@ export function SubmitWodPage() {
   function setImageFile(file: File | null) {
     setImage(file);
     setImagePreviewUrl(file ? URL.createObjectURL(file) : null);
+    setError(null);
   }
 
   function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
