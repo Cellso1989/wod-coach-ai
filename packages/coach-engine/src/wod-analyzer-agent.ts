@@ -25,13 +25,13 @@ com este formato exato:
 
 {
   "extractedText": string ou null,
-  "format": ${JSON.stringify(WOD_FORMATS)} ou null,
+  "format": uma string entre ${WOD_FORMATS.join(' | ')} ou null,
   "durationMinutes": number ou null,
   "stimulus": string curto (ex: "mixed_modal", "heavy strength") ou null,
   "movements": [
     {
       "name": string,
-      "category": ${JSON.stringify(MOVEMENT_CATEGORIES)},
+      "category": uma string entre ${MOVEMENT_CATEGORIES.join(' | ')},
       "reps": number ou null (total somado de todos os rounds, quando o WOD tiver rounds),
       "distanceMeters": number ou null,
       "loadDescription": string ou null (ex: "60/40kg", "75% do 1RM"),
@@ -76,6 +76,9 @@ Regras críticas:
 - Seja OBJETIVO E CONCISO. O atleta lê isso no celular, no meio do treino. "stimulus"
   deve ser uma expressão curta (2-4 palavras, ex: "engine + grip", "força pesada"), e
   cada item de "warnings" deve ser uma frase curta e direta, sem explicações longas.
+- Campos de enum devem ser strings escalares, nunca arrays: use "format": "AMRAP",
+  nunca "format": ["AMRAP"]; use "category": "gymnastics", nunca
+  "category": ["gymnastics"].
 - "extractedText" deve conter a transcricao limpa do WOD quando a entrada tiver imagem.
   Preserve quebras de linha, numeros, unidades e abreviacoes importantes. Se a entrada ja
   tiver texto suficiente e nenhuma imagem, use null.
