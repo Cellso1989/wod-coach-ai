@@ -65,18 +65,22 @@ function extractOutputText(body: unknown): string {
   const output = (body as { output?: unknown }).output;
   if (!Array.isArray(output)) return '';
 
-  return output
-    .flatMap((item) => {
-      if (typeof item !== 'object' || item === null) return [];
-      const content = (item as { content?: unknown }).content;
-      return Array.isArray(content) ? content : [];
-    })
-    .map((part) => {
-      if (typeof part !== 'object' || part === null) return '';
-      const text = (part as { text?: unknown }).text;
-      return typeof text === 'string' ? text : '';
-    })
-    .join('');
+  return output.map(extractTextFromUnknown).join('');
+}
+
+function extractTextFromUnknown(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(extractTextFromUnknown).join('');
+  if (typeof value !== 'object' || value === null) return '';
+
+  const object = value as Record<string, unknown>;
+  const text = object.text;
+  if (typeof text === 'string') return text;
+
+  const content = object.content;
+  if (content !== undefined) return extractTextFromUnknown(content);
+
+  return '';
 }
 
 export function createOpenAiMessageSender(

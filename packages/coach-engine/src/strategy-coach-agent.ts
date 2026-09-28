@@ -175,6 +175,9 @@ Regras críticas:
   no score para confirmar ou refutar a estratégia anterior, diga isso claramente em vez
   de inventar uma justificativa, e mantenha ou ajuste a recomendação com base apenas no
   restante do contexto disponível.
+- "breakStrategy" e "movementStrategy" devem ter no maximo 5 itens cada. Agrupe rounds
+  parecidos em um unico item (ex: "Double-unders (todos os rounds)") em vez de criar uma
+  entrada para cada round quando a recomendacao for igual.
 - Responda APENAS com o JSON. Nenhum outro texto.`;
 
 function buildUserContent(input: StrategyCoachInput): string {
@@ -201,7 +204,9 @@ export async function generateStrategy(
       userContent: [{ type: 'text', text: buildUserContent(input) }],
       sendMessage,
       maxAttempts: options.maxAttempts,
-      effort: 'high',
+      model: 'gpt-5-mini',
+      maxTokens: 3500,
+      effort: 'medium',
     });
     // Clamp defensivo: recommendedIntensity deve SEMPRE ser 9 ou 10, e targetRpe
     // deve SEMPRE ser 10, mesmo que a IA não siga a instrução do prompt à risca
