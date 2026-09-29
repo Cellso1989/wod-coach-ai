@@ -82,6 +82,11 @@ describe("auth routes input validation", () => {
     expect(response.statusCode).toBe(401);
   });
 
+  it("rejects access to /admin/users without a valid session", async () => {
+    const response = await app.inject({ method: "GET", url: "/api/admin/users" });
+    expect(response.statusCode).toBe(401);
+  });
+
   it("rejects creating a personal record without a valid session", async () => {
     const response = await app.inject({ method: "POST", url: "/api/personal-records" });
     expect(response.statusCode).toBe(401);

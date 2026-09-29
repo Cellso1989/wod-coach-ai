@@ -282,6 +282,32 @@ export interface TrainingFrequencyWeek {
   treadmillCount: number;
 }
 
+export interface AdminUserSummary {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  lastActivityAt: string | null;
+  wodCount: number;
+  analysisCount: number;
+  strategyCount: number;
+  resultCount: number;
+  checkinCount: number;
+  personalRecordCount: number;
+  treadmillSessionCount: number;
+}
+
+export interface AdminUsersResponse {
+  totals: {
+    users: number;
+    wods: number;
+    analyses: number;
+    strategies: number;
+    results: number;
+  };
+  users: AdminUserSummary[];
+}
+
 export const api = {
   register: (input: { name: string; email: string; password: string }) =>
     request<{ user: PublicUser }>('/auth/register', {
@@ -422,4 +448,6 @@ export const api = {
     request<{ weeks: TrainingFrequencyWeek[] }>(
       `/stats/training-frequency${weeks ? `?weeks=${weeks}` : ''}`,
     ),
+
+  getAdminUsers: () => request<AdminUsersResponse>('/admin/users'),
 };

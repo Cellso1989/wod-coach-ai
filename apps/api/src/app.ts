@@ -21,6 +21,7 @@ import athleteContextRoutes from "./routes/athlete-context.js";
 import wodStrategyRoutes from "./routes/wod-strategy.js";
 import treadmillRoutes from "./routes/treadmill.js";
 import statsRoutes from "./routes/stats.js";
+import adminRoutes from "./routes/admin.js";
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({ logger: true });
@@ -59,6 +60,7 @@ export function buildApp(): FastifyInstance {
       api.register(wodStrategyRoutes);
       api.register(treadmillRoutes);
       api.register(statsRoutes);
+      api.register(adminRoutes);
     },
     { prefix: "/api" },
   );
