@@ -9,6 +9,7 @@ import {
 } from '../lib/api.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { TreadmillTimer } from '../components/TreadmillTimer.js';
 import { Alert, Button, EmptyState, PageShell, TextArea, TextInput } from '../components/ui.js';
 
@@ -154,15 +155,17 @@ export function TreadmillPage() {
 
   return (
     <PageShell>
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Treino de esteira</h1>
-        <div className="flex gap-3">
-          <BrandHomeLink />
-          <button type="button" onClick={() => navigate(-1)} className="text-sm text-neutral-400">
-            Voltar
-          </button>
+      <PageHeader>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-bold">Treino de esteira</h1>
+          <div className="flex gap-3">
+            <BrandHomeLink />
+            <button type="button" onClick={() => navigate(-1)} className="text-sm text-neutral-400">
+              Voltar
+            </button>
+          </div>
         </div>
-      </div>
+      </PageHeader>
 
       <NavBar />
 

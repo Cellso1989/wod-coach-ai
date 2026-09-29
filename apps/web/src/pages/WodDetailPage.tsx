@@ -13,6 +13,7 @@ import { AthleteContextSection } from '../components/AthleteContextSection.js';
 import { StrategySection } from '../components/StrategySection.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { Alert, Button, Card, PageShell, TextArea, TextInput } from '../components/ui.js';
 
 const FORMAT_LABEL: Record<NonNullable<WodAnalysis['format']>, string> = {
@@ -223,15 +224,17 @@ export function WodDetailPage() {
 
   return (
     <PageShell>
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">{wod?.name ?? 'WOD'}</h1>
-        <div className="flex items-center gap-3">
-          <BrandHomeLink />
-          <Link to="/wods" className="text-sm text-neutral-400">
-            Voltar
-          </Link>
+      <PageHeader>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="truncate text-xl font-bold">{wod?.name ?? 'WOD'}</h1>
+          <div className="flex shrink-0 items-center gap-3">
+            <BrandHomeLink />
+            <Link to="/wods" className="text-sm text-neutral-400">
+              Voltar
+            </Link>
+          </div>
         </div>
-      </div>
+      </PageHeader>
 
       <NavBar />
 

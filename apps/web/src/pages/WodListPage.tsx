@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, ApiError, type Wod, type WodSourceType } from '../lib/api.js';
 import { NavBar } from '../components/NavBar.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
+import { PageHeader } from '../components/PageHeader.js';
 import {
   Alert,
   Button,
@@ -66,15 +67,17 @@ export function WodListPage() {
 
   return (
     <PageShell>
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Meus WODs</h1>
-        <div className="flex items-center gap-3">
-          <BrandHomeLink />
-          <Link to="/wods/new" className="text-sm text-orange-500">
-            + Novo
-          </Link>
+      <PageHeader>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-bold">Meus WODs</h1>
+          <div className="flex items-center gap-3">
+            <BrandHomeLink />
+            <Link to="/wods/new" className="text-sm text-orange-500">
+              + Novo
+            </Link>
+          </div>
         </div>
-      </div>
+      </PageHeader>
 
       <NavBar />
 

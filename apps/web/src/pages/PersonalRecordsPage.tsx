@@ -3,6 +3,7 @@ import { COMMON_BENCHMARK_WODS, COMMON_GYMNASTICS, COMMON_LIFTS } from '@wod-coa
 import { api, ApiError, type PersonalRecord } from '../lib/api.js';
 import { NavBar } from '../components/NavBar.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { PrHistoryChart } from '../components/PrHistoryChart.js';
 import { MovementAutocomplete } from '../components/MovementAutocomplete.js';
 import { Alert, Button, EmptyState, PageShell, SelectInput, TextInput } from '../components/ui.js';
@@ -140,10 +141,12 @@ export function PersonalRecordsPage() {
 
   return (
     <PageShell>
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Meus PRs</h1>
-        <BrandHomeLink />
-      </div>
+      <PageHeader>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-bold">Meus PRs</h1>
+          <BrandHomeLink />
+        </div>
+      </PageHeader>
 
       <NavBar />
 

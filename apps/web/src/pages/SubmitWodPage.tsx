@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { Alert, Button, PageShell, TextArea, TextInput } from '../components/ui.js';
 
 export function SubmitWodPage() {
@@ -72,15 +73,17 @@ export function SubmitWodPage() {
 
   return (
     <PageShell>
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Enviar WOD</h1>
-        <div className="flex items-center gap-3">
-          <BrandHomeLink />
-          <Link to="/wods" className="text-sm text-neutral-400">
-            Histórico
-          </Link>
+      <PageHeader>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-bold">Enviar WOD</h1>
+          <div className="flex items-center gap-3">
+            <BrandHomeLink />
+            <Link to="/wods" className="text-sm text-neutral-400">
+              Histórico
+            </Link>
+          </div>
         </div>
-      </div>
+      </PageHeader>
 
       <NavBar />
 

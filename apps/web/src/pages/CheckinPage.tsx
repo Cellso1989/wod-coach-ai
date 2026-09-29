@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
+import { PageHeader } from '../components/PageHeader.js';
 import {
   Alert,
   Button,
@@ -88,15 +89,17 @@ export function CheckinPage() {
 
   return (
     <PageShell>
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Resultado do treino</h1>
-        <div className="flex gap-3">
-          <BrandHomeLink />
-          <button type="button" onClick={() => navigate(-1)} className="text-sm text-neutral-400">
-            Voltar
-          </button>
+      <PageHeader>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-bold">Resultado do treino</h1>
+          <div className="flex gap-3">
+            <BrandHomeLink />
+            <button type="button" onClick={() => navigate(-1)} className="text-sm text-neutral-400">
+              Voltar
+            </button>
+          </div>
         </div>
-      </div>
+      </PageHeader>
 
       <NavBar />
 

@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../lib/auth-context.js';
 import { NavBar } from '../components/NavBar.js';
 import { LogoutButton } from '../components/LogoutButton.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { TrainingFrequencyChart } from '../components/TrainingFrequencyChart.js';
 import { ButtonLink, Card, LoadingState, PageShell } from '../components/ui.js';
 
@@ -60,13 +61,15 @@ export function DashboardPage() {
 
   return (
     <PageShell>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">WOD Coach AI</h1>
-          <p className="text-sm text-neutral-500">Ola, {user?.name}</p>
+      <PageHeader>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold">WOD Coach AI</h1>
+            <p className="text-sm text-neutral-500">Ola, {user?.name}</p>
+          </div>
+          <LogoutButton />
         </div>
-        <LogoutButton />
-      </div>
+      </PageHeader>
 
       <NavBar />
 

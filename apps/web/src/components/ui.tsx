@@ -6,6 +6,7 @@ import type {
   TextareaHTMLAttributes,
 } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
+import { ThemeToggle } from './ThemeToggle.js';
 
 export function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
@@ -21,7 +22,10 @@ export function PageShell({ children }: { children: ReactNode }) {
 
 export function CenteredState({ children }: { children: ReactNode }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-950 px-4 text-neutral-100">
+    <main className="relative flex min-h-screen items-center justify-center bg-neutral-950 px-4 text-neutral-100">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       {children}
     </main>
   );

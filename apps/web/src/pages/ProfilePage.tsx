@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth-context.js';
 import { NavBar } from '../components/NavBar.js';
 import { LogoutButton } from '../components/LogoutButton.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
+import { PageHeader } from '../components/PageHeader.js';
 import {
   Alert,
   Button,
@@ -168,13 +169,15 @@ export function ProfilePage() {
 
   return (
     <PageShell>
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Meu perfil</h1>
-        <div className="flex items-center gap-3">
-          <BrandHomeLink />
-          <LogoutButton />
+      <PageHeader>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-bold">Meu perfil</h1>
+          <div className="flex items-center gap-3">
+            <BrandHomeLink />
+            <LogoutButton />
+          </div>
         </div>
-      </div>
+      </PageHeader>
 
       <NavBar />
 

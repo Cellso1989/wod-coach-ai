@@ -1,5 +1,4 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ThemeToggle } from './ThemeToggle.js';
 
 interface NavItem {
   to: string;
@@ -44,7 +43,6 @@ export function NavBar() {
           </Link>
         );
       })}
-      <ThemeToggle />
     </nav>
   );
 }
