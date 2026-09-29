@@ -128,6 +128,7 @@ describe('generateStrategy', () => {
     const params = vi.mocked(sendMessage).mock.calls[0]?.[0];
     expect(params?.systemPrompt).toContain('oportunidade de ataque');
     expect(params?.systemPrompt).toContain('buy-in + buy-out');
+    expect(params?.systemPrompt).toContain('volume por round');
     expect(params?.messages[0]?.content[0]).toMatchObject({
       type: 'text',
       text: expect.stringContaining('"movementName": "Bar muscle-up"'),

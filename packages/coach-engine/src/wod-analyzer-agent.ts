@@ -1,4 +1,9 @@
-import { wodAnalysisOutputSchema, type WodAnalysisOutput } from '@wod-coach-ai/validation';
+import {
+  wodAnalysisOutputSchema,
+  type WodAnalysisOutput,
+  type WodMovementOutput,
+  type WodRoundOutput,
+} from '@wod-coach-ai/validation';
 import { WOD_FORMATS, MOVEMENT_CATEGORIES } from '@wod-coach-ai/types';
 import {
   callAiForJson,
@@ -95,6 +100,9 @@ Regras críticas:
 - "confidence" deve refletir sua real certeza — baixa se o texto/imagem for ambíguo,
   incompleto ou difícil de ler.
 - Se receber uma imagem, leia o quadro/tela com atenção antes de responder.
+- REGRA PRIORITARIA: se o WOD contem "N rounds", "N rds", "N rodadas" ou titulo tipo
+  "5 Rounds", preencha "rounds" com N itens mesmo quando os rounds forem identicos.
+  Nunca devolva apenas totais agregados nesse caso.
 - Responda APENAS com o JSON. Nenhum outro texto.`;
 
 function buildUserContent(input: WodAnalyzerInput): AiMessageContent {
@@ -118,6 +126,129 @@ function buildUserContent(input: WodAnalyzerInput): AiMessageContent {
   return content;
 }
 
+function extractExplicitRoundCount(text: string): number | null {
+  const match = text.match(/\b([2-9]|1\d|20)\s*(?:rounds?|rds?|rodadas?)\b/i);
+  if (!match?.[1]) return null;
+  return Number(match[1]);
+}
+
+interface ParsedMovementLine {
+  value: number;
+  unit: 'distance' | 'reps' | 'calories' | null;
+}
+
+function parseMovementLine(line: string): ParsedMovementLine | null {
+  const normalized = line.trim().replace(',', '.');
+  const start = normalized.match(
+    /^(\d+(?:\.\d+)?)\s*(m|metros?|meters?|cal(?:s|orias?)?|reps?)?\b/i,
+  );
+  const end = normalized.match(
+    /\b(\d+(?:\.\d+)?)\s*(m|metros?|meters?|cal(?:s|orias?)?|reps?)\s*$/i,
+  );
+  const match = start ?? end;
+  if (!match?.[1]) return null;
+
+  const unitText = match[2]?.toLowerCase() ?? null;
+  const unit =
+    unitText == null
+      ? null
+      : /^m|metro|meter/.test(unitText)
+        ? 'distance'
+        : /^cal/.test(unitText)
+          ? 'calories'
+          : 'reps';
+
+  return { value: Number(match[1]), unit };
+}
+
+function findRoundMovementLines(text: string, roundCount: number, movementCount: number) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const roundLineIndex = lines.findIndex((line) => extractExplicitRoundCount(line) === roundCount);
+  if (roundLineIndex < 0) return [];
+
+  return lines
+    .slice(roundLineIndex + 1)
+    .map(parseMovementLine)
+    .filter((line): line is ParsedMovementLine => line != null)
+    .slice(0, movementCount);
+}
+
+function metricForMovement(movement: WodMovementOutput): 'distance' | 'reps' | 'calories' | null {
+  if (movement.distanceMeters != null) return 'distance';
+  if (movement.reps != null) return 'reps';
+  if (movement.calories != null) return 'calories';
+  return null;
+}
+
+function totalForMetric(movement: WodMovementOutput, metric: 'distance' | 'reps' | 'calories') {
+  if (metric === 'distance') return movement.distanceMeters ?? null;
+  if (metric === 'reps') return movement.reps ?? null;
+  return movement.calories ?? null;
+}
+
+function movementWithPerRoundValue(
+  movement: WodMovementOutput,
+  metric: 'distance' | 'reps' | 'calories',
+  value: number,
+): WodMovementOutput {
+  return {
+    name: movement.name,
+    category: movement.category,
+    loadDescription: movement.loadDescription,
+    reps: metric === 'reps' ? value : null,
+    distanceMeters: metric === 'distance' ? value : null,
+    calories: metric === 'calories' ? value : null,
+  };
+}
+
+function inferUniformRoundsFromText(
+  output: WodAnalysisOutput,
+  sourceText: string,
+): WodAnalysisOutput {
+  if (output.rounds?.length) return output;
+
+  const roundCount = extractExplicitRoundCount(sourceText);
+  if (!roundCount || roundCount < 2) return output;
+
+  const parsedLines = findRoundMovementLines(sourceText, roundCount, output.movements.length);
+  if (parsedLines.length < output.movements.length) return output;
+
+  const perRoundMovements: WodMovementOutput[] = [];
+  for (let index = 0; index < output.movements.length; index++) {
+    const movement = output.movements[index]!;
+    const line = parsedLines[index]!;
+    const metric = metricForMovement(movement);
+    if (!metric) return output;
+    if (line.unit && line.unit !== metric) return output;
+
+    const total = totalForMetric(movement, metric);
+    if (total == null || Math.abs(total - line.value * roundCount) > 0.001) {
+      return output;
+    }
+
+    perRoundMovements.push(movementWithPerRoundValue(movement, metric, line.value));
+  }
+
+  const rounds: WodRoundOutput[] = Array.from({ length: roundCount }, (_, index) => ({
+    roundNumber: index + 1,
+    label: `Round ${index + 1}`,
+    movements: perRoundMovements,
+  }));
+
+  return { ...output, rounds };
+}
+
+function normalizeAnalysisOutput(
+  output: WodAnalysisOutput,
+  input: WodAnalyzerInput,
+): WodAnalysisOutput {
+  const sourceText = [input.rawText, output.extractedText].filter(Boolean).join('\n');
+  return sourceText.trim() ? inferUniformRoundsFromText(output, sourceText) : output;
+}
+
 export interface AnalyzeWodOptions {
   maxAttempts?: number;
 }
@@ -135,7 +266,7 @@ export async function analyzeWod(
   }
 
   try {
-    return await callAiForJson({
+    const output = await callAiForJson({
       schema: wodAnalysisOutputSchema,
       systemPrompt: SYSTEM_PROMPT,
       userContent: buildUserContent(input),
@@ -149,6 +280,7 @@ export async function analyzeWod(
       maxTokens: 2500,
       effort: 'low',
     });
+    return normalizeAnalysisOutput(output, input);
   } catch (err) {
     if (err instanceof AiJsonError) {
       throw new WodAnalysisError(err.message, err.rawResponse);

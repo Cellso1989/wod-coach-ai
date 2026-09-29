@@ -192,6 +192,10 @@ Regras críticas:
 - "breakStrategy" e "movementStrategy" devem ter no maximo 5 itens cada. Agrupe rounds
   parecidos em um unico item (ex: "Double-unders (todos os rounds)") em vez de criar uma
   entrada para cada round quando a recomendacao for igual.
+- Quando agrupar rounds parecidos, use SEMPRE o volume por round/bloco. Ex: se o treino tem
+  5 rounds de 16m lunge + 16 T2B + 8m HSW, escreva estrategias para "16m por round",
+  "16 T2B por round" e "8m por round"; NUNCA escreva que o atleta deve executar 80m/80
+  reps/40m como um bloco corrido.
 - Responda APENAS com o JSON. Nenhum outro texto.`;
 
 function buildUserContent(input: StrategyCoachInput): string {

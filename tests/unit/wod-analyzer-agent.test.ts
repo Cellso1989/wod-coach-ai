@@ -53,6 +53,42 @@ describe('analyzeWod', () => {
     expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 
+  it('reconstructs explicit uniform rounds when the model returns only aggregated totals', async () => {
+    const aggregatedRoundsOutput = {
+      ...VALID_OUTPUT,
+      extractedText: '5 Rounds\n16m farm hold double db lunge\n16 T2B\n8m Handstand Walk',
+      format: 'ROUNDS_FOR_TIME',
+      durationMinutes: null,
+      stimulus: 'engine + grip',
+      movements: [
+        {
+          name: 'farm hold double db lunge',
+          category: 'weightlifting',
+          distanceMeters: 80,
+        },
+        { name: 'toes to bar', category: 'gymnastics', reps: 80 },
+        { name: 'handstand walk', category: 'gymnastics', distanceMeters: 40 },
+      ],
+      rounds: null,
+    };
+    const sendMessage: SendMessage = vi
+      .fn()
+      .mockResolvedValue(textMessage(JSON.stringify(aggregatedRoundsOutput)));
+
+    const result = await analyzeWod(
+      { rawText: null, imageBase64: 'abc', imageMimeType: 'image/png' },
+      sendMessage,
+    );
+
+    expect(result.rounds).toHaveLength(5);
+    expect(result.rounds?.[0]?.movements).toEqual([
+      expect.objectContaining({ name: 'farm hold double db lunge', distanceMeters: 16 }),
+      expect.objectContaining({ name: 'toes to bar', reps: 16 }),
+      expect.objectContaining({ name: 'handstand walk', distanceMeters: 8 }),
+    ]);
+    expect(result.movements).toEqual(aggregatedRoundsOutput.movements);
+  });
+
   it('throws WodAnalysisError without ever returning invalid data after exhausting retries', async () => {
     const sendMessage: SendMessage = vi.fn().mockResolvedValue(textMessage('still not json'));
 
