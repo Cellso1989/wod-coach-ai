@@ -15,13 +15,19 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/profile', icon: '👤', label: 'Perfil' },
 ];
 
+function isActiveNavItem(pathname: string, item: NavItem) {
+  if (item.to === '/') return pathname === '/';
+  if (item.to === '/wods') return pathname === '/wods' || /^\/wods\/(?!new(?:\/|$))/.test(pathname);
+  return pathname === item.to || pathname.startsWith(`${item.to}/`);
+}
+
 export function NavBar() {
   const { pathname } = useLocation();
 
   return (
     <nav className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {NAV_ITEMS.map((item) => {
-        const active = item.to === '/' ? pathname === '/' : pathname.startsWith(item.to);
+        const active = isActiveNavItem(pathname, item);
         return (
           <Link
             key={item.to}
