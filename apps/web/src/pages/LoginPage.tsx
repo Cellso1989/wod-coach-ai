@@ -51,6 +51,12 @@ export function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
+        <div className="text-right">
+          <Link to="/forgot-password" className="text-sm text-orange-500">
+            Esqueci minha senha
+          </Link>
+        </div>
+
         <Button type="submit" disabled={submitting} fullWidth>
           {submitting ? 'Entrando...' : 'Entrar'}
         </Button>

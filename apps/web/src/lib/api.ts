@@ -303,6 +303,18 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
+  forgotPassword: (input: { email: string }) =>
+    request<{ ok: true; devResetUrl?: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  resetPassword: (input: { token: string; newPassword: string }) =>
+    request<{ ok: true }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
   me: () => request<{ user: PublicUser }>('/auth/me'),
 
   getAthleteProfile: () => request<{ profile: Record<string, unknown> }>('/athlete-profile'),
@@ -330,7 +342,7 @@ export const api = {
     return requestForm<{ wod: Wod }>('/wods', formData);
   },
 
-  listWods: () => request<{ wods: Wod[] }>('/wods'),
+  listWods: (limit?: number) => request<{ wods: Wod[] }>(`/wods${limit ? `?limit=${limit}` : ''}`),
 
   getWod: (id: string) => request<{ wod: Wod }>(`/wods/${id}`),
 
@@ -366,6 +378,12 @@ export const api = {
   createPersonalRecord: (input: PersonalRecordInput) =>
     request<{ record: PersonalRecord }>('/personal-records', {
       method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  updatePersonalRecord: (id: string, input: PersonalRecordInput) =>
+    request<{ record: PersonalRecord }>(`/personal-records/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(input),
     }),
 

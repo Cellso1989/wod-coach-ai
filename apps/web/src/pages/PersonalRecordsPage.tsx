@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { COMMON_LIFTS, COMMON_GYMNASTICS, COMMON_BENCHMARK_WODS } from '@wod-coach-ai/types';
+import { COMMON_BENCHMARK_WODS, COMMON_GYMNASTICS, COMMON_LIFTS } from '@wod-coach-ai/types';
 import { api, ApiError, type PersonalRecord } from '../lib/api.js';
 import { NavBar } from '../components/NavBar.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
@@ -7,10 +7,6 @@ import { PrHistoryChart } from '../components/PrHistoryChart.js';
 import { MovementAutocomplete } from '../components/MovementAutocomplete.js';
 import { Alert, Button, EmptyState, PageShell, SelectInput, TextInput } from '../components/ui.js';
 
-// Intercalado (em vez de concatenado) para que o começo da lista já
-// misture levantamento, ginástica e benchmarks — o autocomplete só
-// mostra os primeiros itens quando o campo está vazio, então uma
-// concatenação simples deixava só os de LPO visíveis.
 function interleave(...lists: readonly (readonly string[])[]): string[] {
   const result: string[] = [];
   const maxLength = Math.max(...lists.map((list) => list.length));
@@ -23,7 +19,6 @@ function interleave(...lists: readonly (readonly string[])[]): string[] {
 }
 
 const SUGGESTED_MOVEMENTS = interleave(COMMON_LIFTS, COMMON_GYMNASTICS, COMMON_BENCHMARK_WODS);
-
 const PERCENTAGE_STEPS = [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
 const WEIGHT_UNITS = new Set(['kg', 'lb']);
 
@@ -40,6 +35,7 @@ export function PersonalRecordsPage() {
   const [value, setValue] = useState('');
   const [unit, setUnit] = useState('kg');
   const [notes, setNotes] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -57,20 +53,11 @@ export function PersonalRecordsPage() {
         const sorted = [...recs].sort(
           (a, b) => new Date(a.achievedAt).getTime() - new Date(b.achievedAt).getTime(),
         );
-        const unit = sorted[sorted.length - 1]!.unit;
-        return { name, unit, history: sorted.filter((r) => r.unit === unit) };
+        const latest = sorted[sorted.length - 1]!;
+        return { name, unit: latest.unit, history: sorted.filter((r) => r.unit === latest.unit) };
       })
       .filter((group) => group.history.length > 1);
   }, [records]);
-
-  function toggleMovement(name: string) {
-    setExpandedMovements((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
-  }
 
   function load() {
     api
@@ -82,32 +69,73 @@ export function PersonalRecordsPage() {
 
   useEffect(load, []);
 
+  function resetForm() {
+    setEditingId(null);
+    setMovementName('');
+    setValue('');
+    setUnit('kg');
+    setNotes('');
+    setFormError(null);
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
     setSaving(true);
     try {
-      await api.createPersonalRecord({
+      const input = {
         movementName,
         value: Number(value),
         unit,
         notes: notes || undefined,
-      });
-      setMovementName('');
-      setValue('');
-      setNotes('');
-      load();
+      };
+
+      if (editingId) {
+        const { record } = await api.updatePersonalRecord(editingId, input);
+        setRecords((prev) => prev.map((item) => (item.id === record.id ? record : item)));
+      } else {
+        const { record } = await api.createPersonalRecord(input);
+        setRecords((prev) => [record, ...prev]);
+      }
+
+      resetForm();
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : 'Não foi possível salvar o PR.');
+      setFormError(err instanceof ApiError ? err.message : 'Nao foi possivel salvar o PR.');
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!window.confirm('Remover este PR? Se quer mesmo remover, confirme.')) return;
-    await api.deletePersonalRecord(id);
-    setRecords((prev) => prev.filter((r) => r.id !== id));
+  function handleEdit(record: PersonalRecord) {
+    setEditingId(record.id);
+    setMovementName(record.movementName);
+    setValue(String(record.value));
+    setUnit(record.unit);
+    setNotes(record.notes ?? '');
+    setFormError(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function handleDelete(record: PersonalRecord) {
+    const label = `${record.movementName} - ${record.value} ${record.unit}`;
+    if (!window.confirm(`Remover o PR "${label}"? Essa acao nao pode ser desfeita.`)) return;
+
+    try {
+      await api.deletePersonalRecord(record.id);
+      setRecords((prev) => prev.filter((r) => r.id !== record.id));
+      if (editingId === record.id) resetForm();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Nao foi possivel remover o PR.');
+    }
+  }
+
+  function toggleMovement(name: string) {
+    setExpandedMovements((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
   }
 
   return (
@@ -120,6 +148,22 @@ export function PersonalRecordsPage() {
       <NavBar />
 
       <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-neutral-800 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-neutral-300">
+            {editingId ? 'Editar PR' : 'Adicionar PR'}
+          </h2>
+          {editingId && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="min-h-8 px-2 py-1 text-xs"
+              onClick={resetForm}
+            >
+              Cancelar
+            </Button>
+          )}
+        </div>
+
         {formError && <Alert>{formError}</Alert>}
         <MovementAutocomplete
           value={movementName}
@@ -135,9 +179,9 @@ export function PersonalRecordsPage() {
             required
             placeholder="Valor"
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(event) => setValue(event.target.value)}
           />
-          <SelectInput value={unit} onChange={(e) => setUnit(e.target.value)}>
+          <SelectInput value={unit} onChange={(event) => setUnit(event.target.value)}>
             <option value="kg">kg</option>
             <option value="lb">lb</option>
             <option value="sec">segundos</option>
@@ -149,11 +193,11 @@ export function PersonalRecordsPage() {
           type="text"
           placeholder="Notas (opcional)"
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(event) => setNotes(event.target.value)}
         />
 
         <Button type="submit" disabled={saving} fullWidth>
-          {saving ? 'Salvando...' : 'Adicionar PR'}
+          {saving ? 'Salvando...' : editingId ? 'Salvar alteracoes' : 'Adicionar PR'}
         </Button>
       </form>
 
@@ -163,13 +207,13 @@ export function PersonalRecordsPage() {
       {!loading && records.length === 0 && (
         <EmptyState
           title="Nenhum PR registrado"
-          description="Adicione seus principais PRs para melhorar as estratégias dos treinos."
+          description="Adicione seus principais PRs para melhorar as estrategias dos treinos."
         />
       )}
 
       {historyByMovement.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-neutral-300">Evolução dos PRs</h2>
+          <h2 className="text-sm font-semibold text-neutral-300">Evolucao dos PRs</h2>
           {historyByMovement.map((group) => {
             const isOpen = expandedMovements.has(group.name);
             return (
@@ -183,7 +227,7 @@ export function PersonalRecordsPage() {
                 >
                   <span className="font-medium">{group.name}</span>
                   <span className="text-xs text-orange-400">
-                    {isOpen ? 'Ocultar' : 'Ver evolução'}
+                    {isOpen ? 'Ocultar' : 'Ver evolucao'}
                   </span>
                 </button>
                 {isOpen && (
@@ -206,15 +250,15 @@ export function PersonalRecordsPage() {
               key={record.id}
               className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{record.movementName}</p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{record.movementName}</p>
                   <p className="text-sm text-neutral-400">
                     {record.value} {record.unit}
-                    {record.notes ? ` · ${record.notes}` : ''}
+                    {record.notes ? ` - ${record.notes}` : ''}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex shrink-0 items-center gap-2">
                   {isWeight && (
                     <button
                       onClick={() => setExpandedId(isExpanded ? null : record.id)}
@@ -224,7 +268,14 @@ export function PersonalRecordsPage() {
                     </button>
                   )}
                   <Button
-                    onClick={() => void handleDelete(record.id)}
+                    onClick={() => handleEdit(record)}
+                    variant="secondary"
+                    className="min-h-8 px-2 py-1 text-xs"
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    onClick={() => void handleDelete(record)}
                     variant="danger"
                     className="min-h-8 px-2 py-1 text-xs"
                   >

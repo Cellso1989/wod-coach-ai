@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { changePasswordSchema, registerSchema, loginSchema } from '@wod-coach-ai/validation';
+import {
+  changePasswordSchema,
+  forgotPasswordSchema,
+  registerSchema,
+  loginSchema,
+  resetPasswordSchema,
+} from '@wod-coach-ai/validation';
 
 describe('registerSchema', () => {
   it('accepts valid input and normalizes email', () => {
@@ -66,6 +72,32 @@ describe('changePasswordSchema', () => {
   it('rejects a short new password', () => {
     const result = changePasswordSchema.safeParse({
       currentPassword: 'old-password',
+      newPassword: 'short',
+    });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('password reset schemas', () => {
+  it('normalizes the forgot-password email', () => {
+    const result = forgotPasswordSchema.parse({ email: 'Athlete@Example.com' });
+
+    expect(result.email).toBe('athlete@example.com');
+  });
+
+  it('requires a reset token and a strong enough password', () => {
+    const result = resetPasswordSchema.safeParse({
+      token: 'valid-reset-token-with-enough-length',
+      newPassword: 'new-password-123',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a short reset password', () => {
+    const result = resetPasswordSchema.safeParse({
+      token: 'valid-reset-token-with-enough-length',
       newPassword: 'short',
     });
 

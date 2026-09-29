@@ -17,13 +17,27 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  athleteProfile AthleteProfile?
-  dailyCheckins  DailyCheckin[]
-  wods           Wod[]
-  personalRecords PersonalRecord[]
-  treadmillSessions TreadmillSession[]
+  athleteProfile      AthleteProfile?
+  dailyCheckins       DailyCheckin[]
+  wods                Wod[]
+  personalRecords     PersonalRecord[]
+  treadmillSessions   TreadmillSession[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 enum Sex {
@@ -51,19 +65,19 @@ model AthleteProfile {
   sex       Sex?
 
   // Experiência
-  crossfitSince      DateTime?
-  level              CrossfitLevel?
+  crossfitSince       DateTime?
+  level               CrossfitLevel?
   competitionCategory String?
-  weeklyFrequency    Int?
+  weeklyFrequency     Int?
 
   // Objetivos, limitações e equipamentos (seção 7).
   // Modelados como arrays simples nesta fase; normalizar em
   // tabelas próprias (Goal, Injury, Equipment) só se/quando o
   // produto precisar de um catálogo compartilhado entre atletas.
-  goals             String[]
-  injuries          String[]
-  limitedMovements  String[]
-  equipment         String[]
+  goals            String[]
+  injuries         String[]
+  limitedMovements String[]
+  equipment        String[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -154,9 +168,9 @@ enum MovementCategory {
 // Gerada por IA, mas SEMPRE validada com Zod antes de chegar aqui —
 // nunca persistimos uma resposta que falhou na validação (seção 30).
 model WodAnalysis {
-  id     String @id @default(uuid())
-  wodId  String @unique
-  wod    Wod    @relation(fields: [wodId], references: [id], onDelete: Cascade)
+  id    String @id @default(uuid())
+  wodId String @unique
+  wod   Wod    @relation(fields: [wodId], references: [id], onDelete: Cascade)
 
   format          WodFormat?
   durationMinutes Int?
