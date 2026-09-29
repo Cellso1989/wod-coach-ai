@@ -5,9 +5,10 @@ import { Alert, Button, Card, TextInput } from './ui.js';
 interface WodResultSectionProps {
   wodId: string;
   initialResult: WodResult | null;
+  onResultSaved?: (result: WodResult) => void;
 }
 
-export function WodResultSection({ wodId, initialResult }: WodResultSectionProps) {
+export function WodResultSection({ wodId, initialResult, onResultSaved }: WodResultSectionProps) {
   const [result, setResult] = useState<WodResult | null>(initialResult);
 
   const [score, setScore] = useState('');
@@ -21,6 +22,7 @@ export function WodResultSection({ wodId, initialResult }: WodResultSectionProps
     try {
       const { result } = await api.saveWodResult(wodId, { score });
       setResult(result);
+      onResultSaved?.(result);
     } catch (err) {
       setResultError(
         err instanceof ApiError ? err.message : 'Não foi possível salvar o resultado.',

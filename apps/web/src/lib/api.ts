@@ -1,7 +1,7 @@
 // Em produção o frontend é servido pela própria API (mesma origem), então
 // o padrão é string vazia (caminho relativo). Em dev, aponta pro Fastify
 // rodando em outra porta via VITE_API_URL.
-const API_URL = import.meta.env.VITE_API_URL ?? "";
+const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 export class ApiError extends Error {
   constructor(
@@ -15,16 +15,16 @@ export class ApiError extends Error {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_URL}/api${path}`, {
     ...options,
-    credentials: "include",
+    credentials: 'include',
     headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...options.headers,
     },
   });
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
-    throw new ApiError(response.status, body.error ?? "Erro inesperado");
+    throw new ApiError(response.status, body.error ?? 'Erro inesperado');
   }
 
   if (response.status === 204) {
@@ -36,14 +36,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 async function requestForm<T>(path: string, formData: FormData): Promise<T> {
   const response = await fetch(`${API_URL}/api${path}`, {
-    method: "POST",
-    credentials: "include",
+    method: 'POST',
+    credentials: 'include',
     body: formData,
   });
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
-    throw new ApiError(response.status, body.error ?? "Erro inesperado");
+    throw new ApiError(response.status, body.error ?? 'Erro inesperado');
   }
 
   return response.json() as Promise<T>;
@@ -73,7 +73,7 @@ export interface DailyCheckinInput {
   notes?: string;
 }
 
-export type WodSourceType = "TEXT" | "IMAGE" | "TEXT_AND_IMAGE";
+export type WodSourceType = 'TEXT' | 'IMAGE' | 'TEXT_AND_IMAGE';
 
 export interface WodResult {
   id: string;
@@ -117,21 +117,10 @@ export interface WodSubmissionInput {
 }
 
 export type WodFormat =
-  | "AMRAP"
-  | "FOR_TIME"
-  | "EMOM"
-  | "E2MOM"
-  | "CHIPPER"
-  | "ROUNDS_FOR_TIME"
-  | "STRENGTH"
-  | "INTERVAL";
+  'AMRAP' | 'FOR_TIME' | 'EMOM' | 'E2MOM' | 'CHIPPER' | 'ROUNDS_FOR_TIME' | 'STRENGTH' | 'INTERVAL';
 
 export type MovementCategory =
-  | "gymnastics"
-  | "weightlifting"
-  | "conditioning"
-  | "monostructural"
-  | "mixed_modal";
+  'gymnastics' | 'weightlifting' | 'conditioning' | 'monostructural' | 'mixed_modal';
 
 export interface WodMovementResult {
   id: string;
@@ -199,7 +188,7 @@ export interface TrainingLoadWindow {
   sessionCount: number;
 }
 
-export type DataSufficiency = "low" | "moderate" | "high";
+export type DataSufficiency = 'low' | 'moderate' | 'high';
 
 export interface SimilarWodMatch {
   wodId: string;
@@ -254,7 +243,7 @@ export interface WodStrategy {
   warnings: string[];
 }
 
-export type TreadmillEffort = "leve" | "moderado" | "moderado_alto" | "forte" | "maximo";
+export type TreadmillEffort = 'leve' | 'moderado' | 'moderado_alto' | 'forte' | 'maximo';
 
 export interface TreadmillBlock {
   startMinute: number;
@@ -295,116 +284,124 @@ export interface TrainingFrequencyWeek {
 
 export const api = {
   register: (input: { name: string; email: string; password: string }) =>
-    request<{ user: PublicUser }>("/auth/register", {
-      method: "POST",
+    request<{ user: PublicUser }>('/auth/register', {
+      method: 'POST',
       body: JSON.stringify(input),
     }),
 
   login: (input: { email: string; password: string }) =>
-    request<{ user: PublicUser }>("/auth/login", {
-      method: "POST",
+    request<{ user: PublicUser }>('/auth/login', {
+      method: 'POST',
       body: JSON.stringify(input),
     }),
 
-  logout: () => request<{ ok: true }>("/auth/logout", { method: "POST" }),
+  logout: () => request<{ ok: true }>('/auth/logout', { method: 'POST' }),
 
-  me: () => request<{ user: PublicUser }>("/auth/me"),
+  changePassword: (input: { currentPassword: string; newPassword: string }) =>
+    request<{ ok: true }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 
-  getAthleteProfile: () => request<{ profile: Record<string, unknown> }>("/athlete-profile"),
+  me: () => request<{ user: PublicUser }>('/auth/me'),
+
+  getAthleteProfile: () => request<{ profile: Record<string, unknown> }>('/athlete-profile'),
 
   saveAthleteProfile: (input: Record<string, unknown>) =>
-    request<{ profile: Record<string, unknown> }>("/athlete-profile", {
-      method: "PUT",
+    request<{ profile: Record<string, unknown> }>('/athlete-profile', {
+      method: 'PUT',
       body: JSON.stringify(input),
     }),
 
-  getTodayCheckin: () => request<{ checkin: DailyCheckin }>("/checkins/today"),
+  getTodayCheckin: () => request<{ checkin: DailyCheckin }>('/checkins/today'),
 
   saveCheckin: (input: DailyCheckinInput) =>
-    request<{ checkin: DailyCheckin }>("/checkins", {
-      method: "POST",
+    request<{ checkin: DailyCheckin }>('/checkins', {
+      method: 'POST',
       body: JSON.stringify(input),
     }),
 
   submitWod: (input: WodSubmissionInput) => {
     const formData = new FormData();
-    if (input.rawText) formData.set("rawText", input.rawText);
-    if (input.name) formData.set("name", input.name);
-    if (input.notes) formData.set("notes", input.notes);
-    if (input.image) formData.set("image", input.image);
-    return requestForm<{ wod: Wod }>("/wods", formData);
+    if (input.rawText) formData.set('rawText', input.rawText);
+    if (input.name) formData.set('name', input.name);
+    if (input.notes) formData.set('notes', input.notes);
+    if (input.image) formData.set('image', input.image);
+    return requestForm<{ wod: Wod }>('/wods', formData);
   },
 
-  listWods: () => request<{ wods: Wod[] }>("/wods"),
+  listWods: () => request<{ wods: Wod[] }>('/wods'),
 
   getWod: (id: string) => request<{ wod: Wod }>(`/wods/${id}`),
 
   updateWod: (id: string, input: { rawText?: string; name?: string; notes?: string }) =>
     request<{ wod: Wod }>(`/wods/${id}`, {
-      method: "PUT",
+      method: 'PUT',
       body: JSON.stringify(input),
     }),
 
-  deleteWod: (id: string) => request<void>(`/wods/${id}`, { method: "DELETE" }),
+  deleteWod: (id: string) => request<void>(`/wods/${id}`, { method: 'DELETE' }),
 
   analyzeWod: (id: string) =>
     request<{ analysis: WodAnalysis; wod?: Wod | null }>(`/wods/${id}/analyze`, {
-      method: "POST",
+      method: 'POST',
     }),
 
   getWodAnalysis: (id: string) => request<{ analysis: WodAnalysis }>(`/wods/${id}/analysis`),
 
   updateWodAnalysis: (id: string, input: { durationMinutes: number | null }) =>
     request<{ analysis: WodAnalysis }>(`/wods/${id}/analysis`, {
-      method: "PATCH",
+      method: 'PATCH',
       body: JSON.stringify(input),
     }),
 
   saveWodResult: (wodId: string, input: WodResultInput) =>
     request<{ result: WodResult }>(`/wods/${wodId}/result`, {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify(input),
     }),
 
-  listPersonalRecords: () => request<{ records: PersonalRecord[] }>("/personal-records"),
+  listPersonalRecords: () => request<{ records: PersonalRecord[] }>('/personal-records'),
 
   createPersonalRecord: (input: PersonalRecordInput) =>
-    request<{ record: PersonalRecord }>("/personal-records", {
-      method: "POST",
+    request<{ record: PersonalRecord }>('/personal-records', {
+      method: 'POST',
       body: JSON.stringify(input),
     }),
 
   deletePersonalRecord: (id: string) =>
-    request<void>(`/personal-records/${id}`, { method: "DELETE" }),
+    request<void>(`/personal-records/${id}`, { method: 'DELETE' }),
 
   getAthleteContext: (wodId: string) =>
     request<{ context: AthleteContext }>(`/wods/${wodId}/context`),
 
   generateStrategy: (wodId: string) =>
-    request<{ strategy: WodStrategy }>(`/wods/${wodId}/strategy`, { method: "POST" }),
+    request<{ strategy: WodStrategy }>(`/wods/${wodId}/strategy`, { method: 'POST' }),
 
   getStrategy: (wodId: string) => request<{ strategy: WodStrategy }>(`/wods/${wodId}/strategy`),
 
   generateTreadmillWorkout: (input: { level: number; durationMinutes: number }) =>
-    request<{ workout: TreadmillWorkout }>("/treadmill/generate", {
-      method: "POST",
+    request<{ workout: TreadmillWorkout }>('/treadmill/generate', {
+      method: 'POST',
       body: JSON.stringify(input),
     }),
 
   saveTreadmillSession: (input: TreadmillSessionInput) =>
-    request<{ session: TreadmillSession }>("/treadmill/sessions", {
-      method: "POST",
+    request<{ session: TreadmillSession }>('/treadmill/sessions', {
+      method: 'POST',
       body: JSON.stringify(input),
     }),
 
   listTreadmillSessions: (limit?: number) =>
-    request<{ sessions: TreadmillSession[] }>(`/treadmill/sessions${limit ? `?limit=${limit}` : ""}`),
+    request<{ sessions: TreadmillSession[] }>(
+      `/treadmill/sessions${limit ? `?limit=${limit}` : ''}`,
+    ),
 
   deleteTreadmillSession: (id: string) =>
-    request<void>(`/treadmill/sessions/${id}`, { method: "DELETE" }),
+    request<void>(`/treadmill/sessions/${id}`, { method: 'DELETE' }),
 
   getTrainingFrequency: (weeks?: number) =>
     request<{ weeks: TrainingFrequencyWeek[] }>(
-      `/stats/training-frequency${weeks ? `?weeks=${weeks}` : ""}`,
+      `/stats/training-frequency${weeks ? `?weeks=${weeks}` : ''}`,
     ),
 };

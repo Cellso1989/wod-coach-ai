@@ -13,7 +13,7 @@ import { AthleteContextSection } from '../components/AthleteContextSection.js';
 import { StrategySection } from '../components/StrategySection.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
-import { Alert, Button, PageShell, TextArea, TextInput } from '../components/ui.js';
+import { Alert, Button, Card, PageShell, TextArea, TextInput } from '../components/ui.js';
 
 const FORMAT_LABEL: Record<NonNullable<WodAnalysis['format']>, string> = {
   AMRAP: 'AMRAP',
@@ -34,6 +34,46 @@ const CATEGORY_ICON: Record<string, string> = {
   mixed_modal: '⚙️',
 };
 
+function WodFlowCard({
+  hasText,
+  hasAnalysis,
+  hasStrategy,
+  hasResult,
+}: {
+  hasText: boolean;
+  hasAnalysis: boolean;
+  hasStrategy: boolean;
+  hasResult: boolean;
+}) {
+  const steps = [
+    { label: 'WOD recebido', done: hasText },
+    { label: 'Análise', done: hasAnalysis },
+    { label: 'Estratégia', done: hasStrategy },
+    { label: 'Resultado', done: hasResult },
+  ];
+
+  return (
+    <Card className="space-y-3">
+      <p className="text-sm font-semibold text-neutral-300">Fluxo do treino</p>
+      <div className="grid grid-cols-2 gap-2">
+        {steps.map((step) => (
+          <div
+            key={step.label}
+            className={`rounded-lg border px-3 py-2 text-sm ${
+              step.done
+                ? 'border-green-900/50 bg-green-950/20 text-green-300'
+                : 'border-neutral-800 bg-neutral-950 text-neutral-500'
+            }`}
+          >
+            {step.done ? '✓ ' : ''}
+            {step.label}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 export function WodDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -44,6 +84,7 @@ export function WodDetailPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisStatus, setAnalysisStatus] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editedText, setEditedText] = useState('');
   const [saving, setSaving] = useState(false);
@@ -156,12 +197,14 @@ export function WodDetailPage() {
     if (!id) return;
     setAnalyzing(true);
     setAnalysisError(null);
+    setAnalysisStatus('Lendo o WOD e identificando movimentos...');
     try {
       const { analysis, wod: updatedWod } = await api.analyzeWod(id);
       setAnalysis(analysis);
       setStrategy(null);
       if (updatedWod) setWod(updatedWod);
       try {
+        setAnalysisStatus('Montando estratégia com base no seu histórico...');
         const { strategy } = await api.generateStrategy(id);
         setStrategy(strategy);
       } catch {
@@ -174,6 +217,7 @@ export function WodDetailPage() {
       );
     } finally {
       setAnalyzing(false);
+      setAnalysisStatus(null);
     }
   }
 
@@ -261,11 +305,19 @@ export function WodDetailPage() {
 
           {wod.notes && <p className="text-sm text-neutral-400">Notas: {wod.notes}</p>}
 
+          <WodFlowCard
+            hasText={Boolean(wod.rawText || wod.imageData)}
+            hasAnalysis={Boolean(analysis)}
+            hasStrategy={Boolean(strategy)}
+            hasResult={Boolean(wod.result)}
+          />
+
           {!analysis && (
             <div className="space-y-2">
               {analysisError && <Alert>{analysisError}</Alert>}
+              {analysisStatus && <Alert variant="info">{analysisStatus}</Alert>}
               <Button onClick={() => void handleAnalyze()} disabled={analyzing} fullWidth>
-                {analyzing ? 'Analisando e montando estratégia...' : '🔍 Analisar treino'}
+                {analyzing ? 'Trabalhando no treino...' : 'Analisar treino'}
               </Button>
             </div>
           )}
@@ -391,6 +443,7 @@ export function WodDetailPage() {
                 Confiança da análise: {Math.round(analysis.confidence * 100)}%
               </p>
               {analysisError && <Alert>{analysisError}</Alert>}
+              {analysisStatus && <Alert variant="info">{analysisStatus}</Alert>}
               <Button
                 onClick={() => void handleAnalyze()}
                 disabled={analyzing}
@@ -404,11 +457,20 @@ export function WodDetailPage() {
 
           {analysis && <AthleteContextSection wodId={wod.id} />}
 
-          {analysis && <StrategySection wodId={wod.id} initialStrategy={strategy} />}
+          {analysis && (
+            <StrategySection
+              wodId={wod.id}
+              initialStrategy={strategy}
+              onStrategyGenerated={setStrategy}
+            />
+          )}
 
           <WodResultSection
             wodId={wod.id}
             initialResult={(wod.result as WodResult | null | undefined) ?? null}
+            onResultSaved={(result) =>
+              setWod((current) => (current ? { ...current, result } : current))
+            }
           />
         </div>
       )}

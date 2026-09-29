@@ -1,8 +1,8 @@
-import type { FastifyInstance } from "fastify";
-import bcrypt from "bcryptjs";
-import { prisma } from "@wod-coach-ai/database";
-import { registerSchema, loginSchema } from "@wod-coach-ai/validation";
-import { AUTH_COOKIE_NAME } from "../plugins/auth.js";
+import type { FastifyInstance } from 'fastify';
+import bcrypt from 'bcryptjs';
+import { prisma } from '@wod-coach-ai/database';
+import { changePasswordSchema, registerSchema, loginSchema } from '@wod-coach-ai/validation';
+import { AUTH_COOKIE_NAME } from '../plugins/auth.js';
 
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
@@ -16,24 +16,24 @@ function publicUser(user: { id: string; email: string; name: string }) {
 // página, nem em /auth/logout).
 const BRUTE_FORCE_RATE_LIMIT = {
   max: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 100),
-  timeWindow: "1 minute",
+  timeWindow: '1 minute',
 };
 
 export default async function authRoutes(app: FastifyInstance) {
   app.post(
-    "/auth/register",
+    '/auth/register',
     { config: { rateLimit: BRUTE_FORCE_RATE_LIMIT } },
     async (request, reply) => {
       const parsed = registerSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
+        return reply.code(400).send({ error: 'Dados inválidos', details: parsed.error.flatten() });
       }
 
       const { name, email, password } = parsed.data;
 
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) {
-        return reply.code(409).send({ error: "E-mail já cadastrado" });
+        return reply.code(409).send({ error: 'E-mail já cadastrado' });
       }
 
       const passwordHash = await bcrypt.hash(password, 12);
@@ -42,9 +42,9 @@ export default async function authRoutes(app: FastifyInstance) {
       const token = app.jwt.sign({ sub: user.id });
       reply.setCookie(AUTH_COOKIE_NAME, token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
         maxAge: COOKIE_MAX_AGE_SECONDS,
       });
 
@@ -53,27 +53,27 @@ export default async function authRoutes(app: FastifyInstance) {
   );
 
   app.post(
-    "/auth/login",
+    '/auth/login',
     { config: { rateLimit: BRUTE_FORCE_RATE_LIMIT } },
     async (request, reply) => {
       const parsed = loginSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
+        return reply.code(400).send({ error: 'Dados inválidos', details: parsed.error.flatten() });
       }
 
       const { email, password } = parsed.data;
 
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-        return reply.code(401).send({ error: "E-mail ou senha inválidos" });
+        return reply.code(401).send({ error: 'E-mail ou senha inválidos' });
       }
 
       const token = app.jwt.sign({ sub: user.id });
       reply.setCookie(AUTH_COOKIE_NAME, token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
         maxAge: COOKIE_MAX_AGE_SECONDS,
       });
 
@@ -81,15 +81,38 @@ export default async function authRoutes(app: FastifyInstance) {
     },
   );
 
-  app.post("/auth/logout", async (_request, reply) => {
-    reply.clearCookie(AUTH_COOKIE_NAME, { path: "/" });
+  app.post('/auth/logout', async (_request, reply) => {
+    reply.clearCookie(AUTH_COOKIE_NAME, { path: '/' });
     return reply.send({ ok: true });
   });
 
-  app.get("/auth/me", { onRequest: [app.authenticate] }, async (request, reply) => {
+  app.post('/auth/change-password', { onRequest: [app.authenticate] }, async (request, reply) => {
+    const parsed = changePasswordSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Dados inválidos', details: parsed.error.flatten() });
+    }
+
+    const { currentPassword, newPassword } = parsed.data;
     const user = await prisma.user.findUnique({ where: { id: request.user.sub } });
     if (!user) {
-      return reply.code(404).send({ error: "Usuário não encontrado" });
+      return reply.code(404).send({ error: 'Usuário não encontrado' });
+    }
+
+    const currentPasswordMatches = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!currentPasswordMatches) {
+      return reply.code(401).send({ error: 'Senha atual inválida' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+
+    return reply.send({ ok: true });
+  });
+
+  app.get('/auth/me', { onRequest: [app.authenticate] }, async (request, reply) => {
+    const user = await prisma.user.findUnique({ where: { id: request.user.sub } });
+    if (!user) {
+      return reply.code(404).send({ error: 'Usuário não encontrado' });
     }
     return reply.send({ user: publicUser(user) });
   });
