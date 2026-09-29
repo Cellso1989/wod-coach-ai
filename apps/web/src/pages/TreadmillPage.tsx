@@ -1,29 +1,31 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   api,
   ApiError,
   type TreadmillEffort,
   type TreadmillSession,
   type TreadmillWorkout,
-} from "../lib/api.js";
-import { BrandHomeLink } from "../components/BrandHomeLink.js";
-import { TreadmillTimer } from "../components/TreadmillTimer.js";
+} from '../lib/api.js';
+import { BrandHomeLink } from '../components/BrandHomeLink.js';
+import { NavBar } from '../components/NavBar.js';
+import { TreadmillTimer } from '../components/TreadmillTimer.js';
+import { Alert, Button, EmptyState, PageShell, TextArea, TextInput } from '../components/ui.js';
 
 const EFFORT_LABELS: Record<TreadmillEffort, string> = {
-  leve: "Leve",
-  moderado: "Moderado",
-  moderado_alto: "Moderado alto",
-  forte: "Forte",
-  maximo: "Máximo",
+  leve: 'Leve',
+  moderado: 'Moderado',
+  moderado_alto: 'Moderado alto',
+  forte: 'Forte',
+  maximo: 'Máximo',
 };
 
 const EFFORT_COLORS: Record<TreadmillEffort, string> = {
-  leve: "bg-blue-600/20 text-blue-400",
-  moderado: "bg-green-600/20 text-green-400",
-  moderado_alto: "bg-yellow-600/20 text-yellow-400",
-  forte: "bg-orange-600/20 text-orange-400",
-  maximo: "bg-red-600/20 text-red-400",
+  leve: 'bg-blue-600/20 text-blue-400',
+  moderado: 'bg-green-600/20 text-green-400',
+  moderado_alto: 'bg-yellow-600/20 text-yellow-400',
+  forte: 'bg-orange-600/20 text-orange-400',
+  maximo: 'bg-red-600/20 text-red-400',
 };
 
 function EffortBadge({ effort }: { effort: TreadmillEffort }) {
@@ -40,11 +42,11 @@ export function TreadmillPage() {
   const navigate = useNavigate();
 
   const [level, setLevel] = useState(3);
-  const [durationMinutes, setDurationMinutes] = useState("15");
+  const [durationMinutes, setDurationMinutes] = useState('15');
   const [workout, setWorkout] = useState<TreadmillWorkout | null>(null);
 
-  const [distanceKm, setDistanceKm] = useState("");
-  const [notes, setNotes] = useState("");
+  const [distanceKm, setDistanceKm] = useState('');
+  const [notes, setNotes] = useState('');
 
   const [sessions, setSessions] = useState<TreadmillSession[]>([]);
 
@@ -85,7 +87,7 @@ export function TreadmillPage() {
       const { workout } = await api.generateTreadmillWorkout({ level, durationMinutes: duration });
       setWorkout(workout);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Não foi possível gerar o treino.");
+      setError(err instanceof ApiError ? err.message : 'Não foi possível gerar o treino.');
     } finally {
       setGenerating(false);
     }
@@ -118,26 +120,26 @@ export function TreadmillPage() {
         distanceKm: distanceKm ? Number(distanceKm) : undefined,
         notes: notes || undefined,
       });
-      setSavedMessage("Treino salvo com sucesso.");
-      setDistanceKm("");
-      setNotes("");
+      setSavedMessage('Treino salvo com sucesso.');
+      setDistanceKm('');
+      setNotes('');
       loadHistory();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Não foi possível salvar o treino.");
+      setError(err instanceof ApiError ? err.message : 'Não foi possível salvar o treino.');
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDeleteSession(id: string) {
-    if (!window.confirm("Apagar esta sessão do histórico? Essa ação não pode ser desfeita.")) {
+    if (!window.confirm('Apagar esta sessão do histórico? Essa ação não pode ser desfeita.')) {
       return;
     }
     try {
       await api.deleteTreadmillSession(id);
       setSessions((prev) => prev.filter((s) => s.id !== id));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Não foi possível apagar a sessão.");
+      setError(err instanceof ApiError ? err.message : 'Não foi possível apagar a sessão.');
     }
   }
 
@@ -151,180 +153,163 @@ export function TreadmillPage() {
       : null;
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-100 px-4 py-8">
-      <div className="mx-auto max-w-md space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">Treino de esteira</h1>
-          <div className="flex gap-3">
-            <BrandHomeLink />
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              className="text-sm text-neutral-400"
-            >
-              Voltar
-            </button>
-          </div>
-        </div>
-
-        {error && <p className="text-red-400 text-sm">{error}</p>}
-
-        {levelUpSuggestion && (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-orange-900/50 bg-orange-600/10 px-4 py-3">
-            <p className="text-sm text-orange-300">
-              Você já fez os últimos 3 treinos no nível {sessions[0]!.level}. Que tal tentar o
-              nível {levelUpSuggestion} hoje?
-            </p>
-            <button
-              type="button"
-              onClick={() => setLevel(levelUpSuggestion)}
-              className="shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold"
-            >
-              Usar nível {levelUpSuggestion}
-            </button>
-          </div>
-        )}
-
-        <div className="space-y-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-neutral-300">Nível</label>
-            <div className="flex gap-2">
-              {[1, 2, 3, 4, 5].map((lvl) => (
-                <button
-                  key={lvl}
-                  type="button"
-                  onClick={() => setLevel(lvl)}
-                  className={`h-10 flex-1 rounded-lg border text-sm font-semibold transition-colors duration-150 ${
-                    level === lvl
-                      ? "border-orange-600 bg-orange-600/10 text-orange-400"
-                      : "border-neutral-800 bg-neutral-950 text-neutral-100 hover:border-orange-900/60"
-                  }`}
-                >
-                  {lvl}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-neutral-300">Duração (min)</label>
-            <input
-              type="number"
-              min={5}
-              max={60}
-              value={durationMinutes}
-              onChange={(e) => setDurationMinutes(e.target.value)}
-              className="w-full rounded-lg bg-neutral-950 border border-neutral-800 px-4 py-3"
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={generating}
-            className="w-full rounded-lg bg-orange-600 py-3 font-semibold transition-colors duration-150 hover:bg-orange-700 active:bg-orange-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {generating ? "Gerando..." : "Gerar treino"}
+    <PageShell>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">Treino de esteira</h1>
+        <div className="flex gap-3">
+          <BrandHomeLink />
+          <button type="button" onClick={() => navigate(-1)} className="text-sm text-neutral-400">
+            Voltar
           </button>
         </div>
+      </div>
 
-        {workout && running && (
-          <TreadmillTimer workout={workout} audioContext={audioContext} onExit={handleExitRun} />
-        )}
+      <NavBar />
 
-        {workout && !running && (
-          <div className="space-y-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-            <h2 className="text-center text-sm font-semibold text-neutral-300">
-              Nível {workout.level} — {workout.durationMinutes} min
-            </h2>
+      {error && <Alert>{error}</Alert>}
 
-            <button
-              type="button"
-              onClick={handleStart}
-              className="w-full rounded-lg bg-orange-600 py-3 font-semibold transition-colors duration-150 hover:bg-orange-700 active:bg-orange-800"
-            >
-              ▶ Iniciar treino
-            </button>
+      {levelUpSuggestion && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-orange-900/50 bg-orange-600/10 px-4 py-3">
+          <p className="text-sm text-orange-300">
+            Você já fez os últimos 3 treinos no nível {sessions[0]!.level}. Que tal tentar o nível{' '}
+            {levelUpSuggestion} hoje?
+          </p>
+          <Button
+            type="button"
+            onClick={() => setLevel(levelUpSuggestion)}
+            className="min-h-9 shrink-0 px-3 py-1.5 text-xs"
+          >
+            Usar nível {levelUpSuggestion}
+          </Button>
+        </div>
+      )}
 
-            <div className="space-y-2">
-              {workout.blocks.map((block, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-3 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2"
-                >
-                  <span className="text-sm text-neutral-300 whitespace-nowrap text-center">
-                    {block.startMinute}&apos;-{block.endMinute}&apos;
-                  </span>
-                  <span className="text-sm font-medium text-center">{block.speedRange} km/h</span>
-                  <span className="flex justify-center">
-                    <EffortBadge effort={block.effort} />
+      <div className="space-y-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-neutral-300">Nível</label>
+          <div className="flex gap-2">
+            {[1, 2, 3, 4, 5].map((lvl) => (
+              <button
+                key={lvl}
+                type="button"
+                onClick={() => setLevel(lvl)}
+                className={`h-10 flex-1 rounded-lg border text-sm font-semibold transition-colors duration-150 ${
+                  level === lvl
+                    ? 'border-orange-600 bg-orange-600/10 text-orange-400'
+                    : 'border-neutral-800 bg-neutral-950 text-neutral-100 hover:border-orange-900/60'
+                }`}
+              >
+                {lvl}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-neutral-300">Duração (min)</label>
+          <TextInput
+            type="number"
+            min={5}
+            max={60}
+            value={durationMinutes}
+            onChange={(e) => setDurationMinutes(e.target.value)}
+          />
+        </div>
+
+        <Button type="button" onClick={handleGenerate} disabled={generating} fullWidth>
+          {generating ? 'Gerando...' : 'Gerar treino'}
+        </Button>
+      </div>
+
+      {workout && running && (
+        <TreadmillTimer workout={workout} audioContext={audioContext} onExit={handleExitRun} />
+      )}
+
+      {workout && !running && (
+        <div className="space-y-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+          <h2 className="text-center text-sm font-semibold text-neutral-300">
+            Nível {workout.level} — {workout.durationMinutes} min
+          </h2>
+
+          <Button type="button" onClick={handleStart} fullWidth>
+            ▶ Iniciar treino
+          </Button>
+
+          <div className="space-y-2">
+            {workout.blocks.map((block, index) => (
+              <div
+                key={index}
+                className="grid grid-cols-3 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2"
+              >
+                <span className="text-sm text-neutral-300 whitespace-nowrap text-center">
+                  {block.startMinute}&apos;-{block.endMinute}&apos;
+                </span>
+                <span className="text-sm font-medium text-center">{block.speedRange} km/h</span>
+                <span className="flex justify-center">
+                  <EffortBadge effort={block.effort} />
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-3 border-t border-neutral-800 pt-4">
+            {savedMessage && <Alert variant="success">{savedMessage}</Alert>}
+
+            <TextInput
+              type="number"
+              step="0.1"
+              min={0}
+              placeholder="Distância (km) — opcional"
+              value={distanceKm}
+              onChange={(e) => setDistanceKm(e.target.value)}
+            />
+            <TextArea
+              placeholder="Observações — opcional"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+            />
+
+            <Button type="button" onClick={handleSave} disabled={saving} fullWidth>
+              {saving ? 'Salvando...' : 'Salvar treino'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <h2 className="text-sm font-semibold text-neutral-300">Histórico</h2>
+        {sessions.length === 0 ? (
+          <EmptyState
+            title="Nenhum treino salvo ainda"
+            description="Gere um treino, execute e salve para acompanhar sua evolução."
+          />
+        ) : (
+          <ul className="space-y-2">
+            {sessions.map((session) => (
+              <li
+                key={session.id}
+                className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm"
+              >
+                <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                  <span>{new Date(session.date).toLocaleDateString('pt-BR')}</span>
+                  <span className="text-neutral-400">
+                    Nível {session.level} · {session.durationMinutes} min
+                    {session.distanceKm != null ? ` · ${session.distanceKm} km` : ''}
                   </span>
                 </div>
-              ))}
-            </div>
-
-            <div className="space-y-3 border-t border-neutral-800 pt-4">
-              {savedMessage && <p className="text-green-400 text-sm">{savedMessage}</p>}
-
-              <input
-                type="number"
-                step="0.1"
-                min={0}
-                placeholder="Distância (km) — opcional"
-                value={distanceKm}
-                onChange={(e) => setDistanceKm(e.target.value)}
-                className="w-full rounded-lg bg-neutral-950 border border-neutral-800 px-4 py-3"
-              />
-              <textarea
-                placeholder="Observações — opcional"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-                className="w-full rounded-lg bg-neutral-950 border border-neutral-800 px-4 py-3"
-              />
-
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="w-full rounded-lg bg-orange-600 py-3 font-semibold transition-colors duration-150 hover:bg-orange-700 active:bg-orange-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {saving ? "Salvando..." : "Salvar treino"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-neutral-300">Histórico</h2>
-          {sessions.length === 0 ? (
-            <p className="text-sm text-neutral-500">Nenhum treino salvo ainda.</p>
-          ) : (
-            <ul className="space-y-2">
-              {sessions.map((session) => (
-                <li
-                  key={session.id}
-                  className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm"
+                <Button
+                  onClick={() => void handleDeleteSession(session.id)}
+                  variant="danger"
+                  className="min-h-9 shrink-0 px-3 py-1.5 text-xs"
                 >
-                  <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                    <span>{new Date(session.date).toLocaleDateString("pt-BR")}</span>
-                    <span className="text-neutral-400">
-                      Nível {session.level} · {session.durationMinutes} min
-                      {session.distanceKm != null ? ` · ${session.distanceKm} km` : ""}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => void handleDeleteSession(session.id)}
-                    className="shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold"
-                  >
-                    Apagar
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+                  Apagar
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-    </main>
+    </PageShell>
   );
 }

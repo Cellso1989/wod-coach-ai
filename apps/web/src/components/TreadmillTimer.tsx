@@ -1,32 +1,33 @@
-import { useEffect, useRef, useState } from "react";
-import type { TreadmillEffort, TreadmillWorkout } from "../lib/api.js";
+import { useEffect, useRef, useState } from 'react';
+import type { TreadmillEffort, TreadmillWorkout } from '../lib/api.js';
+import { Button } from './ui.js';
 
 const EFFORT_LABELS: Record<TreadmillEffort, string> = {
-  leve: "Leve",
-  moderado: "Moderado",
-  moderado_alto: "Moderado alto",
-  forte: "Forte",
-  maximo: "Máximo",
+  leve: 'Leve',
+  moderado: 'Moderado',
+  moderado_alto: 'Moderado alto',
+  forte: 'Forte',
+  maximo: 'Máximo',
 };
 
 const EFFORT_COLORS: Record<TreadmillEffort, string> = {
-  leve: "bg-blue-600/20 text-blue-400 border-blue-900/50",
-  moderado: "bg-green-600/20 text-green-400 border-green-900/50",
-  moderado_alto: "bg-yellow-600/20 text-yellow-400 border-yellow-900/50",
-  forte: "bg-orange-600/20 text-orange-400 border-orange-900/50",
-  maximo: "bg-red-600/20 text-red-400 border-red-900/50",
+  leve: 'bg-blue-600/20 text-blue-400 border-blue-900/50',
+  moderado: 'bg-green-600/20 text-green-400 border-green-900/50',
+  moderado_alto: 'bg-yellow-600/20 text-yellow-400 border-yellow-900/50',
+  forte: 'bg-orange-600/20 text-orange-400 border-orange-900/50',
+  maximo: 'bg-red-600/20 text-red-400 border-red-900/50',
 };
 
 function formatMmSs(totalSeconds: number): string {
   const safe = Math.max(0, Math.round(totalSeconds));
   const minutes = Math.floor(safe / 60);
   const seconds = safe % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 function playBeep(context: AudioContext) {
   try {
-    if (context.state === "suspended") {
+    if (context.state === 'suspended') {
       void context.resume();
     }
     const oscillator = context.createOscillator();
@@ -45,7 +46,7 @@ function playBeep(context: AudioContext) {
 }
 
 function vibrate(pattern: number | number[]) {
-  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
     try {
       navigator.vibrate(pattern);
     } catch {
@@ -84,18 +85,18 @@ export function TreadmillTimer({ workout, audioContext, onExit }: TreadmillTimer
   }, [paused, finished, totalSeconds]);
 
   useEffect(() => {
-    if (!("wakeLock" in navigator)) return;
+    if (!('wakeLock' in navigator)) return;
 
     async function requestWakeLock() {
       try {
-        wakeLockRef.current = await navigator.wakeLock.request("screen");
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
       } catch {
         // Bloqueado (ex: pouca bateria) — segue sem travar a tela.
       }
     }
 
     function handleVisibilityChange() {
-      if (document.visibilityState === "visible" && !paused && !finished) {
+      if (document.visibilityState === 'visible' && !paused && !finished) {
         void requestWakeLock();
       }
     }
@@ -107,9 +108,9 @@ export function TreadmillTimer({ workout, audioContext, onExit }: TreadmillTimer
       wakeLockRef.current = null;
     }
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [paused, finished]);
 
@@ -123,8 +124,7 @@ export function TreadmillTimer({ workout, audioContext, onExit }: TreadmillTimer
   const currentBlockIndex = workout.blocks.findIndex(
     (block) => elapsedSeconds < block.endMinute * 60,
   );
-  const effectiveIndex =
-    currentBlockIndex === -1 ? workout.blocks.length - 1 : currentBlockIndex;
+  const effectiveIndex = currentBlockIndex === -1 ? workout.blocks.length - 1 : currentBlockIndex;
   const currentBlock = workout.blocks[effectiveIndex];
   const nextBlock = workout.blocks[effectiveIndex + 1] ?? null;
 
@@ -162,7 +162,7 @@ export function TreadmillTimer({ workout, audioContext, onExit }: TreadmillTimer
   }
 
   function handleStop() {
-    if (window.confirm("Encerrar o treino? O progresso do cronômetro não fica salvo.")) {
+    if (window.confirm('Encerrar o treino? O progresso do cronômetro não fica salvo.')) {
       onExit();
     }
   }
@@ -175,7 +175,10 @@ export function TreadmillTimer({ workout, audioContext, onExit }: TreadmillTimer
   const totalRemaining = totalSeconds - elapsedSeconds;
   const blockLengthSeconds = (currentBlock.endMinute - currentBlock.startMinute) * 60;
   const blockElapsed = blockLengthSeconds - blockRemaining;
-  const progressPct = blockLengthSeconds > 0 ? Math.min(100, Math.max(0, (blockElapsed / blockLengthSeconds) * 100)) : 100;
+  const progressPct =
+    blockLengthSeconds > 0
+      ? Math.min(100, Math.max(0, (blockElapsed / blockLengthSeconds) * 100))
+      : 100;
 
   if (finished) {
     return (
@@ -184,13 +187,9 @@ export function TreadmillTimer({ workout, audioContext, onExit }: TreadmillTimer
         <p className="text-sm text-neutral-400">
           Nível {workout.level} — {workout.durationMinutes} min
         </p>
-        <button
-          type="button"
-          onClick={onExit}
-          className="w-full rounded-lg bg-orange-600 py-3 font-semibold transition-colors duration-150 hover:bg-orange-700 active:bg-orange-800"
-        >
+        <Button type="button" onClick={onExit} fullWidth>
           Concluir
-        </button>
+        </Button>
       </div>
     );
   }
@@ -226,20 +225,12 @@ export function TreadmillTimer({ workout, audioContext, onExit }: TreadmillTimer
       </p>
 
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={handlePauseResume}
-          className="flex-1 rounded-lg border border-neutral-700 py-3 text-sm font-semibold text-neutral-300"
-        >
-          {paused ? "▶ Continuar" : "⏸ Pausar"}
-        </button>
-        <button
-          type="button"
-          onClick={handleStop}
-          className="flex-1 rounded-lg border border-red-900/50 py-3 text-sm font-semibold text-red-400"
-        >
+        <Button type="button" onClick={handlePauseResume} variant="secondary" className="flex-1">
+          {paused ? '▶ Continuar' : '⏸ Pausar'}
+        </Button>
+        <Button type="button" onClick={handleStop} variant="danger" className="flex-1">
           ⏹ Encerrar
-        </button>
+        </Button>
       </div>
     </div>
   );

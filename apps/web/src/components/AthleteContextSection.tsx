@@ -1,10 +1,11 @@
-import { useState } from "react";
-import { api, ApiError, type AthleteContext } from "../lib/api.js";
+import { useState } from 'react';
+import { api, ApiError, type AthleteContext } from '../lib/api.js';
+import { Alert, Button, Card } from './ui.js';
 
-const SUFFICIENCY_LABEL: Record<AthleteContext["dataSufficiency"], string> = {
-  low: "Baixa (poucos dados históricos)",
-  moderate: "Moderada",
-  high: "Alta",
+const SUFFICIENCY_LABEL: Record<AthleteContext['dataSufficiency'], string> = {
+  low: 'Baixa (poucos dados históricos)',
+  moderate: 'Moderada',
+  high: 'Alta',
 };
 
 export function AthleteContextSection({ wodId }: { wodId: string }) {
@@ -19,9 +20,7 @@ export function AthleteContextSection({ wodId }: { wodId: string }) {
       const { context } = await api.getAthleteContext(wodId);
       setContext(context);
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Não foi possível carregar seu histórico.",
-      );
+      setError(err instanceof ApiError ? err.message : 'Não foi possível carregar seu histórico.');
     } finally {
       setLoading(false);
     }
@@ -30,20 +29,16 @@ export function AthleteContextSection({ wodId }: { wodId: string }) {
   if (!context) {
     return (
       <div className="space-y-2">
-        {error && <p className="text-red-400 text-sm">{error}</p>}
-        <button
-          onClick={() => void handleLoad()}
-          disabled={loading}
-          className="w-full rounded-lg border border-neutral-700 py-3 font-semibold disabled:opacity-50"
-        >
-          {loading ? "Carregando..." : "📊 Ver meu histórico com esse tipo de treino"}
-        </button>
+        {error && <Alert>{error}</Alert>}
+        <Button onClick={() => void handleLoad()} disabled={loading} variant="secondary" fullWidth>
+          {loading ? 'Carregando...' : '📊 Ver meu histórico com esse tipo de treino'}
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+    <Card className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-neutral-300">Seu histórico</h2>
         <span className="text-xs text-neutral-500">
@@ -53,9 +48,9 @@ export function AthleteContextSection({ wodId }: { wodId: string }) {
 
       <div className="grid grid-cols-3 gap-2 text-center text-xs">
         {[
-          { label: "7 dias", window: context.trainingLoad.last7Days },
-          { label: "14 dias", window: context.trainingLoad.last14Days },
-          { label: "28 dias", window: context.trainingLoad.last28Days },
+          { label: '7 dias', window: context.trainingLoad.last7Days },
+          { label: '14 dias', window: context.trainingLoad.last14Days },
+          { label: '28 dias', window: context.trainingLoad.last28Days },
         ].map(({ label, window }) => (
           <div key={label} className="rounded-lg bg-neutral-800 p-2">
             <p className="text-neutral-500">{label}</p>
@@ -78,12 +73,14 @@ export function AthleteContextSection({ wodId }: { wodId: string }) {
 
       {context.similarWods.length > 0 ? (
         <div className="space-y-2">
-          <h3 className="text-xs font-semibold text-neutral-400">Treinos parecidos que você já fez</h3>
+          <h3 className="text-xs font-semibold text-neutral-400">
+            Treinos parecidos que você já fez
+          </h3>
           <ul className="space-y-2">
             {context.similarWods.map((match) => (
               <li key={match.wodId} className="rounded-lg bg-neutral-800 p-2 text-sm">
                 <div className="flex justify-between text-neutral-400">
-                  <span>{new Date(match.date).toLocaleDateString("pt-BR")}</span>
+                  <span>{new Date(match.date).toLocaleDateString('pt-BR')}</span>
                   <span>{Math.round(match.similarityScore * 100)}% parecido</span>
                 </div>
                 {match.result && <p>{match.result.score}</p>}
@@ -103,6 +100,6 @@ export function AthleteContextSection({ wodId }: { wodId: string }) {
           Ainda não há treinos parecidos o suficiente no seu histórico.
         </p>
       )}
-    </div>
+    </Card>
   );
 }

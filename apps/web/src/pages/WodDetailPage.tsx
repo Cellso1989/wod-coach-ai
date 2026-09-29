@@ -12,6 +12,8 @@ import { WodResultSection } from '../components/WodResultSection.js';
 import { AthleteContextSection } from '../components/AthleteContextSection.js';
 import { StrategySection } from '../components/StrategySection.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
+import { NavBar } from '../components/NavBar.js';
+import { Alert, Button, PageShell, TextArea, TextInput } from '../components/ui.js';
 
 const FORMAT_LABEL: Record<NonNullable<WodAnalysis['format']>, string> = {
   AMRAP: 'AMRAP',
@@ -176,253 +178,240 @@ export function WodDetailPage() {
   }
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-100 px-4 py-8">
-      <div className="mx-auto max-w-md space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">{wod?.name ?? 'WOD'}</h1>
-          <div className="flex items-center gap-3">
-            <BrandHomeLink />
-            <Link to="/wods" className="text-sm text-neutral-400">
-              Voltar
-            </Link>
-          </div>
+    <PageShell>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">{wod?.name ?? 'WOD'}</h1>
+        <div className="flex items-center gap-3">
+          <BrandHomeLink />
+          <Link to="/wods" className="text-sm text-neutral-400">
+            Voltar
+          </Link>
         </div>
-
-        {loading && <p className="text-neutral-400">Carregando...</p>}
-        {error && <p className="text-red-400 text-sm">{error}</p>}
-
-        {wod && (
-          <div className="space-y-4">
-            <p className="text-sm text-neutral-500">
-              {new Date(wod.date).toLocaleDateString('pt-BR')}
-            </p>
-
-            {wod.imageData && wod.imageMimeType && (
-              <img
-                src={`data:${wod.imageMimeType};base64,${wod.imageData}`}
-                alt="Foto do treino"
-                className="w-full rounded-lg border border-neutral-800"
-              />
-            )}
-
-            {!editing && (
-              <div className="space-y-2">
-                {wod.rawText && (
-                  <pre className="whitespace-pre-wrap rounded-lg border border-neutral-800 bg-neutral-900 p-4 font-mono text-sm">
-                    {wod.rawText}
-                  </pre>
-                )}
-                {deleteError && <p className="text-red-400 text-sm">{deleteError}</p>}
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={startEditing}
-                    disabled={deleting}
-                    className="rounded-lg border border-neutral-700 py-2 text-sm text-neutral-300 disabled:opacity-50"
-                  >
-                    {wod.rawText ? 'Editar' : 'Adicionar texto'}
-                  </button>
-                  <button
-                    onClick={() => void handleDeleteWod()}
-                    disabled={deleting}
-                    className="rounded-lg border border-red-900/70 py-2 text-sm font-semibold text-red-400 disabled:opacity-50"
-                  >
-                    {deleting ? 'Apagando...' : 'Apagar'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {editing && (
-              <div className="space-y-2">
-                {saveError && <p className="text-red-400 text-sm">{saveError}</p>}
-                <textarea
-                  value={editedText}
-                  onChange={(e) => setEditedText(e.target.value)}
-                  rows={8}
-                  className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3 font-mono text-sm"
-                />
-                <p className="text-xs text-neutral-600">
-                  Editar o texto apaga a análise e a estratégia já geradas para este WOD.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setEditing(false)}
-                    disabled={saving}
-                    className="flex-1 rounded-lg border border-neutral-700 py-2 text-sm text-neutral-300 disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={() => void handleSaveEdit()}
-                    disabled={saving || !editedText.trim()}
-                    className="flex-1 rounded-lg bg-orange-600 py-2 text-sm font-semibold disabled:opacity-50"
-                  >
-                    {saving ? 'Salvando...' : 'Salvar'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {wod.notes && <p className="text-sm text-neutral-400">Notas: {wod.notes}</p>}
-
-            {!analysis && (
-              <div className="space-y-2">
-                {analysisError && <p className="text-red-400 text-sm">{analysisError}</p>}
-                <button
-                  onClick={() => void handleAnalyze()}
-                  disabled={analyzing}
-                  className="w-full rounded-lg bg-orange-600 py-3 font-semibold disabled:opacity-50"
-                >
-                  {analyzing ? 'Analisando e montando estratégia...' : '🔍 Analisar treino'}
-                </button>
-              </div>
-            )}
-
-            {analysis && (
-              <div className="space-y-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-                <div className="flex items-center justify-between">
-                  <span className="rounded-full bg-orange-600/20 px-3 py-1 text-sm font-semibold text-orange-400">
-                    {analysis.format ? FORMAT_LABEL[analysis.format] : 'Formato não identificado'}
-                  </span>
-                  {!editingDuration && (
-                    <button
-                      onClick={startEditingDuration}
-                      className="text-sm text-neutral-400 underline decoration-dotted"
-                    >
-                      {analysis.durationMinutes != null
-                        ? `${analysis.durationMinutes} min ✏️`
-                        : 'Definir tempo ✏️'}
-                    </button>
-                  )}
-                </div>
-
-                {editingDuration && (
-                  <div className="space-y-2">
-                    {durationError && <p className="text-red-400 text-sm">{durationError}</p>}
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={0}
-                        max={180}
-                        placeholder="min"
-                        value={editedDuration}
-                        onChange={(e) => setEditedDuration(e.target.value)}
-                        className="w-24 rounded-lg bg-neutral-950 border border-neutral-800 px-3 py-2 text-sm"
-                      />
-                      <span className="text-sm text-neutral-500">
-                        minutos (time cap para FOR_TIME/CHIPPER, ou duração do AMRAP)
-                      </span>
-                    </div>
-                    <p className="text-xs text-neutral-600">
-                      Alterar o tempo apaga a estratégia já gerada, já que ela depende dele.
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setEditingDuration(false)}
-                        disabled={savingDuration}
-                        className="flex-1 rounded-lg border border-neutral-700 py-2 text-sm text-neutral-300 disabled:opacity-50"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={() => void handleSaveDuration()}
-                        disabled={savingDuration}
-                        className="flex-1 rounded-lg bg-orange-600 py-2 text-sm font-semibold disabled:opacity-50"
-                      >
-                        {savingDuration ? 'Salvando...' : 'Salvar'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {analysis.stimulus && (
-                  <p className="text-sm text-neutral-400">Estímulo: {analysis.stimulus}</p>
-                )}
-
-                {analysis.roundBreakdown && analysis.roundBreakdown.length > 0 ? (
-                  <div className="space-y-3">
-                    <h2 className="text-sm font-semibold text-neutral-300">Sequência do treino</h2>
-                    {analysis.roundBreakdown.map((round) => {
-                      const roundLabel = round.label?.trim() || `Bloco ${round.roundNumber}`;
-
-                      return (
-                        <div key={`${round.roundNumber}-${roundLabel}`} className="space-y-1">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-orange-400">
-                            {roundLabel}
-                          </p>
-                          <ul className="space-y-1">
-                            {round.movements.map((movement, index) => (
-                              <li key={index} className="flex items-center gap-2 text-sm">
-                                <span>{CATEGORY_ICON[movement.category] ?? '•'}</span>
-                                <span>{movement.name}</span>
-                                {movement.reps != null && (
-                                  <span className="text-neutral-500">{movement.reps} reps</span>
-                                )}
-                                {movement.distanceMeters != null && (
-                                  <span className="text-neutral-500">
-                                    {movement.distanceMeters}m
-                                  </span>
-                                )}
-                                {movement.loadDescription && (
-                                  <span className="text-neutral-500">
-                                    {movement.loadDescription}
-                                  </span>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <h2 className="text-sm font-semibold text-neutral-300">Movimentos</h2>
-                    <ul className="space-y-1">
-                      {analysis.movements.map((movement) => (
-                        <li key={movement.id} className="flex items-center gap-2 text-sm">
-                          <span>{CATEGORY_ICON[movement.category] ?? '•'}</span>
-                          <span>{movement.name}</span>
-                          {movement.reps != null && (
-                            <span className="text-neutral-500">{movement.reps} reps</span>
-                          )}
-                          {movement.distanceMeters != null && (
-                            <span className="text-neutral-500">{movement.distanceMeters}m</span>
-                          )}
-                          {movement.loadDescription && (
-                            <span className="text-neutral-500">{movement.loadDescription}</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                <p className="text-xs text-neutral-600">
-                  Confiança da análise: {Math.round(analysis.confidence * 100)}%
-                </p>
-                {analysisError && <p className="text-red-400 text-sm">{analysisError}</p>}
-                <button
-                  onClick={() => void handleAnalyze()}
-                  disabled={analyzing}
-                  className="w-full rounded-lg border border-neutral-700 py-2 text-sm font-semibold text-neutral-300 disabled:opacity-50"
-                >
-                  {analyzing ? 'Reanalisando...' : 'Reanalisar treino'}
-                </button>
-              </div>
-            )}
-
-            {analysis && <AthleteContextSection wodId={wod.id} />}
-
-            {analysis && <StrategySection wodId={wod.id} initialStrategy={strategy} />}
-
-            <WodResultSection
-              wodId={wod.id}
-              initialResult={(wod.result as WodResult | null | undefined) ?? null}
-            />
-          </div>
-        )}
       </div>
-    </main>
+
+      <NavBar />
+
+      {loading && <p className="text-neutral-400">Carregando...</p>}
+      {error && <Alert>{error}</Alert>}
+
+      {wod && (
+        <div className="space-y-4">
+          <p className="text-sm text-neutral-500">
+            {new Date(wod.date).toLocaleDateString('pt-BR')}
+          </p>
+
+          {wod.imageData && wod.imageMimeType && (
+            <img
+              src={`data:${wod.imageMimeType};base64,${wod.imageData}`}
+              alt="Foto do treino"
+              className="w-full rounded-lg border border-neutral-800"
+            />
+          )}
+
+          {!editing && (
+            <div className="space-y-2">
+              {wod.rawText && (
+                <pre className="whitespace-pre-wrap rounded-lg border border-neutral-800 bg-neutral-900 p-4 font-mono text-sm">
+                  {wod.rawText}
+                </pre>
+              )}
+              {deleteError && <Alert>{deleteError}</Alert>}
+              <div className="grid grid-cols-2 gap-2">
+                <Button onClick={startEditing} disabled={deleting} variant="secondary">
+                  {wod.rawText ? 'Editar' : 'Adicionar texto'}
+                </Button>
+                <Button onClick={() => void handleDeleteWod()} disabled={deleting} variant="danger">
+                  {deleting ? 'Apagando...' : 'Apagar'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {editing && (
+            <div className="space-y-2">
+              {saveError && <Alert>{saveError}</Alert>}
+              <TextArea
+                value={editedText}
+                onChange={(e) => setEditedText(e.target.value)}
+                rows={8}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-neutral-600">
+                Editar o texto apaga a análise e a estratégia já geradas para este WOD.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setEditing(false)}
+                  disabled={saving}
+                  variant="secondary"
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={() => void handleSaveEdit()}
+                  disabled={saving || !editedText.trim()}
+                  className="flex-1"
+                >
+                  {saving ? 'Salvando...' : 'Salvar'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {wod.notes && <p className="text-sm text-neutral-400">Notas: {wod.notes}</p>}
+
+          {!analysis && (
+            <div className="space-y-2">
+              {analysisError && <Alert>{analysisError}</Alert>}
+              <Button onClick={() => void handleAnalyze()} disabled={analyzing} fullWidth>
+                {analyzing ? 'Analisando e montando estratégia...' : '🔍 Analisar treino'}
+              </Button>
+            </div>
+          )}
+
+          {analysis && (
+            <div className="space-y-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+              <div className="flex items-center justify-between">
+                <span className="rounded-full bg-orange-600/20 px-3 py-1 text-sm font-semibold text-orange-400">
+                  {analysis.format ? FORMAT_LABEL[analysis.format] : 'Formato não identificado'}
+                </span>
+                {!editingDuration && (
+                  <button
+                    onClick={startEditingDuration}
+                    className="text-sm text-neutral-400 underline decoration-dotted"
+                  >
+                    {analysis.durationMinutes != null
+                      ? `${analysis.durationMinutes} min ✏️`
+                      : 'Definir tempo ✏️'}
+                  </button>
+                )}
+              </div>
+
+              {editingDuration && (
+                <div className="space-y-2">
+                  {durationError && <Alert>{durationError}</Alert>}
+                  <div className="flex items-center gap-2">
+                    <TextInput
+                      type="number"
+                      min={0}
+                      max={180}
+                      placeholder="min"
+                      value={editedDuration}
+                      onChange={(e) => setEditedDuration(e.target.value)}
+                      className="w-24 px-3 py-2 text-sm"
+                    />
+                    <span className="text-sm text-neutral-500">
+                      minutos (time cap para FOR_TIME/CHIPPER, ou duração do AMRAP)
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-600">
+                    Alterar o tempo apaga a estratégia já gerada, já que ela depende dele.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => setEditingDuration(false)}
+                      disabled={savingDuration}
+                      variant="secondary"
+                      className="flex-1"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={() => void handleSaveDuration()}
+                      disabled={savingDuration}
+                      className="flex-1"
+                    >
+                      {savingDuration ? 'Salvando...' : 'Salvar'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {analysis.stimulus && (
+                <p className="text-sm text-neutral-400">Estímulo: {analysis.stimulus}</p>
+              )}
+
+              {analysis.roundBreakdown && analysis.roundBreakdown.length > 0 ? (
+                <div className="space-y-3">
+                  <h2 className="text-sm font-semibold text-neutral-300">Sequência do treino</h2>
+                  {analysis.roundBreakdown.map((round) => {
+                    const roundLabel = round.label?.trim() || `Bloco ${round.roundNumber}`;
+
+                    return (
+                      <div key={`${round.roundNumber}-${roundLabel}`} className="space-y-1">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-orange-400">
+                          {roundLabel}
+                        </p>
+                        <ul className="space-y-1">
+                          {round.movements.map((movement, index) => (
+                            <li key={index} className="flex items-center gap-2 text-sm">
+                              <span>{CATEGORY_ICON[movement.category] ?? '•'}</span>
+                              <span>{movement.name}</span>
+                              {movement.reps != null && (
+                                <span className="text-neutral-500">{movement.reps} reps</span>
+                              )}
+                              {movement.distanceMeters != null && (
+                                <span className="text-neutral-500">{movement.distanceMeters}m</span>
+                              )}
+                              {movement.loadDescription && (
+                                <span className="text-neutral-500">{movement.loadDescription}</span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <h2 className="text-sm font-semibold text-neutral-300">Movimentos</h2>
+                  <ul className="space-y-1">
+                    {analysis.movements.map((movement) => (
+                      <li key={movement.id} className="flex items-center gap-2 text-sm">
+                        <span>{CATEGORY_ICON[movement.category] ?? '•'}</span>
+                        <span>{movement.name}</span>
+                        {movement.reps != null && (
+                          <span className="text-neutral-500">{movement.reps} reps</span>
+                        )}
+                        {movement.distanceMeters != null && (
+                          <span className="text-neutral-500">{movement.distanceMeters}m</span>
+                        )}
+                        {movement.loadDescription && (
+                          <span className="text-neutral-500">{movement.loadDescription}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <p className="text-xs text-neutral-600">
+                Confiança da análise: {Math.round(analysis.confidence * 100)}%
+              </p>
+              {analysisError && <Alert>{analysisError}</Alert>}
+              <Button
+                onClick={() => void handleAnalyze()}
+                disabled={analyzing}
+                variant="secondary"
+                fullWidth
+              >
+                {analyzing ? 'Reanalisando...' : 'Reanalisar treino'}
+              </Button>
+            </div>
+          )}
+
+          {analysis && <AthleteContextSection wodId={wod.id} />}
+
+          {analysis && <StrategySection wodId={wod.id} initialStrategy={strategy} />}
+
+          <WodResultSection
+            wodId={wod.id}
+            initialResult={(wod.result as WodResult | null | undefined) ?? null}
+          />
+        </div>
+      )}
+    </PageShell>
   );
 }

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { api, ApiError, type WodStrategy } from "../lib/api.js";
+import { useEffect, useState } from 'react';
+import { api, ApiError, type WodStrategy } from '../lib/api.js';
+import { Alert, Button, Card } from './ui.js';
 
 export function StrategySection({
   wodId,
@@ -23,9 +24,7 @@ export function StrategySection({
       const { strategy } = await api.generateStrategy(wodId);
       setStrategy(strategy);
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Não foi possível gerar a estratégia.",
-      );
+      setError(err instanceof ApiError ? err.message : 'Não foi possível gerar a estratégia.');
     } finally {
       setGenerating(false);
     }
@@ -34,20 +33,21 @@ export function StrategySection({
   if (!strategy) {
     return (
       <div className="space-y-2">
-        {error && <p className="text-red-400 text-sm">{error}</p>}
-        <button
+        {error && <Alert>{error}</Alert>}
+        <Button
           onClick={() => void handleGenerate()}
           disabled={generating}
-          className="w-full rounded-lg bg-orange-600 py-4 font-bold disabled:opacity-50"
+          fullWidth
+          className="py-4 font-bold"
         >
-          {generating ? "Montando sua estratégia..." : "🧠 Gerar estratégia para hoje"}
-        </button>
+          {generating ? 'Montando sua estratégia...' : '🧠 Gerar estratégia para hoje'}
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-5 rounded-lg border border-orange-900/50 bg-neutral-900 p-4">
+    <Card className="space-y-5 border-orange-900/50">
       <div className="text-center">
         <p className="text-xs uppercase tracking-wide text-neutral-500">Intensidade</p>
         <p className="text-4xl font-bold text-orange-500">{strategy.recommendedIntensity}/10</p>
@@ -67,7 +67,7 @@ export function StrategySection({
             <p className="text-sm font-medium text-neutral-300">Quebras por movimento</p>
             {strategy.breakStrategy.map((note) => (
               <p key={note.movement} className="text-sm text-neutral-400">
-                <span className="font-medium text-neutral-300">{note.movement}:</span>{" "}
+                <span className="font-medium text-neutral-300">{note.movement}:</span>{' '}
                 {note.strategy}
               </p>
             ))}
@@ -106,6 +106,6 @@ export function StrategySection({
       <p className="text-center text-xs text-neutral-600">
         Confiança da recomendação: {Math.round(strategy.confidence * 100)}%
       </p>
-    </div>
+    </Card>
   );
 }

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from 'react';
+import { TextInput } from './ui.js';
 
 interface MovementAutocompleteProps {
   value: string;
@@ -29,8 +30,8 @@ export function MovementAutocomplete({
         setOpen(false);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const query = value.trim().toLowerCase();
@@ -40,7 +41,7 @@ export function MovementAutocomplete({
 
   return (
     <div ref={containerRef} className="relative">
-      <input
+      <TextInput
         type="text"
         required
         autoComplete="off"
@@ -51,7 +52,6 @@ export function MovementAutocomplete({
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        className="w-full rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-3"
       />
       {open && filtered.length > 0 && (
         <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 shadow-lg">

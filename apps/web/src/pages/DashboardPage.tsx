@@ -11,6 +11,7 @@ import { useAuth } from '../lib/auth-context.js';
 import { NavBar } from '../components/NavBar.js';
 import { LogoutButton } from '../components/LogoutButton.js';
 import { TrainingFrequencyChart } from '../components/TrainingFrequencyChart.js';
+import { ButtonLink, Card, EmptyState, LoadingState, PageShell } from '../components/ui.js';
 
 function isToday(dateStr: string): boolean {
   const d = new Date(dateStr);
@@ -57,102 +58,98 @@ export function DashboardPage() {
   const otherRecentWods = recentWods.filter((w) => w !== todayWod).slice(0, 3);
 
   if (loading) {
-    return (
-      <main className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center">
-        <p>Carregando...</p>
-      </main>
-    );
+    return <LoadingState message="Carregando seu painel..." />;
   }
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-100 px-4 py-8">
-      <div className="mx-auto max-w-md space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold">WOD Coach AI - GPT</h1>
-            <p className="text-sm text-neutral-500">Olá, {user?.name}</p>
-          </div>
-          <LogoutButton />
+    <PageShell>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold">WOD Coach AI - GPT</h1>
+          <p className="text-sm text-neutral-500">Olá, {user?.name}</p>
         </div>
-
-        <NavBar />
-
-        {/* Prontidão de hoje */}
-        {checkin ? (
-          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 text-center">
-            <p className="text-lg font-semibold">🏋️ Seu WOD, minha análise. Manda aí!</p>
-          </div>
-        ) : (
-          <Link to="/checkin" className="block rounded-lg bg-orange-600 py-4 text-center font-bold">
-            📋 Fazer check-in de hoje
-          </Link>
-        )}
-
-        {/* Treino de hoje */}
-        {todayWod ? (
-          <Link
-            to={`/wods/${todayWod.id}`}
-            className="block rounded-lg border border-orange-900/50 bg-neutral-900 p-4"
-          >
-            <p className="text-xs uppercase tracking-wide text-neutral-500">Treino de hoje</p>
-            <p className="text-lg font-semibold">{todayWod.name ?? 'WOD sem nome'}</p>
-            {todayWod.result ? (
-              <p className="text-sm text-orange-400">{todayWod.result.score}</p>
-            ) : (
-              <p className="text-sm text-neutral-400">Ver estratégia e registrar resultado →</p>
-            )}
-          </Link>
-        ) : (
-          <Link
-            to="/wods/new"
-            className="block rounded-lg bg-orange-600 py-4 text-center font-bold"
-          >
-            💪 Enviar o WOD de hoje
-          </Link>
-        )}
-
-        {/* Últimos resultados */}
-        {otherRecentWods.length > 0 && (
-          <div className="space-y-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              Últimos treinos
-            </h2>
-            <ul className="space-y-2">
-              {otherRecentWods.map((wod) => (
-                <li key={wod.id}>
-                  <Link
-                    to={`/wods/${wod.id}`}
-                    className="block rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{wod.name ?? 'WOD sem nome'}</span>
-                      <span className="text-xs text-neutral-500">
-                        {new Date(wod.date).toLocaleDateString('pt-BR')}
-                      </span>
-                    </div>
-                    {wod.result && (
-                      <p className="mt-1 text-xs text-orange-400">{wod.result.score}</p>
-                    )}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {frequency.length > 0 && <TrainingFrequencyChart weeks={frequency} />}
-
-        {/* PRs */}
-        <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-neutral-400">Personal Records</p>
-            <Link to="/personal-records" className="text-sm text-orange-500">
-              Ver todos
-            </Link>
-          </div>
-          <p className="text-2xl font-bold">{records.length}</p>
-        </div>
+        <LogoutButton />
       </div>
-    </main>
+
+      <NavBar />
+
+      {/* Prontidão de hoje */}
+      {checkin ? (
+        <Card className="text-center">
+          <p className="text-lg font-semibold">Seu WOD, minha análise. Manda aí!</p>
+          <p className="mt-1 text-sm text-neutral-500">Check-in de hoje registrado.</p>
+        </Card>
+      ) : (
+        <ButtonLink to="/checkin" fullWidth>
+          Fazer check-in de hoje
+        </ButtonLink>
+      )}
+
+      {/* Treino de hoje */}
+      {todayWod ? (
+        <Link
+          to={`/wods/${todayWod.id}`}
+          className="block rounded-lg border border-orange-900/50 bg-neutral-900 p-4"
+        >
+          <p className="text-xs uppercase tracking-wide text-neutral-500">Treino de hoje</p>
+          <p className="text-lg font-semibold">{todayWod.name ?? 'WOD sem nome'}</p>
+          {todayWod.result ? (
+            <p className="text-sm text-orange-400">{todayWod.result.score}</p>
+          ) : (
+            <p className="text-sm text-neutral-400">Ver estratégia e registrar resultado →</p>
+          )}
+        </Link>
+      ) : (
+        <EmptyState
+          title="Nenhum WOD enviado hoje"
+          description="Envie uma foto ou cole o texto para gerar análise e estratégia."
+          action={
+            <ButtonLink to="/wods/new" fullWidth>
+              Enviar WOD de hoje
+            </ButtonLink>
+          }
+        />
+      )}
+
+      {/* Últimos resultados */}
+      {otherRecentWods.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            Últimos treinos
+          </h2>
+          <ul className="space-y-2">
+            {otherRecentWods.map((wod) => (
+              <li key={wod.id}>
+                <Link
+                  to={`/wods/${wod.id}`}
+                  className="block rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{wod.name ?? 'WOD sem nome'}</span>
+                    <span className="text-xs text-neutral-500">
+                      {new Date(wod.date).toLocaleDateString('pt-BR')}
+                    </span>
+                  </div>
+                  {wod.result && <p className="mt-1 text-xs text-orange-400">{wod.result.score}</p>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {frequency.length > 0 && <TrainingFrequencyChart weeks={frequency} />}
+
+      {/* PRs */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-neutral-400">Personal Records</p>
+          <Link to="/personal-records" className="text-sm text-orange-500">
+            Ver todos
+          </Link>
+        </div>
+        <p className="text-2xl font-bold">{records.length}</p>
+      </Card>
+    </PageShell>
   );
 }
