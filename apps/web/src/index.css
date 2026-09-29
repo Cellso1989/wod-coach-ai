@@ -1,3 +1,69 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    background-color: #0a0a0a;
+  }
+
+  html[data-theme='light'] {
+    background-color: #f7f7f5;
+  }
+}
+
+@layer utilities {
+  html[data-theme='light'] .bg-neutral-950 {
+    background-color: #f7f7f5;
+  }
+
+  html[data-theme='light'] .bg-neutral-900 {
+    background-color: #ffffff;
+  }
+
+  html[data-theme='light'] .bg-neutral-800 {
+    background-color: #f0efed;
+  }
+
+  html[data-theme='light'] .bg-neutral-950\/80 {
+    background-color: rgb(255 255 255 / 0.9);
+  }
+
+  html[data-theme='light'] .bg-neutral-950\/30 {
+    background-color: rgb(255 255 255 / 0.72);
+  }
+
+  html[data-theme='light'] .border-neutral-800,
+  html[data-theme='light'] .border-neutral-700 {
+    border-color: #dedbd6;
+  }
+
+  html[data-theme='light'] .border-dashed.border-neutral-700 {
+    border-color: #c9c5bd;
+  }
+
+  html[data-theme='light'] .text-neutral-100,
+  html[data-theme='light'] .text-neutral-200,
+  html[data-theme='light'] .text-neutral-300 {
+    color: #18181b;
+  }
+
+  html[data-theme='light'] .text-neutral-400 {
+    color: #52525b;
+  }
+
+  html[data-theme='light'] .text-neutral-500,
+  html[data-theme='light'] .text-neutral-600 {
+    color: #71717a;
+  }
+
+  html[data-theme='light'] .placeholder\:text-neutral-500::placeholder {
+    color: #8b8790;
+  }
+
+  html[data-theme='light'] .shadow-lg {
+    box-shadow:
+      0 10px 15px -3px rgb(24 24 27 / 0.12),
+      0 4px 6px -4px rgb(24 24 27 / 0.12);
+  }
+}

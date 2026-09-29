@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './lib/auth-provider.js';
+import { ThemeProvider } from './lib/theme-provider.js';
 import { ProtectedRoute } from './components/ProtectedRoute.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage.js';
@@ -16,26 +17,28 @@ import { TreadmillPage } from './pages/TreadmillPage.js';
 
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/checkin" element={<CheckinPage />} />
-            <Route path="/wods/new" element={<SubmitWodPage />} />
-            <Route path="/wods/:id" element={<WodDetailPage />} />
-            <Route path="/wods" element={<WodListPage />} />
-            <Route path="/personal-records" element={<PersonalRecordsPage />} />
-            <Route path="/treadmill" element={<TreadmillPage />} />
-          </Route>
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route element={<ProtectedRoute />}>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/checkin" element={<CheckinPage />} />
+              <Route path="/wods/new" element={<SubmitWodPage />} />
+              <Route path="/wods/:id" element={<WodDetailPage />} />
+              <Route path="/wods" element={<WodListPage />} />
+              <Route path="/personal-records" element={<PersonalRecordsPage />} />
+              <Route path="/treadmill" element={<TreadmillPage />} />
+            </Route>
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

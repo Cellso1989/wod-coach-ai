@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import { ThemeToggle } from './ThemeToggle.js';
 
 interface NavItem {
   to: string;
@@ -35,7 +36,7 @@ export function NavBar() {
             className={`flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-sm font-medium transition-colors duration-150 ${
               active
                 ? 'border-orange-600 bg-orange-600/10 text-orange-400'
-                : 'border-[#303030] bg-[#181818] text-neutral-100 hover:border-orange-900/60 hover:bg-[#202020]'
+                : 'border-neutral-800 bg-neutral-900 text-neutral-100 hover:border-orange-900/60 hover:bg-neutral-800'
             }`}
           >
             <span aria-hidden="true">{item.icon}</span>
@@ -43,6 +44,7 @@ export function NavBar() {
           </Link>
         );
       })}
+      <ThemeToggle />
     </nav>
   );
 }
