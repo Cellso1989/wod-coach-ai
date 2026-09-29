@@ -53,7 +53,7 @@ export function StrategySection({
       setStrategy(strategy);
       onStrategyGenerated?.(strategy);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Não foi possível gerar a estratégia.');
+      setError(err instanceof ApiError ? err.message : 'Nao foi possivel gerar a estrategia.');
     } finally {
       setGenerating(false);
     }
@@ -65,7 +65,7 @@ export function StrategySection({
         {error && <Alert>{error}</Alert>}
         {generating && (
           <Alert variant="info">
-            Cruzando o WOD com seus PRs e histórico. Isso pode levar alguns segundos.
+            Cruzando o WOD com seus PRs e historico. Isso pode levar alguns segundos.
           </Alert>
         )}
         <Button
@@ -74,7 +74,7 @@ export function StrategySection({
           fullWidth
           className="py-4 font-bold"
         >
-          {generating ? 'Montando estratégia...' : 'Gerar estratégia para hoje'}
+          {generating ? 'Montando estrategia...' : 'Gerar estrategia para hoje'}
         </Button>
       </div>
     );
@@ -97,7 +97,7 @@ export function StrategySection({
           <p className="text-xs text-neutral-500">RPE {strategy.targetRpe}</p>
         </div>
         <div className="rounded-lg bg-neutral-950 p-3">
-          <p className="text-xs uppercase tracking-wide text-neutral-500">Ponto crítico</p>
+          <p className="text-xs uppercase tracking-wide text-neutral-500">Ponto critico</p>
           <p className="mt-2 text-sm font-semibold text-yellow-400">
             {strategy.criticalPoint ?? 'Ritmo'}
           </p>
@@ -117,7 +117,7 @@ export function StrategySection({
             {strategy.restStrategy}
           </p>
           <p>
-            <span className="font-semibold text-neutral-200">Transições:</span>{' '}
+            <span className="font-semibold text-neutral-200">Transicoes:</span>{' '}
             {strategy.transitionStrategy}
           </p>
           <p>
@@ -128,20 +128,9 @@ export function StrategySection({
       </div>
 
       <StrategyNoteList title="Quebras" notes={strategy.breakStrategy} />
-      <StrategyNoteList title="Técnica" notes={strategy.movementStrategy} />
-
-      {strategy.warnings.length > 0 && (
-        <div className="space-y-2">
-          {strategy.warnings.map((warning) => (
-            <Alert key={warning} variant="info">
-              {warning}
-            </Alert>
-          ))}
-        </div>
-      )}
 
       <p className="text-center text-xs text-neutral-600">
-        Confiança da recomendação: {Math.round(strategy.confidence * 100)}%
+        Confianca da recomendacao: {Math.round(strategy.confidence * 100)}%
       </p>
     </Card>
   );
