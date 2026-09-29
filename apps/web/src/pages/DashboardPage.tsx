@@ -75,10 +75,10 @@ export function DashboardPage() {
           <div>
             <p className="text-xs uppercase tracking-wide text-neutral-500">Painel de hoje</p>
             <h2 className="text-lg font-semibold">
-              {todayWod ? (todayWod.name ?? 'WOD de hoje') : 'Comece pelo WOD de hoje'}
+              {todayWod ? (todayWod.name ?? 'WOD de hoje') : 'WOD de hoje'}
             </h2>
           </div>
-          <span className="rounded-full bg-neutral-950 px-2 py-1 text-xs text-neutral-400">
+          <span className="whitespace-nowrap rounded-full bg-neutral-950 px-2 py-1 text-xs text-neutral-400">
             {checkin ? 'Check-in ok' : 'Sem check-in'}
           </span>
         </div>
