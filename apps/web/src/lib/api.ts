@@ -99,6 +99,7 @@ export interface Wod {
   userId: string;
   date: string;
   sourceType: WodSourceType;
+  discipline?: 'CROSSFIT' | 'HYROX';
   rawText: string | null;
   imageMimeType: string | null;
   imageData?: string | null;
@@ -243,43 +244,57 @@ export interface WodStrategy {
   warnings: string[];
 }
 
-export type TreadmillEffort = 'leve' | 'moderado' | 'moderado_alto' | 'forte' | 'maximo';
+export type HyroxDivision =
+  'OPEN_MEN' | 'OPEN_WOMEN' | 'PRO_MEN' | 'PRO_WOMEN' | 'DOUBLES' | 'RELAY';
 
-export interface TreadmillBlock {
-  startMinute: number;
-  endMinute: number;
-  speedRange: string;
-  effort: TreadmillEffort;
+export type HyroxExperience = 'first_timer' | 'returning' | 'competitive';
+
+export interface HyroxStrategyInput {
+  rawWorkout: string;
+  division: HyroxDivision;
+  experience: HyroxExperience;
+  targetTimeMinutes?: number | null;
+  runPaceSecondsPerKm?: number | null;
+  strengths?: string[];
+  limiters?: string[];
+  injuryNotes?: string | null;
+  goal?: string | null;
 }
 
-export interface TreadmillWorkout {
-  level: number;
-  durationMinutes: number;
-  blocks: TreadmillBlock[];
+export interface HyroxBlockPlan {
+  block: string;
+  focus: string;
+  execution: string;
 }
 
-export interface TreadmillSession {
-  id: string;
-  level: number;
-  durationMinutes: number;
-  blocks: TreadmillBlock[];
-  distanceKm: number | null;
-  notes: string | null;
-  date: string;
+export interface HyroxBreakStrategy {
+  movement: string;
+  strategy: string;
 }
 
-export interface TreadmillSessionInput {
-  level: number;
-  durationMinutes: number;
-  blocks: TreadmillBlock[];
-  distanceKm?: number;
-  notes?: string;
+export interface HyroxStrategy {
+  id?: string;
+  wodId?: string;
+  workoutSummary: string;
+  target: string | null;
+  runPace: string | null;
+  pacing: string;
+  blockPlan: HyroxBlockPlan[];
+  breakStrategy: HyroxBreakStrategy[];
+  transitionStrategy: string;
+  criticalRisk: string;
+  finalPush: string;
+  warnings: string[];
+  confidence: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
+
+export type HyroxWorkout = Wod;
 
 export interface TrainingFrequencyWeek {
   weekStart: string;
   wodCount: number;
-  treadmillCount: number;
 }
 
 export interface AdminUserSummary {
@@ -294,7 +309,6 @@ export interface AdminUserSummary {
   resultCount: number;
   checkinCount: number;
   personalRecordCount: number;
-  treadmillSessionCount: number;
 }
 
 export interface AdminUsersResponse {
@@ -424,25 +438,54 @@ export const api = {
 
   getStrategy: (wodId: string) => request<{ strategy: WodStrategy }>(`/wods/${wodId}/strategy`),
 
-  generateTreadmillWorkout: (input: { level: number; durationMinutes: number }) =>
-    request<{ workout: TreadmillWorkout }>('/treadmill/generate', {
+  generateHyroxStrategy: (input: HyroxStrategyInput) =>
+    request<{ strategy: HyroxStrategy }>('/hyrox/strategy', {
       method: 'POST',
       body: JSON.stringify(input),
     }),
 
-  saveTreadmillSession: (input: TreadmillSessionInput) =>
-    request<{ session: TreadmillSession }>('/treadmill/sessions', {
-      method: 'POST',
+  submitHyroxWorkout: (input: WodSubmissionInput) => {
+    const formData = new FormData();
+    if (input.rawText) formData.set('rawText', input.rawText);
+    if (input.name) formData.set('name', input.name);
+    if (input.notes) formData.set('notes', input.notes);
+    if (input.image) formData.set('image', input.image);
+    return requestForm<{ workout: HyroxWorkout }>('/hyrox-workouts', formData);
+  },
+
+  listHyroxWorkouts: (limit?: number) =>
+    request<{ workouts: HyroxWorkout[] }>(`/hyrox-workouts${limit ? `?limit=${limit}` : ''}`),
+
+  getHyroxWorkout: (id: string) => request<{ workout: HyroxWorkout }>(`/hyrox-workouts/${id}`),
+
+  updateHyroxWorkout: (id: string, input: { rawText?: string; name?: string; notes?: string }) =>
+    request<{ workout: HyroxWorkout }>(`/hyrox-workouts/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(input),
     }),
 
-  listTreadmillSessions: (limit?: number) =>
-    request<{ sessions: TreadmillSession[] }>(
-      `/treadmill/sessions${limit ? `?limit=${limit}` : ''}`,
+  deleteHyroxWorkout: (id: string) => request<void>(`/hyrox-workouts/${id}`, { method: 'DELETE' }),
+
+  analyzeHyroxWorkout: (id: string) =>
+    request<{ analysis: WodAnalysis; workout?: HyroxWorkout | null }>(
+      `/hyrox-workouts/${id}/analyze`,
+      { method: 'POST' },
     ),
 
-  deleteTreadmillSession: (id: string) =>
-    request<void>(`/treadmill/sessions/${id}`, { method: 'DELETE' }),
+  getHyroxAnalysis: (id: string) =>
+    request<{ analysis: WodAnalysis }>(`/hyrox-workouts/${id}/analysis`),
+
+  updateHyroxAnalysis: (id: string, input: { durationMinutes: number | null }) =>
+    request<{ analysis: WodAnalysis }>(`/hyrox-workouts/${id}/analysis`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  generateHyroxWorkoutStrategy: (id: string) =>
+    request<{ strategy: HyroxStrategy }>(`/hyrox-workouts/${id}/strategy`, { method: 'POST' }),
+
+  getHyroxWorkoutStrategy: (id: string) =>
+    request<{ strategy: HyroxStrategy }>(`/hyrox-workouts/${id}/strategy`),
 
   getTrainingFrequency: (weeks?: number) =>
     request<{ weeks: TrainingFrequencyWeek[] }>(

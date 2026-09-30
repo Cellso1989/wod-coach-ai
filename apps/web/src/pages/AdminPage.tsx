@@ -108,7 +108,9 @@ export function AdminPage() {
                           </p>
                         </div>
 
-                        <p className="text-sm text-neutral-300">{formatDate(user.lastActivityAt)}</p>
+                        <p className="text-sm text-neutral-300">
+                          {formatDate(user.lastActivityAt)}
+                        </p>
 
                         <div className="grid grid-cols-4 gap-2 text-sm md:contents">
                           <p>
@@ -130,8 +132,7 @@ export function AdminPage() {
                         </div>
 
                         <div className="text-xs text-neutral-500 md:col-span-6">
-                          Resultados: {user.resultCount} · PRs: {user.personalRecordCount} · Esteira:{' '}
-                          {user.treadmillSessionCount}
+                          Resultados: {user.resultCount} · PRs: {user.personalRecordCount}
                         </div>
                       </li>
                     ))}

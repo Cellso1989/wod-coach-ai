@@ -84,6 +84,7 @@ export default async function wodRoutes(app: FastifyInstance) {
         userId: request.user.sub,
         date: date ?? new Date(),
         sourceType,
+        discipline: 'CROSSFIT',
         rawText,
         imageData: parsed.imageBuffer?.toString('base64'),
         imageMimeType: parsed.imageMimeType ?? undefined,
@@ -101,7 +102,7 @@ export default async function wodRoutes(app: FastifyInstance) {
     const limit = Math.min(Math.max(Number(query.limit ?? 20), 1), 100);
 
     const wods = await prisma.wod.findMany({
-      where: { userId: request.user.sub },
+      where: { userId: request.user.sub, discipline: 'CROSSFIT' },
       orderBy: { date: 'desc' },
       take: limit,
       select: wodListSelect,
@@ -114,7 +115,7 @@ export default async function wodRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
 
     const wod = await prisma.wod.findFirst({
-      where: { id, userId: request.user.sub },
+      where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
       include: {
         result: true,
       },
@@ -131,7 +132,7 @@ export default async function wodRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
 
     const existing = await prisma.wod.findFirst({
-      where: { id, userId: request.user.sub },
+      where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
     });
     if (!existing) {
       return reply.code(404).send({ error: 'WOD não encontrado' });
@@ -166,7 +167,7 @@ export default async function wodRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
 
     const existing = await prisma.wod.findFirst({
-      where: { id, userId: request.user.sub },
+      where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
     });
     if (!existing) {
       return reply.code(404).send({ error: 'WOD não encontrado' });

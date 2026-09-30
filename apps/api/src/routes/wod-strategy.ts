@@ -20,6 +20,14 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const userId = request.user.sub;
 
+    const crossfitWod = await prisma.wod.findFirst({
+      where: { id, userId, discipline: 'CROSSFIT' },
+      select: { id: true },
+    });
+    if (!crossfitWod) {
+      return reply.code(404).send({ error: 'WOD nÃ£o encontrado' });
+    }
+
     let athleteContextResult;
     try {
       athleteContextResult = await getAthleteContextForWod(userId, id);
@@ -157,7 +165,9 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
   app.get('/wods/:id/strategy', async (request, reply) => {
     const { id } = request.params as { id: string };
 
-    const wod = await prisma.wod.findFirst({ where: { id, userId: request.user.sub } });
+    const wod = await prisma.wod.findFirst({
+      where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
+    });
     if (!wod) {
       return reply.code(404).send({ error: 'WOD não encontrado' });
     }

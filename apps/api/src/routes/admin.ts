@@ -50,7 +50,6 @@ export default async function adminRoutes(app: FastifyInstance) {
             wods: true,
             dailyCheckins: true,
             personalRecords: true,
-            treadmillSessions: true,
           },
         },
       },
@@ -58,46 +57,33 @@ export default async function adminRoutes(app: FastifyInstance) {
 
     const rows = await Promise.all(
       users.map(async (user) => {
-        const [
-          analysisCount,
-          strategyCount,
-          resultCount,
-          latestWod,
-          latestCheckin,
-          latestRecord,
-          latestTreadmill,
-        ] = await Promise.all([
-          prisma.wodAnalysis.count({ where: { wod: { userId: user.id } } }),
-          prisma.wodStrategy.count({ where: { wod: { userId: user.id } } }),
-          prisma.wodResult.count({ where: { wod: { userId: user.id } } }),
-          prisma.wod.findFirst({
-            where: { userId: user.id },
-            orderBy: { updatedAt: 'desc' },
-            select: { updatedAt: true },
-          }),
-          prisma.dailyCheckin.findFirst({
-            where: { userId: user.id },
-            orderBy: { updatedAt: 'desc' },
-            select: { updatedAt: true },
-          }),
-          prisma.personalRecord.findFirst({
-            where: { userId: user.id },
-            orderBy: { updatedAt: 'desc' },
-            select: { updatedAt: true },
-          }),
-          prisma.treadmillSession.findFirst({
-            where: { userId: user.id },
-            orderBy: { updatedAt: 'desc' },
-            select: { updatedAt: true },
-          }),
-        ]);
+        const [analysisCount, strategyCount, resultCount, latestWod, latestCheckin, latestRecord] =
+          await Promise.all([
+            prisma.wodAnalysis.count({ where: { wod: { userId: user.id } } }),
+            prisma.wodStrategy.count({ where: { wod: { userId: user.id } } }),
+            prisma.wodResult.count({ where: { wod: { userId: user.id } } }),
+            prisma.wod.findFirst({
+              where: { userId: user.id },
+              orderBy: { updatedAt: 'desc' },
+              select: { updatedAt: true },
+            }),
+            prisma.dailyCheckin.findFirst({
+              where: { userId: user.id },
+              orderBy: { updatedAt: 'desc' },
+              select: { updatedAt: true },
+            }),
+            prisma.personalRecord.findFirst({
+              where: { userId: user.id },
+              orderBy: { updatedAt: 'desc' },
+              select: { updatedAt: true },
+            }),
+          ]);
 
         const lastActivityAt = latestDate([
           user.updatedAt,
           latestWod?.updatedAt,
           latestCheckin?.updatedAt,
           latestRecord?.updatedAt,
-          latestTreadmill?.updatedAt,
         ]);
 
         return {
@@ -112,7 +98,6 @@ export default async function adminRoutes(app: FastifyInstance) {
           resultCount,
           checkinCount: user._count.dailyCheckins,
           personalRecordCount: user._count.personalRecords,
-          treadmillSessionCount: user._count.treadmillSessions,
         };
       }),
     );

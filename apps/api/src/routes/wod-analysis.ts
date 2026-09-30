@@ -10,7 +10,9 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
   app.post('/wods/:id/analyze', async (request, reply) => {
     const { id } = request.params as { id: string };
 
-    const wod = await prisma.wod.findFirst({ where: { id, userId: request.user.sub } });
+    const wod = await prisma.wod.findFirst({
+      where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
+    });
     if (!wod) {
       return reply.code(404).send({ error: 'WOD não encontrado' });
     }
@@ -119,7 +121,9 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
   app.patch('/wods/:id/analysis', async (request, reply) => {
     const { id } = request.params as { id: string };
 
-    const wod = await prisma.wod.findFirst({ where: { id, userId: request.user.sub } });
+    const wod = await prisma.wod.findFirst({
+      where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
+    });
     if (!wod) {
       return reply.code(404).send({ error: 'WOD não encontrado' });
     }
@@ -149,7 +153,9 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
   app.get('/wods/:id/analysis', async (request, reply) => {
     const { id } = request.params as { id: string };
 
-    const wod = await prisma.wod.findFirst({ where: { id, userId: request.user.sub } });
+    const wod = await prisma.wod.findFirst({
+      where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
+    });
     if (!wod) {
       return reply.code(404).send({ error: 'WOD não encontrado' });
     }

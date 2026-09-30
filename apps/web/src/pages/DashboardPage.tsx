@@ -51,9 +51,7 @@ export function DashboardPage() {
         .slice(0, 3),
     [records],
   );
-  const lastFourWeeksTotal = frequency
-    .slice(-4)
-    .reduce((total, week) => total + week.wodCount + week.treadmillCount, 0);
+  const lastFourWeeksTotal = frequency.slice(-4).reduce((total, week) => total + week.wodCount, 0);
 
   if (loading) {
     return <LoadingState message="Carregando seu painel..." />;

@@ -21,10 +21,14 @@ model User {
   dailyCheckins       DailyCheckin[]
   wods                Wod[]
   personalRecords     PersonalRecord[]
-  treadmillSessions   TreadmillSession[]
   passwordResetTokens PasswordResetToken[]
 
   @@map("users")
+}
+
+enum WorkoutDiscipline {
+  CROSSFIT
+  HYROX
 }
 
 model PasswordResetToken {
@@ -123,6 +127,7 @@ model Wod {
 
   date       DateTime
   sourceType WodSourceType
+  discipline WorkoutDiscipline @default(CROSSFIT)
 
   rawText String?
 
@@ -138,9 +143,10 @@ model Wod {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  analysis WodAnalysis?
-  result   WodResult?
-  strategy WodStrategy?
+  analysis      WodAnalysis?
+  result        WodResult?
+  strategy      WodStrategy?
+  hyroxStrategy HyroxStrategy?
 
   @@map("wods")
 }
@@ -304,24 +310,26 @@ model WodStrategy {
   @@map("wod_strategies")
 }
 
-// Sessão de treino de esteira: protocolo gerado deterministicamente pelo
-// TreadmillAgent (sem IA — ver treadmill-agent.ts) e registrado pelo
-// atleta após a execução.
-model TreadmillSession {
-  id     String @id @default(uuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+model HyroxStrategy {
+  id    String @id @default(uuid())
+  wodId String @unique
+  wod   Wod    @relation(fields: [wodId], references: [id], onDelete: Cascade)
 
-  level           Int
-  durationMinutes Int
-  blocks          Json
-  distanceKm      Float?
-  notes           String?
-
-  date DateTime @default(now())
+  workoutSummary     String
+  target             String?
+  runPace            String?
+  pacing             String
+  blockPlan          Json
+  breakStrategy      Json
+  transitionStrategy String
+  criticalRisk       String
+  finalPush          String
+  confidence         Float
+  warnings           String[]
+  rawResponse        Json
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("treadmill_sessions")
+  @@map("hyrox_strategies")
 }

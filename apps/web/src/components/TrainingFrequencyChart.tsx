@@ -1,16 +1,15 @@
-import type { TrainingFrequencyWeek } from "../lib/api.js";
+import type { TrainingFrequencyWeek } from '../lib/api.js';
 
 const CHART_HEIGHT = 80;
-const WOD_COLOR = "#3987e5";
-const TREADMILL_COLOR = "#199e70";
+const WOD_COLOR = '#3987e5';
 
 interface TrainingFrequencyChartProps {
   weeks: TrainingFrequencyWeek[];
 }
 
 export function TrainingFrequencyChart({ weeks }: TrainingFrequencyChartProps) {
-  const hasData = weeks.some((w) => w.wodCount + w.treadmillCount > 0);
-  const maxTotal = Math.max(1, ...weeks.map((w) => w.wodCount + w.treadmillCount));
+  const hasData = weeks.some((w) => w.wodCount > 0);
+  const maxTotal = Math.max(1, ...weeks.map((w) => w.wodCount));
 
   return (
     <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
@@ -25,14 +24,6 @@ export function TrainingFrequencyChart({ weeks }: TrainingFrequencyChartProps) {
             />
             WODs
           </span>
-          <span className="flex items-center gap-1">
-            <span
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: TREADMILL_COLOR }}
-              aria-hidden="true"
-            />
-            Esteira
-          </span>
         </div>
       </div>
 
@@ -44,27 +35,17 @@ export function TrainingFrequencyChart({ weeks }: TrainingFrequencyChartProps) {
         <>
           <div className="flex items-end justify-between gap-1" style={{ height: CHART_HEIGHT }}>
             {weeks.map((week) => {
-              const total = week.wodCount + week.treadmillCount;
+              const total = week.wodCount;
               const wodHeight = (week.wodCount / maxTotal) * CHART_HEIGHT;
-              const treadmillHeight = (week.treadmillCount / maxTotal) * CHART_HEIGHT;
               return (
                 <div
                   key={week.weekStart}
                   className="flex flex-1 flex-col items-center justify-end gap-1"
-                  title={`Semana de ${new Date(week.weekStart).toLocaleDateString("pt-BR")}: ${week.wodCount} WOD(s), ${week.treadmillCount} esteira`}
+                  title={`Semana de ${new Date(week.weekStart).toLocaleDateString('pt-BR')}: ${week.wodCount} WOD(s)`}
                 >
-                  <span className="text-[10px] text-neutral-500">{total > 0 ? total : ""}</span>
+                  <span className="text-[10px] text-neutral-500">{total > 0 ? total : ''}</span>
                   <div className="flex w-full max-w-[18px] flex-col-reverse overflow-hidden rounded-t">
                     <div style={{ height: `${wodHeight}px`, backgroundColor: WOD_COLOR }} />
-                    {treadmillHeight > 0 && (
-                      <div
-                        style={{
-                          height: `${treadmillHeight}px`,
-                          backgroundColor: TREADMILL_COLOR,
-                          marginTop: 2,
-                        }}
-                      />
-                    )}
                   </div>
                 </div>
               );
@@ -73,9 +54,9 @@ export function TrainingFrequencyChart({ weeks }: TrainingFrequencyChartProps) {
           <div className="flex justify-between text-[10px] text-neutral-600">
             {weeks.map((week) => (
               <span key={week.weekStart} className="flex-1 text-center">
-                {new Date(week.weekStart).toLocaleDateString("pt-BR", {
-                  day: "2-digit",
-                  month: "2-digit",
+                {new Date(week.weekStart).toLocaleDateString('pt-BR', {
+                  day: '2-digit',
+                  month: '2-digit',
                 })}
               </span>
             ))}
