@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 interface NavItem {
@@ -23,6 +24,18 @@ function isActiveNavItem(pathname: string, item: NavItem) {
 
 export function NavBar() {
   const { pathname } = useLocation();
+  const itemRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
+  const activeItem = NAV_ITEMS.find((item) => isActiveNavItem(pathname, item));
+
+  useEffect(() => {
+    if (!activeItem) return;
+
+    itemRefs.current[activeItem.to]?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'nearest',
+      inline: 'center',
+    });
+  }, [activeItem]);
 
   return (
     <nav className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -31,6 +44,9 @@ export function NavBar() {
         return (
           <Link
             key={item.to}
+            ref={(element) => {
+              itemRefs.current[item.to] = element;
+            }}
             to={item.to}
             className={`flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-sm font-medium transition-colors duration-150 ${
               active
