@@ -3,6 +3,13 @@
 Este arquivo registra aprendizados e decisoes do projeto para manter contexto entre mudancas.
 Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 
+## Regra de memoria
+
+- Toda novidade relevante deve ser registrada neste arquivo no mesmo ciclo da implementacao.
+- Documentar decisoes de produto, regras de IA, limites de uso, infraestrutura, deploy, banco de dados, integracoes e comportamentos importantes de UX.
+- Nao registrar segredos, credenciais, tokens, URLs completas de banco, dados pessoais sensiveis ou conteudo privado dos usuarios.
+- Quando uma mudanca tiver arquivo proprio de apoio, como guia de migracao ou skill, manter aqui um resumo curto e apontar o detalhe no arquivo dedicado.
+
 ## Produto
 
 - O app e o WOD Coach AI, focado em CrossFit/WOD.
