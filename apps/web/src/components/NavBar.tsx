@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 interface NavItem {
   to: string;
-  icon: string;
+  icon?: string;
   label: string;
 }
 
@@ -10,7 +10,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/', icon: '🏠', label: 'Início' },
   { to: '/wods/new', icon: '+', label: 'Novo WOD' },
   { to: '/wods', icon: '🏋️', label: 'Meus WODs' },
-  { to: '/hyrox', icon: 'HX', label: 'HYROX' },
+  { to: '/hyrox', label: 'HYROX' },
   { to: '/personal-records', icon: '🏆', label: 'PRs' },
   { to: '/profile', icon: '👤', label: 'Perfil' },
 ];
@@ -38,7 +38,7 @@ export function NavBar() {
                 : 'border-neutral-800 bg-neutral-900 text-neutral-100 hover:border-orange-900/60 hover:bg-neutral-800'
             }`}
           >
-            <span aria-hidden="true">{item.icon}</span>
+            {item.icon ? <span aria-hidden="true">{item.icon}</span> : null}
             {item.label}
           </Link>
         );
