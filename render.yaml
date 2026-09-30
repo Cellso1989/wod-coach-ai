@@ -23,6 +23,10 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: gpt-5
+      - key: AI_DAILY_LIMIT
+        value: 3
+      - key: AI_DAILY_LIMIT_TIME_ZONE
+        value: America/Sao_Paulo
       - key: PASSWORD_RESET_BASE_URL
         value: https://wod-coach-ai.onrender.com
       - key: RESEND_API_KEY

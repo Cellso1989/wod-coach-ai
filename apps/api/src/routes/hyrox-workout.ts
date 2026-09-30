@@ -8,6 +8,11 @@ import {
   wodUpdateFieldsSchema,
   WOD_IMAGE_ALLOWED_MIME_TYPES,
 } from '@wod-coach-ai/validation';
+import { sendAiDailyLimitError } from '../services/ai-usage-limit-response.js';
+import {
+  AiDailyLimitExceededError,
+  consumeAiDailyUsage,
+} from '../services/ai-usage-limit-service.js';
 
 interface ParsedSubmission {
   fields: Record<string, string>;
@@ -187,6 +192,15 @@ export default async function hyroxWorkoutRoutes(app: FastifyInstance) {
       sendMessage = createOpenAiMessageSender();
     } catch {
       return reply.code(503).send({ error: 'A analise por IA ainda nao foi configurada' });
+    }
+
+    try {
+      await consumeAiDailyUsage(request.user.sub);
+    } catch (err) {
+      if (err instanceof AiDailyLimitExceededError) {
+        return sendAiDailyLimitError(reply, err);
+      }
+      throw err;
     }
 
     let output;

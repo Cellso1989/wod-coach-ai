@@ -19,6 +19,7 @@ model User {
 
   athleteProfile      AthleteProfile?
   dailyCheckins       DailyCheckin[]
+  aiDailyUsages       AiDailyUsage[]
   wods                Wod[]
   personalRecords     PersonalRecord[]
   passwordResetTokens PasswordResetToken[]
@@ -109,6 +110,22 @@ model DailyCheckin {
 
   @@unique([userId, date])
   @@map("daily_checkins")
+}
+
+model AiDailyUsage {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  dateKey String
+  count   Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, dateKey])
+  @@index([dateKey])
+  @@map("ai_daily_usages")
 }
 
 enum WodSourceType {

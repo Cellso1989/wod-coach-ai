@@ -67,6 +67,12 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 - O usuario pode colar um treino estilo HYROX definido pelo box, nao apenas uma prova padrao.
 - O `HyroxStrategyCoachAgent` usa IA para responder como executar o treino recebido: pacing, plano por blocos, quebras, transicoes, risco critico e final.
 - A prova oficial HYROX continua sendo referencia de dominio: corrida + estacoes, preservar capacidade de correr/trabalhar no bloco seguinte, sled push/pull e wall balls como pontos comuns de quebra.
+
+## Limites de IA
+
+- Chamadas que disparam IA usam uma quota diaria por usuario, compartilhada entre CrossFit e HYROX.
+- O limite padrao e `AI_DAILY_LIMIT=3`, contado por dia em `America/Sao_Paulo`.
+- Entram na quota: analisar WOD, gerar estrategia de WOD, analisar HYROX e gerar estrategia de HYROX.
 - Para treinos nao padronizados, respeitar a ordem original do treino e nao forcar exatamente as 8 estacoes oficiais.
 
 ## Frontend

@@ -12,6 +12,11 @@ import {
   WodNotFoundError,
   WodNotAnalyzedError,
 } from '../services/athlete-context-service.js';
+import { sendAiDailyLimitError } from '../services/ai-usage-limit-response.js';
+import {
+  AiDailyLimitExceededError,
+  consumeAiDailyUsage,
+} from '../services/ai-usage-limit-service.js';
 
 export default async function wodStrategyRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -56,6 +61,15 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
       return reply
         .code(503)
         .send({ error: 'A geração de estratégia por IA ainda não foi configurada' });
+    }
+
+    try {
+      await consumeAiDailyUsage(userId);
+    } catch (err) {
+      if (err instanceof AiDailyLimitExceededError) {
+        return sendAiDailyLimitError(reply, err);
+      }
+      throw err;
     }
 
     const strategyInput: StrategyCoachInput = {
