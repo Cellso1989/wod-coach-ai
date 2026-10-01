@@ -3,7 +3,7 @@ import { AiDailyLimitExceededError } from './ai-usage-limit-service.js';
 
 export function sendAiDailyLimitError(reply: FastifyReply, err: AiDailyLimitExceededError) {
   return reply.code(429).send({
-    error: `Limite diario de ${err.usage.limit} chamadas de IA atingido. Tente novamente amanha.`,
+    error: 'Calma, atleta! 😂 Até a IA precisa de descanso. Voltamos amanhã!',
     limit: err.usage.limit,
     used: err.usage.used,
     remaining: err.usage.remaining,

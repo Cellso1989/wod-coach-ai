@@ -78,7 +78,7 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 ## Limites de IA
 
 - Chamadas que disparam IA usam uma quota diaria por usuario, compartilhada entre CrossFit e HYROX.
-- O limite padrao e `AI_DAILY_LIMIT=3`, contado por dia em `America/Sao_Paulo`.
+- O limite padrao e `AI_DAILY_LIMIT=5`, contado por dia em `America/Sao_Paulo`.
 - Entram na quota: analisar WOD, gerar estrategia de WOD, analisar HYROX e gerar estrategia de HYROX.
 - Para treinos nao padronizados, respeitar a ordem original do treino e nao forcar exatamente as 8 estacoes oficiais.
 

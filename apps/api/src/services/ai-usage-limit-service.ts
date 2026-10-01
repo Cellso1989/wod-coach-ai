@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@wod-coach-ai/database';
 
-const DEFAULT_DAILY_LIMIT = 3;
+const DEFAULT_DAILY_LIMIT = 5;
 const DEFAULT_TIME_ZONE = 'America/Sao_Paulo';
 
 export interface AiDailyUsageResult {
@@ -13,7 +13,7 @@ export interface AiDailyUsageResult {
 
 export class AiDailyLimitExceededError extends Error {
   constructor(readonly usage: AiDailyUsageResult) {
-    super('Limite diario de analises atingido');
+    super('Limite diario de IA atingido');
   }
 }
 
