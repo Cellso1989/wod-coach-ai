@@ -3,11 +3,6 @@ import { Prisma, prisma } from '@wod-coach-ai/database';
 import { createOpenAiMessageSender, describeOpenAiApiError } from '@wod-coach-ai/ai';
 import { analyzeWod, WodAnalysisError } from '@wod-coach-ai/coach-engine';
 import { wodAnalysisUpdateSchema } from '@wod-coach-ai/validation';
-import { sendAiDailyLimitError } from '../services/ai-usage-limit-response.js';
-import {
-  AiDailyLimitExceededError,
-  consumeAiDailyUsage,
-} from '../services/ai-usage-limit-service.js';
 
 export default async function wodAnalysisRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -27,15 +22,6 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
       sendMessage = createOpenAiMessageSender();
     } catch {
       return reply.code(503).send({ error: 'A análise por IA ainda não foi configurada' });
-    }
-
-    try {
-      await consumeAiDailyUsage(request.user.sub);
-    } catch (err) {
-      if (err instanceof AiDailyLimitExceededError) {
-        return sendAiDailyLimitError(reply, err);
-      }
-      throw err;
     }
 
     let output;

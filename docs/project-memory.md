@@ -77,9 +77,8 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 
 ## Limites de IA
 
-- Chamadas que disparam IA usam uma quota diaria por usuario, compartilhada entre CrossFit e HYROX.
-- O limite padrao e `AI_DAILY_LIMIT=5`, contado por dia em `America/Sao_Paulo`.
-- Entram na quota: analisar WOD, gerar estrategia de WOD, analisar HYROX e gerar estrategia de HYROX.
+- O app nao aplica mais quota diaria por usuario para chamadas de IA.
+- Analisar WOD, gerar estrategia de WOD, analisar HYROX e gerar estrategia de HYROX chamam a IA diretamente quando a OpenAI esta configurada.
 - Para treinos nao padronizados, respeitar a ordem original do treino e nao forcar exatamente as 8 estacoes oficiais.
 
 ## Frontend

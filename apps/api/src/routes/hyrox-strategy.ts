@@ -7,11 +7,6 @@ import {
   type HyroxStrategyCoachInput,
 } from '@wod-coach-ai/coach-engine';
 import { hyroxStrategyInputSchema, type HyroxStrategyInput } from '@wod-coach-ai/validation';
-import { sendAiDailyLimitError } from '../services/ai-usage-limit-response.js';
-import {
-  AiDailyLimitExceededError,
-  consumeAiDailyUsage,
-} from '../services/ai-usage-limit-service.js';
 
 async function generateForUser(
   request: FastifyRequest,
@@ -34,16 +29,6 @@ async function generateForUser(
   } catch {
     reply.code(503).send({ error: 'A geracao de estrategia por IA ainda nao foi configurada' });
     return null;
-  }
-
-  try {
-    await consumeAiDailyUsage(userId);
-  } catch (err) {
-    if (err instanceof AiDailyLimitExceededError) {
-      sendAiDailyLimitError(reply, err);
-      return null;
-    }
-    throw err;
   }
 
   const strategyInput: HyroxStrategyCoachInput = {
