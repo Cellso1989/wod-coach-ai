@@ -1,0 +1,16 @@
+- main [ref=e3]:
+  - button "Mudar para tema claro" [ref=e5] [cursor=pointer]:
+    - generic [aria-hidden] [ref=e6]: ☀
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - heading "Entrar" [level=1] [ref=e9]
+      - paragraph [ref=e10]: Acesse para analisar seus treinos.
+    - textbox "Email" [ref=e11]
+    - textbox "Senha" [ref=e12]
+    - link "Esqueci minha senha" [ref=e14] [cursor=pointer]:
+      - /url: /forgot-password
+    - button "Entrar" [ref=e15] [cursor=pointer]
+    - paragraph [ref=e16]:
+      - text: Não tem conta?
+      - link "Criar conta" [ref=e17] [cursor=pointer]:
+        - /url: /register

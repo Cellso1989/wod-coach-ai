@@ -311,6 +311,26 @@ export interface AdminUserSummary {
   personalRecordCount: number;
 }
 
+export type AdminActivityType =
+  | 'WOD'
+  | 'ANALYSIS'
+  | 'STRATEGY'
+  | 'HYROX_STRATEGY'
+  | 'RESULT'
+  | 'CHECKIN'
+  | 'PERSONAL_RECORD';
+
+export interface AdminActivity {
+  id: string;
+  type: AdminActivityType;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  title: string;
+  detail: string | null;
+  occurredAt: string;
+}
+
 export interface AdminUsersResponse {
   totals: {
     users: number;
@@ -320,6 +340,7 @@ export interface AdminUsersResponse {
     results: number;
   };
   users: AdminUserSummary[];
+  activities: AdminActivity[];
 }
 
 export const api = {

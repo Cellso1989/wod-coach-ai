@@ -1,17 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  api,
-  type DailyCheckin,
-  type PersonalRecord,
-  type TrainingFrequencyWeek,
-  type Wod,
-} from '../lib/api.js';
+import { api, type DailyCheckin, type Wod } from '../lib/api.js';
 import { useAuth } from '../lib/auth-context.js';
 import { NavBar } from '../components/NavBar.js';
 import { LogoutButton } from '../components/LogoutButton.js';
 import { PageHeader } from '../components/PageHeader.js';
-import { TrainingFrequencyChart } from '../components/TrainingFrequencyChart.js';
 import { ButtonLink, Card, LoadingState, PageShell } from '../components/ui.js';
 
 function isToday(dateStr: string): boolean {
@@ -28,30 +21,18 @@ export function DashboardPage() {
   const { user } = useAuth();
   const [checkin, setCheckin] = useState<DailyCheckin | null>(null);
   const [recentWods, setRecentWods] = useState<Wod[]>([]);
-  const [records, setRecords] = useState<PersonalRecord[]>([]);
-  const [frequency, setFrequency] = useState<TrainingFrequencyWeek[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.allSettled([
       api.getTodayCheckin().then(({ checkin }) => setCheckin(checkin)),
       api.listWods(20).then(({ wods }) => setRecentWods(wods)),
-      api.getTrainingFrequency(8).then(({ weeks }) => setFrequency(weeks)),
-      api.listPersonalRecords().then(({ records }) => setRecords(records)),
     ]).finally(() => setLoading(false));
   }, []);
 
   const todayWod = recentWods.find((wod) => isToday(wod.date));
   const lastResultWod = recentWods.find((wod) => wod.result);
   const otherRecentWods = recentWods.filter((wod) => wod.id !== todayWod?.id).slice(0, 3);
-  const latestRecords = useMemo(
-    () =>
-      [...records]
-        .sort((a, b) => new Date(b.achievedAt).getTime() - new Date(a.achievedAt).getTime())
-        .slice(0, 3),
-    [records],
-  );
-  const lastFourWeeksTotal = frequency.slice(-4).reduce((total, week) => total + week.wodCount, 0);
 
   if (loading) {
     return <LoadingState message="Carregando seu painel..." />;
@@ -106,18 +87,10 @@ export function DashboardPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2 border-t border-neutral-800 pt-3 text-center">
+        <div className="border-t border-neutral-800 pt-3 text-center">
           <div>
             <p className="text-lg font-bold">{recentWods.length}</p>
             <p className="text-xs text-neutral-500">WODs</p>
-          </div>
-          <div>
-            <p className="text-lg font-bold">{records.length}</p>
-            <p className="text-xs text-neutral-500">PRs</p>
-          </div>
-          <div>
-            <p className="text-lg font-bold">{lastFourWeeksTotal}</p>
-            <p className="text-xs text-neutral-500">4 semanas</p>
           </div>
         </div>
       </Card>
@@ -168,28 +141,6 @@ export function DashboardPage() {
         </div>
       )}
 
-      {latestRecords.length > 0 && (
-        <Card className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-neutral-300">PRs recentes</p>
-            <Link to="/personal-records" className="text-sm text-orange-500">
-              Ver todos
-            </Link>
-          </div>
-          <ul className="space-y-2">
-            {latestRecords.map((record) => (
-              <li key={record.id} className="flex items-center justify-between gap-3 text-sm">
-                <span className="truncate text-neutral-300">{record.movementName}</span>
-                <span className="shrink-0 font-semibold">
-                  {record.value} {record.unit}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
-      {frequency.length > 0 && <TrainingFrequencyChart weeks={frequency} />}
     </PageShell>
   );
 }

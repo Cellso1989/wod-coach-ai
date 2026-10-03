@@ -11,6 +11,8 @@ import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
 import { PageHeader } from '../components/PageHeader.js';
 import { Alert, Button, Card, PageShell, TextArea } from '../components/ui.js';
+import { WhatsAppShareButton } from '../components/WhatsAppShareButton.js';
+import { formatHyroxStrategy } from '../lib/strategy-share.js';
 
 function HyroxFlowCard({
   hasText,
@@ -49,7 +51,13 @@ function HyroxFlowCard({
   );
 }
 
-function HyroxStrategyCard({ strategy }: { strategy: HyroxStrategy }) {
+function HyroxStrategyCard({
+  strategy,
+  workoutName,
+}: {
+  strategy: HyroxStrategy;
+  workoutName: string | null;
+}) {
   return (
     <Card className="space-y-4 border-orange-900/50">
       <div className="rounded-lg bg-neutral-950 p-4 text-center">
@@ -104,6 +112,8 @@ function HyroxStrategyCard({ strategy }: { strategy: HyroxStrategy }) {
           ))}
         </div>
       )}
+
+      <WhatsAppShareButton message={formatHyroxStrategy(strategy, workoutName)} />
 
       <p className="text-center text-xs text-neutral-600">
         Confianca da recomendacao: {Math.round(strategy.confidence * 100)}%
@@ -346,7 +356,7 @@ export function HyroxDetailPage() {
             </Button>
           )}
 
-          {strategy && <HyroxStrategyCard strategy={strategy} />}
+          {strategy && <HyroxStrategyCard strategy={strategy} workoutName={workout.name} />}
         </div>
       )}
     </PageShell>

@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError, type WodStrategy } from '../lib/api.js';
 import { Alert, Button, Card } from './ui.js';
+import { WhatsAppShareButton } from './WhatsAppShareButton.js';
+import { formatWodStrategy } from '../lib/strategy-share.js';
 
 interface StrategySectionProps {
   wodId: string;
+  workoutName?: string | null;
   initialStrategy: WodStrategy | null;
   onStrategyGenerated?: (strategy: WodStrategy) => void;
 }
@@ -34,6 +37,7 @@ function StrategyNoteList({
 
 export function StrategySection({
   wodId,
+  workoutName,
   initialStrategy,
   onStrategyGenerated,
 }: StrategySectionProps) {
@@ -128,6 +132,8 @@ export function StrategySection({
       </div>
 
       <StrategyNoteList title="Quebras" notes={strategy.breakStrategy} />
+
+      <WhatsAppShareButton message={formatWodStrategy(strategy, workoutName)} />
 
       <p className="text-center text-xs text-neutral-600">
         Confianca da recomendacao: {Math.round(strategy.confidence * 100)}%

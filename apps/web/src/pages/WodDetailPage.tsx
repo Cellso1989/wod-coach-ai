@@ -464,6 +464,7 @@ export function WodDetailPage() {
             <StrategySection
               wodId={wod.id}
               initialStrategy={strategy}
+              workoutName={wod.name}
               onStrategyGenerated={setStrategy}
             />
           )}

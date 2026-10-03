@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, ApiError, type AdminUsersResponse } from '../lib/api.js';
+import { api, ApiError, type AdminActivityType, type AdminUsersResponse } from '../lib/api.js';
 import { PageHeader } from '../components/PageHeader.js';
 import { Alert, Card, LoadingState } from '../components/ui.js';
 
@@ -23,6 +23,26 @@ function StatCard({ label, value }: { label: string; value: number }) {
     </Card>
   );
 }
+
+const ACTIVITY_STYLE: Record<AdminActivityType, string> = {
+  WOD: 'border-orange-800/70 bg-orange-950/30 text-orange-200',
+  ANALYSIS: 'border-sky-800/70 bg-sky-950/30 text-sky-200',
+  STRATEGY: 'border-emerald-800/70 bg-emerald-950/30 text-emerald-200',
+  HYROX_STRATEGY: 'border-cyan-800/70 bg-cyan-950/30 text-cyan-200',
+  RESULT: 'border-amber-800/70 bg-amber-950/30 text-amber-200',
+  CHECKIN: 'border-violet-800/70 bg-violet-950/30 text-violet-200',
+  PERSONAL_RECORD: 'border-rose-800/70 bg-rose-950/30 text-rose-200',
+};
+
+const ACTIVITY_LABEL: Record<AdminActivityType, string> = {
+  WOD: 'WOD',
+  ANALYSIS: 'Analise',
+  STRATEGY: 'Estrategia',
+  HYROX_STRATEGY: 'HYROX',
+  RESULT: 'Resultado',
+  CHECKIN: 'Check-in',
+  PERSONAL_RECORD: 'PR',
+};
 
 export function AdminPage() {
   const [data, setData] = useState<AdminUsersResponse | null>(null);
@@ -72,73 +92,125 @@ export function AdminPage() {
               <StatCard label="Resultados" value={data.totals.results} />
             </section>
 
-            <section className="space-y-3">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
-                  Usuarios cadastrados
-                </h2>
+            <section className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+              <div className="space-y-3">
+                <div>
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+                    Usuarios cadastrados
+                  </h2>
+                </div>
+
+                {data.users.length === 0 ? (
+                  <Card>
+                    <p className="text-sm text-neutral-400">Nenhum usuario cadastrado ainda.</p>
+                  </Card>
+                ) : (
+                  <div className="overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900">
+                    <div className="hidden grid-cols-[minmax(220px,1.4fr)_150px_repeat(4,88px)] gap-3 border-b border-neutral-800 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-500 md:grid">
+                      <span>Usuario</span>
+                      <span>Ultima atividade</span>
+                      <span>WODs</span>
+                      <span>Analises</span>
+                      <span>Estrategias</span>
+                      <span>Check-ins</span>
+                    </div>
+
+                    <ul className="divide-y divide-neutral-800">
+                      {data.users.map((user) => (
+                        <li
+                          key={user.id}
+                          className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(220px,1.4fr)_150px_repeat(4,88px)] md:items-center"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-neutral-100">{user.name}</p>
+                            <p className="truncate text-sm text-neutral-500">{user.email}</p>
+                            <p className="mt-1 text-xs text-neutral-600">
+                              Cadastro: {formatDate(user.createdAt)}
+                            </p>
+                          </div>
+
+                          <p className="text-sm text-neutral-300">
+                            {formatDate(user.lastActivityAt)}
+                          </p>
+
+                          <div className="grid grid-cols-4 gap-2 text-sm md:contents">
+                            <p>
+                              <span className="text-neutral-500 md:hidden">WODs: </span>
+                              {user.wodCount}
+                            </p>
+                            <p>
+                              <span className="text-neutral-500 md:hidden">Analises: </span>
+                              {user.analysisCount}
+                            </p>
+                            <p>
+                              <span className="text-neutral-500 md:hidden">Estrategias: </span>
+                              {user.strategyCount}
+                            </p>
+                            <p>
+                              <span className="text-neutral-500 md:hidden">Check-ins: </span>
+                              {user.checkinCount}
+                            </p>
+                          </div>
+
+                          <div className="text-xs text-neutral-500 md:col-span-6">
+                            Resultados: {user.resultCount} · PRs: {user.personalRecordCount}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
-              {data.users.length === 0 ? (
-                <Card>
-                  <p className="text-sm text-neutral-400">Nenhum usuario cadastrado ainda.</p>
-                </Card>
-              ) : (
-                <div className="overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900">
-                  <div className="hidden grid-cols-[minmax(220px,1.4fr)_150px_repeat(4,88px)] gap-3 border-b border-neutral-800 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-500 md:grid">
-                    <span>Usuario</span>
-                    <span>Ultima atividade</span>
-                    <span>WODs</span>
-                    <span>Analises</span>
-                    <span>Estrategias</span>
-                    <span>Check-ins</span>
-                  </div>
+              <aside className="space-y-3">
+                <div>
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+                    Atividades recentes
+                  </h2>
+                </div>
 
-                  <ul className="divide-y divide-neutral-800">
-                    {data.users.map((user) => (
+                {data.activities.length === 0 ? (
+                  <Card>
+                    <p className="text-sm text-neutral-400">Nenhuma atividade registrada ainda.</p>
+                  </Card>
+                ) : (
+                  <ol className="space-y-3">
+                    {data.activities.map((activity) => (
                       <li
-                        key={user.id}
-                        className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(220px,1.4fr)_150px_repeat(4,88px)] md:items-center"
+                        key={activity.id}
+                        className="rounded-lg border border-neutral-800 bg-neutral-900 p-4"
                       >
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-neutral-100">{user.name}</p>
-                          <p className="truncate text-sm text-neutral-500">{user.email}</p>
-                          <p className="mt-1 text-xs text-neutral-600">
-                            Cadastro: {formatDate(user.createdAt)}
-                          </p>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-neutral-100">
+                              {activity.userName}
+                            </p>
+                            <p className="truncate text-xs text-neutral-500">
+                              {activity.userEmail}
+                            </p>
+                          </div>
+                          <span
+                            className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-semibold ${ACTIVITY_STYLE[activity.type]}`}
+                          >
+                            {ACTIVITY_LABEL[activity.type]}
+                          </span>
                         </div>
-
-                        <p className="text-sm text-neutral-300">
-                          {formatDate(user.lastActivityAt)}
+                        <p className="mt-3 text-sm font-medium text-neutral-200">
+                          {activity.title}
                         </p>
-
-                        <div className="grid grid-cols-4 gap-2 text-sm md:contents">
-                          <p>
-                            <span className="md:hidden text-neutral-500">WODs: </span>
-                            {user.wodCount}
+                        {activity.detail && (
+                          <p className="mt-1 line-clamp-2 text-sm text-neutral-500">
+                            {activity.detail}
                           </p>
-                          <p>
-                            <span className="md:hidden text-neutral-500">Analises: </span>
-                            {user.analysisCount}
-                          </p>
-                          <p>
-                            <span className="md:hidden text-neutral-500">Estrategias: </span>
-                            {user.strategyCount}
-                          </p>
-                          <p>
-                            <span className="md:hidden text-neutral-500">Check-ins: </span>
-                            {user.checkinCount}
-                          </p>
-                        </div>
-
-                        <div className="text-xs text-neutral-500 md:col-span-6">
-                          Resultados: {user.resultCount} · PRs: {user.personalRecordCount}
-                        </div>
+                        )}
+                        <p className="mt-3 text-xs text-neutral-600">
+                          {formatDate(activity.occurredAt)}
+                        </p>
                       </li>
                     ))}
-                  </ul>
-                </div>
-              )}
+                  </ol>
+                )}
+              </aside>
             </section>
           </>
         )}
