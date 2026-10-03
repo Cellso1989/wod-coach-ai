@@ -7,6 +7,7 @@ import multipart from '@fastify/multipart';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import staticPlugin from '@fastify/static';
+import { prisma } from '@wod-coach-ai/database';
 import { WOD_IMAGE_MAX_BYTES } from '@wod-coach-ai/validation';
 import errorHandlerPlugin from './plugins/error-handler.js';
 import authPlugin from './plugins/auth.js';
@@ -26,6 +27,10 @@ import adminRoutes from './routes/admin.js';
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({ logger: true });
+
+  app.addHook('onClose', async () => {
+    await prisma.$disconnect();
+  });
 
   app.register(errorHandlerPlugin);
   app.register(helmet, {
