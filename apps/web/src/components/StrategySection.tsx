@@ -110,27 +110,6 @@ export function StrategySection({
 
       {strategy.loadRecommendation && <Alert variant="info">{strategy.loadRecommendation}</Alert>}
 
-      <div className="space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Plano</h3>
-        <div className="space-y-2 text-sm text-neutral-400">
-          <p>
-            <span className="font-semibold text-neutral-200">Ritmo:</span> {strategy.pacing}
-          </p>
-          <p>
-            <span className="font-semibold text-neutral-200">Descanso:</span>{' '}
-            {strategy.restStrategy}
-          </p>
-          <p>
-            <span className="font-semibold text-neutral-200">Transicoes:</span>{' '}
-            {strategy.transitionStrategy}
-          </p>
-          <p>
-            <span className="font-semibold text-neutral-200">Energia:</span>{' '}
-            {strategy.energyManagement}
-          </p>
-        </div>
-      </div>
-
       <StrategyNoteList title="Quebras" notes={strategy.breakStrategy} />
 
       <WhatsAppShareButton message={formatWodStrategy(strategy, workoutName)} />
