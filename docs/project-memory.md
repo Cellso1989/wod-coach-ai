@@ -89,6 +89,8 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 - A aba `+ Novo WOD` nao deve ativar tambem `Meus WODs`.
 - O admin fica fora da barra de navegacao.
 - O layout deve continuar limpo, escuro por padrao, com suporte ao tema claro.
+- No painel inicial, ocultar `Sem check-in`, manter `Check-in ok` quando houver check-in e usar `Meus PR's` como acesso a `/personal-records`.
+- O contador do painel inicial usa o texto `Wod's Realizados`.
 
 ## Deploy
 

@@ -60,9 +60,11 @@ export function DashboardPage() {
               {todayWod ? (todayWod.name ?? 'WOD de hoje') : 'WOD de hoje'}
             </h2>
           </div>
-          <span className="whitespace-nowrap rounded-full bg-neutral-950 px-2 py-1 text-xs text-neutral-400">
-            {checkin ? 'Check-in ok' : 'Sem check-in'}
-          </span>
+          {checkin && (
+            <span className="whitespace-nowrap rounded-full bg-neutral-950 px-2 py-1 text-xs text-neutral-400">
+              Check-in ok
+            </span>
+          )}
         </div>
 
         {todayWod ? (
@@ -79,18 +81,16 @@ export function DashboardPage() {
             <ButtonLink to="/wods/new" fullWidth>
               Enviar WOD
             </ButtonLink>
-            {!checkin && (
-              <ButtonLink to="/checkin" variant="secondary" fullWidth>
-                Fazer check-in
-              </ButtonLink>
-            )}
+            <ButtonLink to="/personal-records" variant="secondary" fullWidth>
+              Meus PR's
+            </ButtonLink>
           </div>
         )}
 
         <div className="border-t border-neutral-800 pt-3 text-center">
           <div>
             <p className="text-lg font-bold">{recentWods.length}</p>
-            <p className="text-xs text-neutral-500">WODs</p>
+            <p className="text-xs text-neutral-500">Wod's Realizados</p>
           </div>
         </div>
       </Card>
