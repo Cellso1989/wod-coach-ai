@@ -151,6 +151,10 @@ depois — com este formato exato:
 }
 
 Regras críticas:
+- "breakStrategy" e "movementStrategy" devem conter pelo menos 1 item cada. Se nao
+  houver quebra planejada, oriente executar unbroken ou indique a pausa entre series.
+  Para treino de um unico movimento, descreva a execucao entre series/intervalos em
+  "transitionStrategy". Nunca deixe "transitionStrategy" ou "energyManagement" vazios.
 - Modo celular: escreva como instrucoes de treino, nao como explicacao. Use frases curtas,
   comandos diretos e numeros. Evite "porque", justificativas longas e repeticoes. Se uma
   ideia ja apareceu em outro campo, nao repita.

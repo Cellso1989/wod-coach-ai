@@ -23,6 +23,17 @@ describe("strategyOutputSchema", () => {
     expect(strategyOutputSchema.safeParse(VALID).success).toBe(true);
   });
 
+  it.each([
+    { breakStrategy: [] },
+    { movementStrategy: [] },
+    { transitionStrategy: "" },
+    { transitionStrategy: "   " },
+    { energyManagement: "" },
+    { energyManagement: "   " },
+  ])("rejects incomplete execution guidance: %j", (incomplete) => {
+    expect(strategyOutputSchema.safeParse({ ...VALID, ...incomplete }).success).toBe(false);
+  });
+
   it("accepts null for loadRecommendation, target and criticalPoint", () => {
     const result = strategyOutputSchema.safeParse({
       ...VALID,

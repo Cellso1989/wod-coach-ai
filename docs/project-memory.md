@@ -54,6 +54,8 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 
 ## Estrategia
 
+- Novas estrategias CrossFit exigem ao menos um item em breakStrategy e movementStrategy, alem de transitionStrategy e energyManagement nao vazios. Respostas incompletas passam pelo retry corretivo existente; se continuarem invalidas, a API responde 502 sem persistir a estrategia.
+- Ausencia de quebra planejada deve ser expressa como execucao unbroken ou pausa entre series; treino de um unico movimento ainda deve orientar a passagem entre series/intervalos. Campos opcionais continuam podendo ser null.
 - A estrategia deve ser objetiva e facil de ler no celular.
 - Evitar texto longo e tecnico demais.
 - A estrategia deve considerar:

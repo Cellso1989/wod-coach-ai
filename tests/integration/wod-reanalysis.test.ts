@@ -232,6 +232,43 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  for (const reanalysis of [false, true]) {
+    it.each([
+      { breakStrategy: [] },
+      { movementStrategy: [] },
+      { transitionStrategy: '   ' },
+      { energyManagement: '   ' },
+    ])(
+      `rejects incomplete strategy after ${reanalysis ? 'reanalysis' : 'initial analysis'}: %j`,
+      async (incomplete) => {
+        if (reanalysis) await seedAnalyzedWod();
+        expect((await request('POST', 'analyze')).statusCode).toBe(200);
+        const previous = structuredClone(store);
+        const calls = mocks.sendMessage.mock.calls.length;
+        mocks.sendMessage.mockResolvedValue({
+          text: JSON.stringify({ ...STRATEGY, ...incomplete }),
+        });
+
+        expect((await request('POST', 'strategy')).statusCode).toBe(502);
+        expect(mocks.sendMessage.mock.calls.length - calls).toBe(2);
+        expect(store).toEqual(previous);
+        expect((await request('GET', 'strategy')).statusCode).toBe(404);
+        expect(mocks.prisma.wodStrategy.upsert).toHaveBeenCalledTimes(reanalysis ? 1 : 0);
+      },
+    );
+  }
+
+  it('persists only the complete strategy returned by the corrective retry', async () => {
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    mocks.sendMessage
+      .mockResolvedValueOnce({ text: JSON.stringify({ ...STRATEGY, breakStrategy: [] }) })
+      .mockResolvedValueOnce({ text: JSON.stringify(STRATEGY) });
+
+    expect((await request('POST', 'strategy')).statusCode).toBe(200);
+    expect(mocks.prisma.wodStrategy.upsert).toHaveBeenCalledTimes(1);
+    expect((await request('GET', 'strategy')).json().strategy).toMatchObject(STRATEGY);
+  });
+
   it('saves initial analysis and strategy with the complete WOD and athlete context', async () => {
     await seedAnalyzedWod();
     expect(store.wod.rawText).toBe(RAW_WOD);

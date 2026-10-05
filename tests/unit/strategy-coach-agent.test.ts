@@ -92,6 +92,53 @@ describe('generateStrategy', () => {
     expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    { breakStrategy: [] },
+    { movementStrategy: [] },
+    { transitionStrategy: '   ' },
+    { energyManagement: '   ' },
+  ])('rejects incomplete guidance after the existing retry: %j', async (incomplete) => {
+    const sendMessage: SendMessage = vi
+      .fn()
+      .mockResolvedValue(textMessage(JSON.stringify({ ...VALID_STRATEGY, ...incomplete })));
+
+    await expect(generateStrategy(MINIMAL_INPUT, sendMessage)).rejects.toBeInstanceOf(
+      StrategyGenerationError,
+    );
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries an incomplete strategy and returns only the complete correction', async () => {
+    const sendMessage: SendMessage = vi
+      .fn()
+      .mockResolvedValueOnce(textMessage(JSON.stringify({ ...VALID_STRATEGY, breakStrategy: [] })))
+      .mockResolvedValueOnce(textMessage(JSON.stringify(VALID_STRATEGY)));
+
+    const result = await generateStrategy(MINIMAL_INPUT, sendMessage);
+
+    expect(result.breakStrategy).toEqual(VALID_STRATEGY.breakStrategy);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    const retry = vi.mocked(sendMessage).mock.calls[1][0].messages[1].content[0];
+    expect(retry).toMatchObject({ type: 'text', text: expect.stringContaining('breakStrategy') });
+  });
+
+  it.each(['', '{"pacing":', '{}'])(
+    'rejects empty, truncated or missing output: %j',
+    async (text) => {
+      const sendMessage: SendMessage = vi.fn().mockResolvedValue(textMessage(text));
+      await expect(generateStrategy(MINIMAL_INPUT, sendMessage)).rejects.toBeInstanceOf(
+        StrategyGenerationError,
+      );
+    },
+  );
+
+  it('propagates transport failure without retrying or inventing a strategy', async () => {
+    const error = new Error('Transport timeout');
+    const sendMessage: SendMessage = vi.fn().mockRejectedValue(error);
+    await expect(generateStrategy(MINIMAL_INPUT, sendMessage)).rejects.toBe(error);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('instructs the model to attack movements when PR is clearly above round reps', async () => {
     const sendMessage: SendMessage = vi
       .fn()
