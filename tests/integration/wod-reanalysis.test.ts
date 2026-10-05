@@ -278,6 +278,39 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  for (const reanalysis of [false, true]) {
+    it.each([{ movements: [] }, { rounds: [{ roundNumber: 1, label: 'Round 1', movements: [] }] }])(
+      `rejects empty analysis after ${reanalysis ? 'saved analysis' : 'initial submission'}: %j`,
+      async (empty) => {
+        if (reanalysis) await seedAnalyzedWod();
+        const previous = structuredClone(store);
+        const calls = mocks.sendMessage.mock.calls.length;
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify({ ...ANALYSIS, ...empty }) });
+        expect((await request('POST', 'analyze')).statusCode).toBe(502);
+        expect(mocks.sendMessage.mock.calls.length - calls).toBe(2);
+        expect(store).toEqual(previous);
+        expect((await request('GET', 'analysis')).statusCode).toBe(reanalysis ? 200 : 404);
+        expect((await request('GET', 'strategy')).statusCode).toBe(reanalysis ? 200 : 404);
+      },
+    );
+  }
+
+  it('persists only the complete analysis returned by the corrective retry', async () => {
+    await seedAnalyzedWod();
+    const original = structuredClone(store.analysisVersions[0]);
+    mocks.sendMessage
+      .mockResolvedValueOnce({ text: JSON.stringify({ ...ANALYSIS, movements: [] }) })
+      .mockResolvedValueOnce({ text: JSON.stringify(ANALYSIS) });
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    expect(store.analysisVersions).toHaveLength(2);
+    expect(store.analysisVersions[0]).toEqual(original);
+    expect(store.analysis).toMatchObject({ roundBreakdown: ANALYSIS.rounds });
+    expect(store.analysis).toMatchObject({
+      movements: ANALYSIS.movements.map((movement) => expect.objectContaining(movement)),
+    });
+    expect(store.strategy).toBeNull();
+  });
+
   it.each([true, false])(
     'uses the locked WOD text for invalidation (delayed edit changes current text: %s)',
     async (changesCurrentText) => {

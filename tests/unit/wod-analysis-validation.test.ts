@@ -13,6 +13,19 @@ const VALID = {
 };
 
 describe("wodAnalysisOutputSchema", () => {
+  it("rejects an analysis with no movements", () => {
+    expect(wodAnalysisOutputSchema.safeParse({ ...VALID, movements: [] }).success).toBe(false);
+  });
+
+  it("rejects a declared round with no movements", () => {
+    expect(
+      wodAnalysisOutputSchema.safeParse({
+        ...VALID,
+        rounds: [{ roundNumber: 1, movements: [] }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts a well-formed analysis", () => {
     expect(wodAnalysisOutputSchema.safeParse(VALID).success).toBe(true);
   });

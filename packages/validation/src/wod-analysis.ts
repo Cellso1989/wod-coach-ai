@@ -25,7 +25,7 @@ export type WodMovementOutput = z.infer<typeof wodMovementOutputSchema>;
 export const wodRoundOutputSchema = z.object({
   roundNumber: z.number().int().min(1).max(50),
   label: z.string().trim().min(1).max(80).optional(),
-  movements: z.array(wodMovementOutputSchema).max(30),
+  movements: z.array(wodMovementOutputSchema).min(1).max(30),
 });
 
 export type WodRoundOutput = z.infer<typeof wodRoundOutputSchema>;
@@ -41,7 +41,7 @@ export const wodAnalysisOutputSchema = z.object({
   format: wodFormatSchema.nullable(),
   durationMinutes: z.number().int().min(0).max(180).nullable(),
   stimulus: z.string().trim().max(200).nullable(),
-  movements: z.array(wodMovementOutputSchema).max(30),
+  movements: z.array(wodMovementOutputSchema).min(1).max(30),
   rounds: z.array(wodRoundOutputSchema).max(20).nullable().optional(),
   estimatedDemand: z.object({
     engine: demandScale,

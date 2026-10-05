@@ -84,6 +84,8 @@ Regra crítica sobre "rounds" (WODs com estrutura por round):
   com "sets" dentro de um único movimento — só use "rounds" para a estrutura macro do WOD.
 
 Regras críticas:
+- "movements" deve conter ao menos um movimento identificado no treino. Cada round
+  declarado tambem deve conter ao menos um movimento. Nao retorne listas vazias.
 - Seja OBJETIVO E CONCISO. O atleta lê isso no celular, no meio do treino. "stimulus"
   deve ser uma expressão curta (2-4 palavras, ex: "engine + grip", "força pesada"), e
   cada item de "warnings" deve ser uma frase curta e direta, sem explicações longas.
