@@ -178,4 +178,72 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
       await prisma.wod.delete({ where: { id: fresh.id } });
     }
   });
+
+  it.each(['initial', 'reanalysis', 'image'] as const)(
+    'rejects stale %s analysis after a real WOD edit and preserves history',
+    async (scenario) => {
+      const fresh = await prisma.wod.create({
+        data: {
+          userId: 'version-legacy-user',
+          date: new Date(),
+          sourceType: scenario === 'image' ? 'IMAGE' : 'TEXT',
+          rawText: scenario === 'image' ? null : 'AMRAP 15: 10 T2B',
+          imageData: scenario === 'image' ? 'image-base64' : null,
+          imageMimeType: scenario === 'image' ? 'image/png' : null,
+        },
+      });
+      const url = `/api/wods/${fresh.id}`;
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+      try {
+        if (scenario === 'reanalysis') {
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+          ).toBe(200);
+          mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+          ).toBe(200);
+        }
+        const history = await prisma.wodAnalysisVersion.findMany({ where: { wodId: fresh.id } });
+        const strategies = await prisma.wodStrategyVersion.findMany({ where: { wodId: fresh.id } });
+        let release: (value: { text: string }) => void = () => {};
+        let started: () => void = () => {};
+        const observed = new Promise<void>((resolve) => {
+          started = resolve;
+        });
+        mocks.sendMessage.mockImplementationOnce(() => {
+          started();
+          return new Promise((resolve) => {
+            release = resolve;
+          });
+        });
+        const pending = app.inject({ method: 'POST', url: `${url}/analyze`, headers });
+        await observed;
+        expect(
+          (
+            await app.inject({
+              method: 'PUT',
+              url,
+              headers,
+              payload: { rawText: 'AMRAP 10: 5 Burpees' },
+            })
+          ).statusCode,
+        ).toBe(200);
+        const edited = await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id } });
+        release({ text: JSON.stringify({ ...ANALYSIS, extractedText: 'AMRAP 15: 10 T2B' }) });
+        expect((await pending).statusCode).toBe(409);
+        expect(await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id } })).toEqual(edited);
+        expect(await prisma.wodAnalysis.findUnique({ where: { wodId: fresh.id } })).toBeNull();
+        expect(await prisma.wodStrategy.findUnique({ where: { wodId: fresh.id } })).toBeNull();
+        expect(await prisma.wodAnalysisVersion.findMany({ where: { wodId: fresh.id } })).toEqual(
+          history,
+        );
+        expect(await prisma.wodStrategyVersion.findMany({ where: { wodId: fresh.id } })).toEqual(
+          strategies,
+        );
+      } finally {
+        await prisma.wod.delete({ where: { id: fresh.id } });
+      }
+    },
+  );
 });

@@ -45,8 +45,19 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
       throw err;
     }
 
-    const { analysis, wod: updatedWod } = await prisma.$transaction(async (tx) => {
+    const persisted = await prisma.$transaction(async (tx) => {
       await lockWodVersions(tx, wod.id);
+      const currentWod = await tx.wod.findFirst({
+        where: { id: wod.id, userId: request.user.sub, discipline: 'CROSSFIT' },
+      });
+      if (
+        !currentWod ||
+        currentWod.rawText !== wod.rawText ||
+        currentWod.imageData !== wod.imageData ||
+        currentWod.imageMimeType !== wod.imageMimeType
+      ) {
+        return null;
+      }
       let analysis = await tx.wodAnalysis.upsert({
         where: { wodId: wod.id },
         create: {
@@ -127,6 +138,12 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
       return { analysis, wod: updatedWod };
     });
 
+    if (!persisted) {
+      return reply.code(409).send({
+        error: 'O WOD mudou durante a analise. Atualize o treino e analise novamente.',
+      });
+    }
+    const { analysis, wod: updatedWod } = persisted;
     return reply.send({ analysis, wod: updatedWod });
   });
 

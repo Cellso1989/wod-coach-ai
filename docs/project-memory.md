@@ -41,6 +41,14 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 - Evitar chamadas desnecessarias a IA.
 - Se houver imagem, a extracao do texto ocorre dentro da chamada de analise do WOD.
 
+## Progresso das correcoes criticas
+
+- 1: invalidacao da estrategia antiga na reanalise corrigida e testada; commit 0b04382.
+- 2: rejeicao de orientacao de execucao incompleta corrigida e testada; commit b47454e.
+- 3: historico de analises e estrategias corrigido e testado; commit 6d7b90f.
+- 4: analise de fonte desatualizada durante edicao corrigida e testada; aguardando aprovacao de commit. Validacao: 133 testes usuais, 8 em PostgreSQL temporario, 2 E2E, typecheck, build e lint dos arquivos alterados passaram. Lint global permanece com erro preexistente de self em apps/web/public/sw.js.
+- 5: decisao de invalidacao baseada em leitura antiga entre edicoes concorrentes do WOD pendente; tratar separadamente.
+
 ## Analise de WOD
 
 - Analises e estrategias CrossFit mantem historico em wod_analysis_versions e wod_strategy_versions; as tabelas antigas continuam como projecoes ativas. Reanalise, regeneracao e edicao de duracao acrescentam versoes, sem sobrescrever as anteriores. Edicao do texto remove apenas as projecoes ativas; exclusao explicita do WOD remove tambem suas versoes.
@@ -48,7 +56,8 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 - Novas estrategias sao vinculadas a versao da analise usada e preservam o input enviado a IA (perfil, PRs, historico e estrutura do treino). Se essa analise deixar de ser ativa durante a geracao, a API responde 409 sem promover uma estrategia desatualizada. Alocacao de numeros e gravacoes sao serializadas por WOD, na mesma transacao das projecoes.
 - GET /api/wods/:id/versions consulta as versoes do proprio atleta, com 50 resultados por tipo e cursores analysisBefore/strategyBefore. A visualizacao de versoes antigas na interface fica para um passo separado. A migracao deve ser aplicada antes de executar a API atualizada.
 - Regressao com PostgreSQL real: gerar o cliente Prisma e executar `powershell -File tests/integration/run-wod-versions.ps1`. O runner cria e remove um container temporario, aplica migracoes com dados legados e verifica rollback, vinculos, paginacao, cascata e concorrencia. A suite real e opt-in; os testes usuais continuam independentes de banco.
-- NOVO PROBLEMA IDENTIFICADO (pendente): o texto do WOD pode ser editado enquanto a analise por IA esta em andamento. POST /analyze le a fonte antes da chamada e grava o resultado sem confirmar que essa fonte ainda e a atual. O historico conserva a fonte usada, mas a projecao ativa pode ficar incompativel com o texto editado. Tratar em um passo separado.
+- Conflito de fonte durante analise CrossFit corrigido: POST /analyze rele o WOD sob bloqueio antes de gravar. Se texto, imagem ou MIME mudaram (ou o WOD foi removido), responde 409 sem gravar analise, versao, invalidacao de estrategia ou extracao de texto. O atleta deve atualizar e analisar novamente; nao ha retry automatico. Regressao cobre analise inicial, reanalise e imagem com edicao concorrente, inclusive em PostgreSQL temporario.
+- NOVO PROBLEMA IDENTIFICADO (pendente): PUT /wods/:id calcula rawTextChanged antes de adquirir o bloqueio. Duas edicoes concorrentes podem usar uma leitura antiga para decidir a invalidacao, deixando analise/estrategia ativas para outro texto. Conferir a fonte atual dentro da transacao em um passo separado.
 - Ao analisar/reanalisar um WOD CrossFit com sucesso, a nova analise, a remocao da estrategia anterior e o texto extraido da imagem (quando aplicavel) sao persistidos na mesma transacao.
 - Se a analise por IA ou a transacao falhar, o conjunto anterior permanece. Se apenas a geracao posterior da estrategia falhar, a nova analise fica salva sem estrategia; uma estrategia antiga nao deve reaparecer ao recarregar.
 - A analise nunca deve agrupar movimentos perdendo a estrutura original do treino.

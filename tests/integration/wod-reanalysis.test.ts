@@ -149,7 +149,7 @@ function databaseClient(current: () => Store) {
   return {
     $queryRaw: async () => [],
     wod: {
-      findFirst: async () => current().wod,
+      findFirst: async () => structuredClone(current().wod),
       findUniqueOrThrow: async () => ({ ...current().wod, analysis: current().analysis }),
       update: async ({ data }: { data: Row }) => {
         if (failWrite === 'wod') throw new Error('WOD write failed');
@@ -275,6 +275,50 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  it.each(['initial', 'reanalysis', 'image'] as const)(
+    'rejects stale %s analysis after a text edit without changing the edited state',
+    async (scenario) => {
+      if (scenario === 'reanalysis') await seedAnalyzedWod();
+      if (scenario === 'image') {
+        store.wod.rawText = null;
+        store.wod.imageData = 'image-base64';
+        store.wod.imageMimeType = 'image/png';
+        store.wod.sourceType = 'IMAGE';
+      }
+      let release: (value: { text: string }) => void = () => {};
+      let started: () => void = () => {};
+      const observed = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      mocks.sendMessage.mockImplementationOnce(() => {
+        started();
+        return new Promise((resolve) => {
+          release = resolve;
+        });
+      });
+      const pending = request('POST', 'analyze');
+      await observed;
+      expect(
+        (
+          await app.inject({
+            method: 'PUT',
+            url: '/api/wods/wod-1',
+            headers,
+            payload: { rawText: 'AMRAP 10\n5 Burpees' },
+          })
+        ).statusCode,
+      ).toBe(200);
+      const edited = structuredClone(store);
+      release({ text: JSON.stringify({ ...ANALYSIS, extractedText: RAW_WOD }) });
+      const response = await pending;
+      expect(response.statusCode).toBe(409);
+      expect(store).toEqual(edited);
+      expect(store.analysis).toBeNull();
+      expect(store.strategy).toBeNull();
+      expect(store.wod.rawText).toBe('AMRAP 10\n5 Burpees');
+    },
+  );
+
   it('preserves versions when the WOD text is edited and active projections are removed', async () => {
     await seedAnalyzedWod();
     const versions = structuredClone({
@@ -292,6 +336,45 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
     expect(store.strategy).toBeNull();
     expect(store.analysisVersions).toEqual(versions.analyses);
     expect(store.strategyVersions).toEqual(versions.strategies);
+  });
+
+  it('does not replace a fresh analysis or invalidate its strategy when an older request completes', async () => {
+    await seedAnalyzedWod();
+    let release: (value: { text: string }) => void = () => {};
+    let started: () => void = () => {};
+    const observed = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    mocks.sendMessage.mockImplementationOnce(() => {
+      started();
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    });
+    const pending = request('POST', 'analyze');
+    await observed;
+    expect(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: '/api/wods/wod-1',
+          headers,
+          payload: { rawText: RAW_WOD.replace('20 min', '18 min') },
+        })
+      ).statusCode,
+    ).toBe(200);
+    mocks.sendMessage.mockResolvedValue({
+      text: JSON.stringify({ ...ANALYSIS, durationMinutes: 18 }),
+    });
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+    expect((await request('POST', 'strategy')).statusCode).toBe(200);
+    const fresh = structuredClone(store);
+    release({ text: JSON.stringify(ANALYSIS) });
+    expect((await pending).statusCode).toBe(409);
+    expect(store).toEqual(fresh);
+    expect((await request('GET', 'analysis')).json().analysis.durationMinutes).toBe(18);
+    expect((await request('GET', 'strategy')).json().strategy).toMatchObject(STRATEGY);
   });
 
   it('records a new analysis version for a duration edit without changing earlier snapshots', async () => {
