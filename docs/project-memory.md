@@ -48,9 +48,10 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 - 3: historico de analises e estrategias corrigido e testado; commit 6d7b90f.
 - 4: analise de fonte desatualizada durante edicao corrigida e testada; commit 51611c2. Validacao: 133 testes usuais, 8 em PostgreSQL temporario, 2 E2E, typecheck, build e lint dos arquivos alterados passaram.
 - 5: invalidacao entre edicoes concorrentes do WOD corrigida e testada; commit ace37e0. Validacao: 138 testes usuais, 10 em PostgreSQL temporario, 2 E2E, typecheck, build e lint dos arquivos alterados passaram.
-- 6: rejeicao de analise sem movimentos na raiz ou em round declarado corrigida e testada; aguardando aprovacao de commit. Validacao: 145 testes usuais, 14 em PostgreSQL temporario, 2 E2E, typecheck, build e lint dos arquivos alterados passaram. Lint global permanece com erro preexistente de self em apps/web/public/sw.js.
+- 6: rejeicao de analise sem movimentos na raiz ou em round declarado corrigida e testada; commit 1ee6def. Validacao: 145 testes usuais, 14 em PostgreSQL temporario, 2 E2E, typecheck, build e lint dos arquivos alterados passaram.
+- 7: exibicao completa da estrategia corrigida e testada; incluida no commit desta etapa com aprovacao do usuario. StrategySection apresenta ritmo, descanso, transicoes, energia, execucao por movimento e avisos, alem dos dados ja exibidos. Validacao: 145 testes usuais, 6 E2E, typecheck, build e lint dos arquivos alterados passaram; capturas de 390 e 1280 px verificadas. Lint global permanece com erro preexistente de self em apps/web/public/sw.js.
 - Revisao incremental e fila com evidencias: docs/auditoria-wod-pendencias.md. O relatorio original nao foi localizado no repositorio; a auditoria ainda nao esta encerrada.
-- NOVOS PROBLEMAS IDENTIFICADOS (pendentes, nao corrigidos junto com o ponto 6): 7, campos persistidos da estrategia nao exibidos em StrategySection; 8, schema ainda permite rounds explicitos ausentes e prompt tem instrucoes conflitantes; 9, contexto e estrutura da estrategia usam leituras separadas da analise. Os pontos 8 e 9 requerem regressao deterministica antes de correcao.
+- NOVOS PROBLEMAS IDENTIFICADOS (pendentes): 8, schema ainda permite rounds explicitos ausentes e prompt tem instrucoes conflitantes; 9, contexto e estrutura da estrategia usam leituras separadas da analise. Ambos requerem regressao deterministica antes de correcao. O ponto 7 foi tratado separadamente depois do ponto 6.
 
 ## Analise de WOD
 

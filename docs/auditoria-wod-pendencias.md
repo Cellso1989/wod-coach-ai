@@ -34,6 +34,7 @@ a estrategia anterior desse WOD como exemplo. Isso nao e, por si so, um defeito.
 | 3 | Preservar versoes e contexto enviado a estrategia | 6d7b90f |
 | 4 | Rejeitar analise se a fonte mudou durante a IA | 51611c2 |
 | 5 | Decidir invalidacao da edicao sob bloqueio | ace37e0 |
+| 6 | Rejeitar analises e rounds declarados sem movimentos | 1ee6def |
 
 ## Ponto 6: analise vazia
 
@@ -45,7 +46,7 @@ Correcao desta etapa: minimo de um movimento nessas listas, prompt alinhado,
 retry corretivo existente e 502 sem persistencia se a resposta continuar invalida.
 Nao corrige ainda omissao parcial de movimentos, volumes ou rounds.
 
-Resultado: corrigido e testado; aguardando aprovacao de commit. Seis testes novos
+Resultado: corrigido e testado; commit 1ee6def. Seis testes novos
 falharam antes da correcao. Depois, pnpm test passou com 145 testes; a suite opt-in
 executada por powershell -File tests/integration/run-wod-versions.ps1 passou com
 14 testes em PostgreSQL descartavel e esquema sem diferencas. Os 14 aparecem
@@ -58,14 +59,22 @@ global preexistente descrito abaixo. Nenhuma migracao da aplicacao foi executada
 
 ### 7. Campos da estrategia nao apresentados
 
-CRITICO, fato do componente. StrategySection.tsx apresenta meta, intensidade,
-ponto critico, carga, quebras e confianca, mas nao renderiza pacing, restStrategy,
-movementStrategy, transitionStrategy, energyManagement e warnings.
+CRITICO, corrigido e testado; incluido no commit desta etapa com aprovacao do usuario. Antes,
+StrategySection.tsx apresentava meta, intensidade, ponto critico, carga, quebras
+e confianca, mas nao renderizava pacing, restStrategy, movementStrategy,
+transitionStrategy, energyManagement e warnings.
 Reproducao: carregar uma estrategia com esses campos preenchidos e comparar
 GET /strategy com a tela. O compartilhamento nao substitui a leitura na tela.
 Impacto: orientacoes e avisos podem estar salvos e nao chegar ao atleta.
-Proxima etapa proposta: verificar decisao de produto e cobrir exibicao em E2E,
-sem mudar o contrato ou a geracao da IA junto com a interface.
+Correcao: secoes compactas e avisos visiveis no componente, sem alterar dados,
+API, prompt ou persistencia. Campos opcionais e listas legadas vazias nao geram
+secoes vazias. Conteudo nao e truncado; quebra de palavras protege a largura.
+Regressao wod-strategy-display.spec.ts falhou antes da mudanca e passou depois
+em analise inicial/reanalise, reload e viewports de 390/1280 px. As capturas em
+output/playwright foram inspecionadas. Junto com wod-reanalysis.spec.ts, os 6 E2E
+passaram. pnpm test passou com 145 testes (14 de banco opt-in nao foram repetidos
+nesta etapa de frontend); typecheck, build e lint dos arquivos alterados passaram.
+Lint global continua falhando no erro preexistente de self em sw.js.
 
 ### 8. Rounds explicitos ainda podem desaparecer
 

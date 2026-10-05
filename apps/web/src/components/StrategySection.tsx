@@ -85,38 +85,73 @@ export function StrategySection({
   }
 
   return (
-    <Card className="space-y-5 border-orange-900/50">
-      <div className="rounded-lg bg-neutral-950 p-4 text-center">
-        <p className="text-xs uppercase tracking-wide text-neutral-500">Meta</p>
-        <p className="mt-1 text-lg font-semibold">{strategy.target ?? strategy.goal}</p>
-        {strategy.target && <p className="mt-1 text-sm text-neutral-400">{strategy.goal}</p>}
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 text-center">
-        <div className="rounded-lg bg-neutral-950 p-3">
-          <p className="text-xs uppercase tracking-wide text-neutral-500">Intensidade</p>
-          <p className="mt-1 text-3xl font-bold text-orange-500">
-            {strategy.recommendedIntensity}/10
-          </p>
-          <p className="text-xs text-neutral-500">RPE {strategy.targetRpe}</p>
+    <section aria-label="Estrategia de execucao">
+      <Card className="space-y-5 break-words border-orange-900/50">
+        <div className="rounded-lg bg-neutral-950 p-4 text-center">
+          <p className="text-xs uppercase tracking-wide text-neutral-500">Meta</p>
+          <p className="mt-1 text-lg font-semibold">{strategy.target ?? strategy.goal}</p>
+          {strategy.target && <p className="mt-1 text-sm text-neutral-400">{strategy.goal}</p>}
         </div>
-        <div className="rounded-lg bg-neutral-950 p-3">
-          <p className="text-xs uppercase tracking-wide text-neutral-500">Ponto critico</p>
-          <p className="mt-2 text-sm font-semibold text-yellow-400">
-            {strategy.criticalPoint ?? 'Ritmo'}
-          </p>
+
+        <div className="grid grid-cols-2 gap-2 text-center">
+          <div className="rounded-lg bg-neutral-950 p-3">
+            <p className="text-xs uppercase tracking-wide text-neutral-500">Intensidade</p>
+            <p className="mt-1 text-3xl font-bold text-orange-500">
+              {strategy.recommendedIntensity}/10
+            </p>
+            <p className="text-xs text-neutral-500">RPE {strategy.targetRpe}</p>
+          </div>
+          <div className="rounded-lg bg-neutral-950 p-3">
+            <p className="text-xs uppercase tracking-wide text-neutral-500">Ponto critico</p>
+            <p className="mt-2 text-sm font-semibold text-yellow-400">
+              {strategy.criticalPoint ?? 'Ritmo'}
+            </p>
+          </div>
         </div>
-      </div>
 
-      {strategy.loadRecommendation && <Alert variant="info">{strategy.loadRecommendation}</Alert>}
+        {strategy.loadRecommendation && <Alert variant="info">{strategy.loadRecommendation}</Alert>}
 
-      <StrategyNoteList title="Quebras" notes={strategy.breakStrategy} />
+        {strategy.warnings.length > 0 && (
+          <section aria-label="Pontos de atencao" className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-yellow-400">
+              Pontos de atencao
+            </h3>
+            <ul className="space-y-2 border-l-2 border-yellow-500 pl-3 text-sm text-yellow-400">
+              {strategy.warnings.map((warning, index) => (
+                <li key={index}>{warning}</li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-      <WhatsAppShareButton message={formatWodStrategy(strategy, workoutName)} />
+        <dl className="space-y-4">
+          {[
+            ['Ritmo', strategy.pacing],
+            ['Descanso', strategy.restStrategy],
+            ['Transicoes', strategy.transitionStrategy],
+            ['Energia', strategy.energyManagement],
+          ].map(
+            ([label, text]) =>
+              text && (
+                <div key={label} className="space-y-1">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                    {label}
+                  </dt>
+                  <dd className="text-sm text-neutral-300">{text}</dd>
+                </div>
+              ),
+          )}
+        </dl>
 
-      <p className="text-center text-xs text-neutral-600">
-        Confianca da recomendacao: {Math.round(strategy.confidence * 100)}%
-      </p>
-    </Card>
+        <StrategyNoteList title="Quebras" notes={strategy.breakStrategy} />
+        <StrategyNoteList title="Execucao por movimento" notes={strategy.movementStrategy} />
+
+        <WhatsAppShareButton message={formatWodStrategy(strategy, workoutName)} />
+
+        <p className="text-center text-xs text-neutral-600">
+          Confianca da recomendacao: {Math.round(strategy.confidence * 100)}%
+        </p>
+      </Card>
+    </section>
   );
 }
