@@ -279,6 +279,35 @@ async function seedAnalyzedWod() {
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
   for (const reanalysis of [false, true]) {
+    it.each([null, ANALYSIS.rounds.slice(0, 3)])(
+      `preserves the WOD and versions when explicit rounds are missing (reanalysis: ${reanalysis}): %j`,
+      async (rounds) => {
+        if (reanalysis) await seedAnalyzedWod();
+        const previous = structuredClone(store);
+        const calls = mocks.sendMessage.mock.calls.length;
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify({ ...ANALYSIS, rounds }) });
+        expect((await request('POST', 'analyze')).statusCode).toBe(502);
+        expect(mocks.sendMessage.mock.calls.length - calls).toBe(2);
+        expect(store).toEqual(previous);
+      },
+    );
+  }
+
+  it('saves corrected rounds and forwards all blocks, reps and loads to the strategy agent', async () => {
+    mocks.sendMessage
+      .mockResolvedValueOnce({ text: JSON.stringify({ ...ANALYSIS, rounds: null }) })
+      .mockResolvedValueOnce({ text: JSON.stringify(ANALYSIS) });
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    expect(store.analysisVersions).toHaveLength(1);
+    expect(store.analysis?.roundBreakdown).toEqual(ANALYSIS.rounds);
+    mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+    expect((await request('POST', 'strategy')).statusCode).toBe(200);
+    expect(store.strategyVersions[0]).toMatchObject({
+      inputSnapshot: { wodAnalysis: { rounds: ANALYSIS.rounds } },
+    });
+  });
+
+  for (const reanalysis of [false, true]) {
     it.each([{ movements: [] }, { rounds: [{ roundNumber: 1, label: 'Round 1', movements: [] }] }])(
       `rejects empty analysis after ${reanalysis ? 'saved analysis' : 'initial submission'}: %j`,
       async (empty) => {

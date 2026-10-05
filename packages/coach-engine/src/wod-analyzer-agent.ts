@@ -74,9 +74,10 @@ Regra crítica sobre "rounds" (WODs com estrutura por round):
   descendentes; ou carga que aumenta a cada round). Nesses casos, SEMPRE preencha
   "rounds" com um item por round, cada um com as reps/carga REAIS daquele round
   específico — nunca deixe essa variação escondida só no total agregado de "movements".
-- Se o WOD for simples e uniforme (todo round com as mesmas reps/carga, ex: "5 rounds de
-  10 pull-ups + 15 air squats"), "rounds" pode ficar null — o total em "movements" já
-  representa bem o treino, não precisa repetir round a round.
+- Mesmo em rounds uniformes (ex: "5 rounds de 10 pull-ups + 15 air squats"),
+  preserve cada round com as reps/cargas daquele round. Use null apenas quando
+  nao houver estrutura por rounds/blocos definida; uma meta de rounds em AMRAP
+  nao define uma quantidade fixa de rounds a executar.
 - Quando preencher "rounds", o campo "movements" no nível raiz continua obrigatório e
   deve conter o TOTAL somado de cada movimento (soma de todos os rounds) — "rounds" é
   informação adicional para pacing, não substitui o resumo agregado.
@@ -104,6 +105,9 @@ Regras críticas:
 - Se receber uma imagem, leia o quadro/tela com atenção antes de responder.
 - REGRA PRIORITARIA: se o WOD contem "N rounds", "N rds", "N rodadas" ou titulo tipo
   "5 Rounds", preencha "rounds" com N itens mesmo quando os rounds forem identicos.
+  Buy-in e buy-out sao itens adicionais, nao substituem os N rounds. Se houver
+  varios blocos com contagens fixas, preserve todos em ordem. Numere os itens de
+  1 em diante, sem saltos ou duplicatas.
   Nunca devolva apenas totais agregados nesse caso.
 - Responda APENAS com o JSON. Nenhum outro texto.`;
 
@@ -128,10 +132,26 @@ function buildUserContent(input: WodAnalyzerInput): AiMessageContent {
   return content;
 }
 
+function explicitRoundCounts(text: string): number[] {
+  return [...text.matchAll(/(?<![\w.,])([1-9]\d*)\s*(?:rounds?|rds?|rodadas?)\b/gi)]
+    .filter(
+      (match) => !/\b(?:meta|goal|target|objetivo)\s*:?\s*$/i.test(text.slice(0, match.index)),
+    )
+    .map((match) => Number(match[1]));
+}
+
 function extractExplicitRoundCount(text: string): number | null {
-  const match = text.match(/\b([2-9]|1\d|20)\s*(?:rounds?|rds?|rodadas?)\b/i);
-  if (!match?.[1]) return null;
-  return Number(match[1]);
+  return explicitRoundCounts(text)[0] ?? null;
+}
+
+function executionBlockCount(text: string): number {
+  const counts = explicitRoundCounts(text);
+  if (!counts.length) return 0;
+  return (
+    counts.reduce((sum, count) => sum + count, 0) +
+    Number(/\bbuy[\s-]?in\b/i.test(text)) +
+    Number(/\bbuy[\s-]?out\b/i.test(text))
+  );
 }
 
 interface ParsedMovementLine {
@@ -213,7 +233,13 @@ function inferUniformRoundsFromText(
   if (output.rounds?.length) return output;
 
   const roundCount = extractExplicitRoundCount(sourceText);
-  if (!roundCount || roundCount < 2) return output;
+  if (!roundCount || roundCount < 2 || roundCount > 20) return output;
+  // Only reconstruct a single uniform block, never mixed execution phases.
+  if (
+    explicitRoundCounts(sourceText).length !== 1 ||
+    executionBlockCount(sourceText) !== roundCount
+  )
+    return output;
 
   const parsedLines = findRoundMovementLines(sourceText, roundCount, output.movements.length);
   if (parsedLines.length < output.movements.length) return output;
@@ -247,8 +273,10 @@ function normalizeAnalysisOutput(
   output: WodAnalysisOutput,
   input: WodAnalyzerInput,
 ): WodAnalysisOutput {
-  const sourceText = [input.rawText, output.extractedText].filter(Boolean).join('\n');
-  return sourceText.trim() ? inferUniformRoundsFromText(output, sourceText) : output;
+  return [input.rawText, output.extractedText].reduce<WodAnalysisOutput>(
+    (result, text) => (text?.trim() ? inferUniformRoundsFromText(result, text) : result),
+    output,
+  );
 }
 
 export interface AnalyzeWodOptions {
@@ -269,7 +297,44 @@ export async function analyzeWod(
 
   try {
     const output = await callAiForJson({
-      schema: wodAnalysisOutputSchema,
+      schema: wodAnalysisOutputSchema
+        .transform((output) => normalizeAnalysisOutput(output, input))
+        .pipe(wodAnalysisOutputSchema)
+        .superRefine((output, ctx) => {
+          // Check each source separately: extracted text may repeat the user's text.
+          const expected = Math.max(
+            executionBlockCount(input.rawText ?? ''),
+            executionBlockCount(output.extractedText ?? ''),
+          );
+          if (!expected) return;
+          for (const phase of ['in', 'out']) {
+            const marker = new RegExp(`\\bbuy[\\s-]?${phase}\\b`, 'i');
+            const explicit = [input.rawText, output.extractedText].some((text) =>
+              marker.test(text ?? ''),
+            );
+            if (explicit && !output.rounds?.some((round) => marker.test(round.label ?? ''))) {
+              ctx.addIssue({
+                code: 'custom',
+                path: ['rounds'],
+                message: `Identifique o buy-${phase} em um bloco separado com label, sem agrega-lo aos rounds principais.`,
+              });
+            }
+          }
+          if ((output.rounds?.length ?? 0) < expected) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['rounds'],
+              message: `Preserve pelo menos ${expected} itens: todos os rounds fixos e buy-in/buy-out explicitos, sem apenas totais agregados.`,
+            });
+          } else if (output.rounds!.some((round, index) => round.roundNumber !== index + 1)) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['rounds'],
+              message:
+                'Numere os rounds/blocos em ordem, de 1 em diante, sem saltos ou duplicatas.',
+            });
+          }
+        }),
       systemPrompt: SYSTEM_PROMPT,
       userContent: buildUserContent(input),
       sendMessage,
@@ -282,7 +347,7 @@ export async function analyzeWod(
       maxTokens: 2500,
       effort: 'low',
     });
-    return normalizeAnalysisOutput(output, input);
+    return output;
   } catch (err) {
     if (err instanceof AiJsonError) {
       throw new WodAnalysisError(err.message, err.rawResponse);

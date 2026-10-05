@@ -35,6 +35,7 @@ a estrategia anterior desse WOD como exemplo. Isso nao e, por si so, um defeito.
 | 4 | Rejeitar analise se a fonte mudou durante a IA | 51611c2 |
 | 5 | Decidir invalidacao da edicao sob bloqueio | ace37e0 |
 | 6 | Rejeitar analises e rounds declarados sem movimentos | 1ee6def |
+| 7 | Apresentar todos os campos da estrategia na tela | 8b1430f |
 
 ## Ponto 6: analise vazia
 
@@ -59,7 +60,7 @@ global preexistente descrito abaixo. Nenhuma migracao da aplicacao foi executada
 
 ### 7. Campos da estrategia nao apresentados
 
-CRITICO, corrigido e testado; incluido no commit desta etapa com aprovacao do usuario. Antes,
+CRITICO, corrigido e testado; commit 8b1430f. Antes,
 StrategySection.tsx apresentava meta, intensidade, ponto critico, carga, quebras
 e confianca, mas nao renderizava pacing, restStrategy, movementStrategy,
 transitionStrategy, energyManagement e warnings.
@@ -76,18 +77,40 @@ passaram. pnpm test passou com 145 testes (14 de banco opt-in nao foram repetido
 nesta etapa de frontend); typecheck, build e lint dos arquivos alterados passaram.
 Lint global continua falhando no erro preexistente de self em sw.js.
 
-### 8. Rounds explicitos ainda podem desaparecer
+### 8. Preservacao de rounds explicitos
 
-CRITICO, permissividade comprovada no codigo; reproduzir o caso antes de alterar.
-wod-analyzer-agent.ts instrui preservar N rounds, mas tambem permite rounds null
-para treinos uniformes. inferUniformRoundsFromText reconhece apenas formatos
-limitados de texto, contagens de 2 a 20 e linhas numericas compativeis com totais.
-wodAnalysisOutputSchema permite rounds omitido/null. Uma entrada em linha unica
-pode receber apenas totais e passar pela validacao sem reconstruir os rounds.
-Impacto: estrategia nao recebe volume por round, ordem e blocos completos.
-Proposta: validacao semantica ligada a fonte e alinhamento do prompt, com testes
-de rounds uniformes, variaveis, buy-in/out, imagem e formatos sem rounds fixos.
-Nao inferir volumes nem cargas sem evidencia na fonte.
+CRITICO, corrigido e testado; aguardando aprovacao para commit. Sete regressoes
+falharam antes da correcao. Exemplo: "5 rounds de 10 T2B + 15 Wall Ball" aceitava
+apenas totais agregados. O prompt permitia rounds null em treinos uniformes,
+contradizendo a regra prioritaria; o fallback limitado rodava depois da validacao,
+fora do retry corretivo. A estrategia recebia a estrutura incompleta.
+
+Correcao em wod-analyzer-agent.ts: prompt alinhado, normalizacao dentro do retry,
+nova validacao do schema depois de reconstruir rounds e verificacao estrutural
+ligada ao texto original/extraido. Contagens numericas fixas exigem ao menos os
+itens declarados, com numeracao sequencial; buy-in/out explicitos exigem blocos
+adicionais identificados por label. Multiplos blocos sao somados. Texto original
+e extraido sao conferidos separadamente para nao duplicar contagens. Metas de
+AMRAP identificadas como meta/goal/target/objetivo nao viram rounds fixos.
+O fallback nao reconstrui fases mistas nem inventa volumes/cargas.
+
+Resposta ainda invalida apos o retry retorna 502 sem gravar. Regressao cobre
+analise inicial, reanalise, imagem, rounds ausentes/parciais, volumes variaveis,
+fases, numeracao, multiplos blocos e normalizacao invalida. A resposta corrigida
+salva uma unica versao e seus rounds seguem no snapshot de input da estrategia.
+Validacao: 166 testes usuais, 18 em PostgreSQL temporario com esquema sem
+diferencas, 6 E2E de analise/reanalise e exibicao da estrategia, typecheck, build
+e ESLint dos arquivos alterados passaram. Os 18
+testes opt-in sao skipped no comando usual e foram executados separadamente.
+Lint global permanece com erro preexistente de self em sw.js. Nenhuma chamada
+ao provedor real nem migracao no banco da aplicacao foi executada.
+
+Limites: schema continua limitado a 20 blocos; contagens maiores sao rejeitadas,
+nao truncadas. O reconhecimento e lexical/numerico, nao um parser completo:
+numeros por extenso, todas as formas de metas e fases sem contagem fixa nao
+estao cobertos. Quantidade e labels nao provam correspondencia integral de cada
+movimento, volume e carga com a fonte. Essa integridade semantica segue na matriz
+de revisao; nao considerar toda omissao parcial resolvida por esta etapa.
 
 ### 9. Contexto e estrutura podem vir de analises diferentes
 

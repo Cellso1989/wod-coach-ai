@@ -20,6 +20,173 @@ const VALID_OUTPUT = {
 };
 
 describe('analyzeWod', () => {
+  it('requires labels for explicit buy-in/out even when enough execution blocks were returned', async () => {
+    const rounds = Array.from({ length: 5 }, (_, index) => ({
+      roundNumber: index + 1,
+      movements: VALID_OUTPUT.movements,
+    }));
+    const sendMessage: SendMessage = vi
+      .fn()
+      .mockResolvedValue(textMessage(JSON.stringify({ ...VALID_OUTPUT, rounds })));
+    await expect(
+      analyzeWod(
+        { rawText: 'Buy-in: 25 thrusters; 3 rounds de 10 T2B; Buy-out: 25 thrusters' },
+        sendMessage,
+      ),
+    ).rejects.toBeInstanceOf(WodAnalysisError);
+  });
+
+  it('validates reconstructed movements instead of returning fractional reps', async () => {
+    const sendMessage: SendMessage = vi.fn().mockResolvedValue(
+      textMessage(
+        JSON.stringify({
+          ...VALID_OUTPUT,
+          movements: [{ name: 'Toes to Bar', category: 'gymnastics', reps: 6 }],
+          rounds: null,
+        }),
+      ),
+    );
+    await expect(analyzeWod({ rawText: '5 rounds\n1.2 T2B' }, sendMessage)).rejects.toBeInstanceOf(
+      WodAnalysisError,
+    );
+  });
+
+  it.each(['5 rds', '5 rodadas', '2 rounds: 10 T2B; 3 rounds: 10 T2B', '21 rounds: 10 T2B'])(
+    'does not silently drop explicit rounds in %s',
+    async (rawText) => {
+      const sendMessage: SendMessage = vi
+        .fn()
+        .mockResolvedValue(textMessage(JSON.stringify({ ...VALID_OUTPUT, rounds: null })));
+      await expect(analyzeWod({ rawText }, sendMessage)).rejects.toBeInstanceOf(WodAnalysisError);
+    },
+  );
+
+  it('does not count AMRAP goals as fixed rounds', async () => {
+    const sendMessage: SendMessage = vi
+      .fn()
+      .mockResolvedValue(textMessage(JSON.stringify(VALID_OUTPUT)));
+    const result = await analyzeWod(
+      { rawText: 'AMRAP 15: 10 T2B + 15 Wall Ball + 200m Run. Meta: 8 rounds' },
+      sendMessage,
+    );
+    expect(result.rounds).toBeUndefined();
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not double-count repeated raw and extracted text', async () => {
+    const text = '3 rounds de 10 T2B';
+    const rounds = Array.from({ length: 3 }, (_, index) => ({
+      roundNumber: index + 1,
+      movements: VALID_OUTPUT.movements,
+    }));
+    const sendMessage: SendMessage = vi
+      .fn()
+      .mockResolvedValue(
+        textMessage(JSON.stringify({ ...VALID_OUTPUT, extractedText: text, rounds })),
+      );
+    expect((await analyzeWod({ rawText: text }, sendMessage)).rounds).toEqual(rounds);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects duplicate or out-of-order round numbers', async () => {
+    const rounds = [1, 1, 3].map((roundNumber) => ({
+      roundNumber,
+      movements: VALID_OUTPUT.movements,
+    }));
+    const sendMessage: SendMessage = vi
+      .fn()
+      .mockResolvedValue(textMessage(JSON.stringify({ ...VALID_OUTPUT, rounds })));
+    await expect(analyzeWod({ rawText: '3 rounds de 10 T2B' }, sendMessage)).rejects.toBeInstanceOf(
+      WodAnalysisError,
+    );
+  });
+
+  it.each([undefined, null, [], [{ roundNumber: 1, movements: VALID_OUTPUT.movements }]])(
+    'rejects missing or partial rounds for an explicit fixed-round WOD: %j',
+    async (rounds) => {
+      const sendMessage: SendMessage = vi.fn().mockResolvedValue(
+        textMessage(
+          JSON.stringify({
+            ...VALID_OUTPUT,
+            format: 'ROUNDS_FOR_TIME',
+            rounds,
+          }),
+        ),
+      );
+      await expect(
+        analyzeWod({ rawText: '5 rounds de 10 T2B + 15 Wall Ball + 200m Run' }, sendMessage),
+      ).rejects.toBeInstanceOf(WodAnalysisError);
+      expect(sendMessage).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('retries aggregated rounds and returns the complete structure with variable reps and loads', async () => {
+    const rounds = [30, 20, 10].map((reps, index) => ({
+      roundNumber: index + 1,
+      movements: [
+        {
+          name: 'Thruster',
+          category: 'weightlifting',
+          reps,
+          loadDescription: `${40 + index * 10}kg`,
+        },
+      ],
+    }));
+    const output = {
+      ...VALID_OUTPUT,
+      format: 'ROUNDS_FOR_TIME',
+      movements: [
+        { name: 'Thruster', category: 'weightlifting', reps: 60, loadDescription: '40/50/60kg' },
+      ],
+    };
+    const sendMessage: SendMessage = vi
+      .fn()
+      .mockResolvedValueOnce(textMessage(JSON.stringify({ ...output, rounds: null })))
+      .mockResolvedValueOnce(textMessage(JSON.stringify({ ...output, rounds })));
+    const result = await analyzeWod(
+      { rawText: '3 rounds: Thrusters 30-20-10 reps, cargas 40/50/60kg' },
+      sendMessage,
+    );
+    expect(result.rounds).toEqual(rounds);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('requires fixed rounds from the extracted image text', async () => {
+    const sendMessage: SendMessage = vi.fn().mockResolvedValue(
+      textMessage(
+        JSON.stringify({
+          ...VALID_OUTPUT,
+          extractedText: '5 rounds de 10 T2B + 15 Wall Ball + 200m Run',
+          rounds: null,
+        }),
+      ),
+    );
+    await expect(
+      analyzeWod({ imageBase64: 'abc', imageMimeType: 'image/png' }, sendMessage),
+    ).rejects.toBeInstanceOf(WodAnalysisError);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects buy-in/out collapsed into the declared round count', async () => {
+    const sendMessage: SendMessage = vi.fn().mockResolvedValue(
+      textMessage(
+        JSON.stringify({
+          ...VALID_OUTPUT,
+          rounds: Array.from({ length: 3 }, (_, index) => ({
+            roundNumber: index + 1,
+            movements: VALID_OUTPUT.movements,
+          })),
+        }),
+      ),
+    );
+    await expect(
+      analyzeWod(
+        { rawText: 'Buy-in: 25 thrusters; 3 rounds de 10 T2B; Buy-out: 25 thrusters' },
+        sendMessage,
+      ),
+    ).rejects.toBeInstanceOf(WodAnalysisError);
+  });
+
   it('parses and validates a well-formed JSON response on the first attempt', async () => {
     const sendMessage: SendMessage = vi
       .fn()

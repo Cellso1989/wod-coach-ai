@@ -283,6 +283,68 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
   );
 
   for (const reanalysis of [false, true]) {
+    it.each([null, [{ roundNumber: 1, movements: ANALYSIS.movements }]])(
+      `preserves real data when fixed rounds are missing (reanalysis: ${reanalysis}): %j`,
+      async (rounds) => {
+        const fresh = await prisma.wod.create({
+          data: {
+            userId: 'version-legacy-user',
+            date: new Date(),
+            sourceType: 'TEXT',
+            rawText: '3 rounds de 10 T2B',
+          },
+        });
+        const complete = {
+          ...ANALYSIS,
+          format: 'ROUNDS_FOR_TIME',
+          movements: [{ name: 'Toes to Bar', category: 'gymnastics', reps: 30 }],
+          rounds: Array.from({ length: 3 }, (_, index) => ({
+            roundNumber: index + 1,
+            movements: ANALYSIS.movements,
+          })),
+        };
+        const url = `/api/wods/${fresh.id}`;
+        try {
+          if (reanalysis) {
+            mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(complete) });
+            expect(
+              (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+            ).toBe(200);
+            mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+            expect(
+              (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+            ).toBe(200);
+          }
+          const before = await prisma.wod.findUniqueOrThrow({
+            where: { id: fresh.id },
+            include: {
+              analysis: { include: { movements: true } },
+              strategy: true,
+              analysisVersions: true,
+              strategyVersions: true,
+            },
+          });
+          mocks.sendMessage.mockResolvedValue({ text: JSON.stringify({ ...complete, rounds }) });
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+          ).toBe(502);
+          expect(
+            await prisma.wod.findUniqueOrThrow({
+              where: { id: fresh.id },
+              include: {
+                analysis: { include: { movements: true } },
+                strategy: true,
+                analysisVersions: true,
+                strategyVersions: true,
+              },
+            }),
+          ).toEqual(before);
+        } finally {
+          await prisma.wod.delete({ where: { id: fresh.id } });
+        }
+      },
+    );
+
     it.each([{ movements: [] }, { rounds: [{ roundNumber: 1, movements: [] }] }])(
       `does not persist empty analysis on PostgreSQL (reanalysis: ${reanalysis}): %j`,
       async (empty) => {

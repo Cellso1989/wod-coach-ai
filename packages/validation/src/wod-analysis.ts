@@ -17,10 +17,9 @@ export type WodMovementOutput = z.infer<typeof wodMovementOutputSchema>;
 /**
  * Um round individual de um WOD estruturado em rounds (ex: 3 rounds de
  * 30-20-10 HSPU / 15 Thrusters / 10 Bar M.U., onde as reps de HSPU mudam
- * a cada round mas Thruster/BMU ficam fixos). Só é preenchido quando o
- * WOD tem essa estrutura por round — para WODs simples (ex: "5 rounds de
- * 10 pull-ups"), basta o total em "movements", sem precisar repetir round
- * a round.
+ * a cada round mas Thruster/BMU ficam fixos). Contagens fixas tambem exigem
+ * rounds uniformes repetidos; totais em "movements" nao substituem a estrutura.
+ * A validacao ligada ao texto/imagem ocorre no WodAnalyzerAgent.
  */
 export const wodRoundOutputSchema = z.object({
   roundNumber: z.number().int().min(1).max(50),
