@@ -129,6 +129,23 @@ let store: Store;
 let failWrite: 'analysis' | 'strategy' | 'wod' | 'analysisVersion' | 'strategyVersion' | null;
 let app: ReturnType<typeof buildApp>;
 let headers: { authorization: string };
+let lease: { token: string; expiresAt: number } | null;
+
+async function leaseQuery(strings: TemplateStringsArray, ...values: unknown[]) {
+  const sql = strings.join('?');
+  if (!sql.includes('wod_generation_leases')) return [];
+  if (sql.includes('INSERT')) {
+    if (lease && lease.expiresAt > Date.now()) return [];
+    lease = { token: values[0] as string, expiresAt: Date.now() + 600_000 };
+    return [{ token: lease.token }];
+  }
+  if (!lease || lease.token !== values[1]) return [];
+  if (sql.includes('DELETE')) {
+    lease = null;
+    return [];
+  }
+  return lease.expiresAt > Date.now() ? [{ token: lease.token }] : [];
+}
 
 // Transaction writes use a draft; failed writes never publish partial state.
 function databaseClient(current: () => Store) {
@@ -147,7 +164,7 @@ function databaseClient(current: () => Store) {
     };
   }
   return {
-    $queryRaw: async () => [],
+    $queryRaw: leaseQuery,
     wod: {
       findFirst: async () => structuredClone(current().wod),
       findUniqueOrThrow: async () => ({ ...current().wod, analysis: current().analysis }),
@@ -209,6 +226,8 @@ function databaseClient(current: () => Store) {
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  lease = null;
+  mocks.prisma.$queryRaw.mockImplementation(leaseQuery);
   failWrite = null;
   store = {
     wod: {
@@ -283,6 +302,111 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  for (const reanalysis of [false, true]) {
+    it.each(['analyze', 'strategy'] as const)(
+      `rejects overlapping %s without a second AI call (reanalysis: ${reanalysis})`,
+      async (operation) => {
+        if (reanalysis) await seedAnalyzedWod();
+        if (operation === 'strategy' && !store.analysis) await request('POST', 'analyze');
+        const output = operation === 'analyze' ? ANALYSIS : STRATEGY;
+        mocks.sendMessage.mockClear();
+        let started!: () => void;
+        let release!: () => void;
+        const observed = new Promise<void>((resolve) => {
+          started = resolve;
+        });
+        const paused = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        mocks.sendMessage.mockImplementationOnce(async () => {
+          started();
+          await paused;
+          return { text: JSON.stringify(output) };
+        });
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(output) });
+        const first = request('POST', operation);
+        try {
+          await observed;
+          const second = await request('POST', operation);
+          expect(second.statusCode).toBe(409);
+          expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
+        } finally {
+          release();
+          expect((await first).statusCode).toBe(200);
+        }
+      },
+    );
+  }
+
+  it.each(['analyze', 'strategy'] as const)(
+    'releases admission after %s failure so an explicit retry can succeed',
+    async (operation) => {
+      if (operation === 'strategy') await seedAnalyzedWod();
+      const previous = structuredClone(store);
+      mocks.sendMessage.mockRejectedValueOnce(new Error('Provider failed'));
+      expect((await request('POST', operation)).statusCode).toBe(500);
+      expect(lease).toBeNull();
+      expect(store).toEqual(previous);
+      mocks.sendMessage.mockResolvedValue({
+        text: JSON.stringify(operation === 'analyze' ? ANALYSIS : STRATEGY),
+      });
+      expect((await request('POST', operation)).statusCode).toBe(200);
+      expect(lease).toBeNull();
+    },
+  );
+
+  it.each(['analyze', 'strategy'] as const)(
+    'does not spend a corrective %s attempt after its reservation expires',
+    async (operation) => {
+      if (operation === 'strategy') await seedAnalyzedWod();
+      const previous = structuredClone(store);
+      mocks.sendMessage.mockClear();
+      mocks.sendMessage.mockImplementationOnce(async () => {
+        lease!.expiresAt = 0;
+        return { text: 'invalid json' };
+      });
+      expect((await request('POST', operation)).statusCode).toBe(409);
+      expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
+      expect(store).toEqual(previous);
+      expect(lease).toBeNull();
+    },
+  );
+
+  it.each(['analyze', 'strategy'] as const)(
+    'shares admission between analysis and strategy while %s runs',
+    async (operation) => {
+      await seedAnalyzedWod();
+      const other = operation === 'analyze' ? 'strategy' : 'analyze';
+      mocks.sendMessage.mockClear();
+      let started!: () => void;
+      let release!: () => void;
+      const observed = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const paused = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      mocks.sendMessage.mockImplementationOnce(async () => {
+        started();
+        await paused;
+        return { text: JSON.stringify(operation === 'analyze' ? ANALYSIS : STRATEGY) };
+      });
+      mocks.sendMessage.mockResolvedValue({
+        text: JSON.stringify(other === 'analyze' ? ANALYSIS : STRATEGY),
+      });
+      const first = request('POST', operation);
+      try {
+        await observed;
+        const second = await request('POST', other);
+        expect(second.statusCode).toBe(409);
+        expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
+      } finally {
+        release();
+        expect((await first).statusCode).toBe(200);
+      }
+    },
+  );
+
   for (const reanalysis of [false, true]) {
     it.each(['analyze', 'strategy'] as const)(
       `archives generation metadata including the corrective retry during %s (reanalysis: ${reanalysis})`,
@@ -681,6 +805,7 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
     mocks.sendMessage.mockResolvedValue({
       text: JSON.stringify({ ...ANALYSIS, durationMinutes: 18 }),
     });
+    lease!.expiresAt = 0;
     expect((await request('POST', 'analyze')).statusCode).toBe(200);
     mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
     expect((await request('POST', 'strategy')).statusCode).toBe(200);
@@ -721,7 +846,7 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
     });
     const pending = request('POST', 'strategy');
     await observed;
-    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    expect((await request('PATCH', 'analysis', { durationMinutes: 18 })).statusCode).toBe(200);
     release({ text: JSON.stringify(STRATEGY) });
     expect((await pending).statusCode).toBe(409);
     expect(store.strategy).toBeNull();

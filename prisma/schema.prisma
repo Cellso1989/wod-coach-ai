@@ -168,8 +168,19 @@ model Wod {
 
   analysisVersions WodAnalysisVersion[]
   strategyVersions WodStrategyVersion[]
+  generationLease  WodGenerationLease?
 
   @@map("wods")
+}
+
+model WodGenerationLease {
+  wodId     String   @id
+  wod       Wod      @relation(fields: [wodId], references: [id], onDelete: Cascade)
+  token     String
+  operation String
+  expiresAt DateTime
+
+  @@map("wod_generation_leases")
 }
 
 enum WodFormat {

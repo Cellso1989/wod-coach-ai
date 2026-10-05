@@ -6,6 +6,7 @@ import { wodAnalysisUpdateSchema } from '@wod-coach-ai/validation';
 import { z } from 'zod';
 import { lockWodVersions, recordAnalysisVersion } from '../services/wod-version-service.js';
 import { captureAiGeneration } from '../services/ai-generation-metadata.js';
+import { runWodGeneration } from '../services/wod-generation-lease.js';
 
 export default async function wodAnalysisRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -20,133 +21,154 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: 'WOD não encontrado' });
     }
 
-    let sendMessage;
-    try {
-      sendMessage = createOpenAiMessageSender();
-    } catch {
-      return reply.code(503).send({ error: 'A análise por IA ainda não foi configurada' });
-    }
+    return runWodGeneration(
+      {
+        wodId: wod.id,
+        userId: request.user.sub,
+        operation: 'ANALYSIS',
+        onCleanupError: (err) => request.log.error({ err }, 'WOD generation lease cleanup failed'),
+      },
+      async (lease) => {
+        let sendMessage;
+        try {
+          sendMessage = createOpenAiMessageSender();
+        } catch {
+          reply.code(503);
+          return { error: 'A análise por IA ainda não foi configurada' };
+        }
 
-    const generation = captureAiGeneration(sendMessage, 'WodAnalyzerAgent');
-    let output;
-    try {
-      output = await analyzeWod(
-        { rawText: wod.rawText, imageBase64: wod.imageData, imageMimeType: wod.imageMimeType },
-        generation.sendMessage,
-      );
-    } catch (err) {
-      if (err instanceof WodAnalysisError) {
-        request.log.warn({ err: err.message, rawResponse: err.rawResponse }, 'WOD analysis failed');
-        return reply.code(502).send({ error: 'Não foi possível analisar este WOD agora' });
-      }
-      const apiError = describeOpenAiApiError(err);
-      if (apiError) {
-        request.log.error({ err }, 'OpenAI API error during WOD analysis');
-        return reply.code(apiError.status).send({ error: apiError.message });
-      }
-      throw err;
-    }
+        const generation = captureAiGeneration(async (params) => {
+          await lease.assertOwned();
+          return sendMessage(params);
+        }, 'WodAnalyzerAgent');
+        let output;
+        try {
+          output = await analyzeWod(
+            { rawText: wod.rawText, imageBase64: wod.imageData, imageMimeType: wod.imageMimeType },
+            generation.sendMessage,
+          );
+        } catch (err) {
+          if (err instanceof WodAnalysisError) {
+            request.log.warn(
+              { err: err.message, rawResponse: err.rawResponse },
+              'WOD analysis failed',
+            );
+            reply.code(502);
+            return { error: 'Não foi possível analisar este WOD agora' };
+          }
+          const apiError = describeOpenAiApiError(err);
+          if (apiError) {
+            request.log.error({ err }, 'OpenAI API error during WOD analysis');
+            reply.code(apiError.status);
+            return { error: apiError.message };
+          }
+          throw err;
+        }
 
-    const persisted = await prisma.$transaction(async (tx) => {
-      await lockWodVersions(tx, wod.id);
-      const currentWod = await tx.wod.findFirst({
-        where: { id: wod.id, userId: request.user.sub, discipline: 'CROSSFIT' },
-      });
-      if (
-        !currentWod ||
-        currentWod.rawText !== wod.rawText ||
-        currentWod.imageData !== wod.imageData ||
-        currentWod.imageMimeType !== wod.imageMimeType
-      ) {
-        return null;
-      }
-      let analysis = await tx.wodAnalysis.upsert({
-        where: { wodId: wod.id },
-        create: {
-          wodId: wod.id,
-          format: output.format,
-          durationMinutes: output.durationMinutes,
-          stimulus: output.stimulus,
-          estimatedIntensity: output.estimatedIntensity,
-          engineDemand: output.estimatedDemand.engine,
-          gripDemand: output.estimatedDemand.grip,
-          legDemand: output.estimatedDemand.legs,
-          gymnasticsDemand: output.estimatedDemand.gymnastics,
-          technicalDemand: output.estimatedDemand.technical,
-          confidence: output.confidence,
-          warnings: output.warnings,
-          roundBreakdown: output.rounds ?? Prisma.JsonNull,
-          rawResponse: output,
-          movements: {
-            create: output.movements.map((movement, index) => ({
-              order: index,
-              name: movement.name,
-              category: movement.category,
-              reps: movement.reps ?? undefined,
-              distanceMeters: movement.distanceMeters ?? undefined,
-              loadDescription: movement.loadDescription ?? undefined,
-              calories: movement.calories ?? undefined,
-            })),
-          },
-        },
-        update: {
-          format: output.format,
-          durationMinutes: output.durationMinutes,
-          stimulus: output.stimulus,
-          estimatedIntensity: output.estimatedIntensity,
-          engineDemand: output.estimatedDemand.engine,
-          gripDemand: output.estimatedDemand.grip,
-          legDemand: output.estimatedDemand.legs,
-          gymnasticsDemand: output.estimatedDemand.gymnastics,
-          technicalDemand: output.estimatedDemand.technical,
-          confidence: output.confidence,
-          warnings: output.warnings,
-          roundBreakdown: output.rounds ?? Prisma.JsonNull,
-          rawResponse: output,
-          movements: {
-            deleteMany: {},
-            create: output.movements.map((movement, index) => ({
-              order: index,
-              name: movement.name,
-              category: movement.category,
-              reps: movement.reps ?? undefined,
-              distanceMeters: movement.distanceMeters ?? undefined,
-              loadDescription: movement.loadDescription ?? undefined,
-              calories: movement.calories ?? undefined,
-            })),
-          },
-        },
-        include: { movements: { orderBy: { order: 'asc' } } },
-      });
-
-      analysis = await recordAnalysisVersion(tx, wod, analysis, 'AI', generation.metadata());
-
-      // A strategy based on the previous analysis must not survive its replacement.
-      await tx.wodStrategy.deleteMany({ where: { wodId: wod.id } });
-
-      const extractedText = output.extractedText?.trim();
-      const updatedWod =
-        extractedText && !wod.rawText?.trim()
-          ? await tx.wod.update({
-              where: { id: wod.id },
-              data: {
-                rawText: extractedText,
-                sourceType: wod.imageData ? 'TEXT_AND_IMAGE' : 'TEXT',
+        const persisted = await prisma.$transaction(async (tx) => {
+          await lockWodVersions(tx, wod.id);
+          await lease.assertOwned(tx);
+          const currentWod = await tx.wod.findFirst({
+            where: { id: wod.id, userId: request.user.sub, discipline: 'CROSSFIT' },
+          });
+          if (
+            !currentWod ||
+            currentWod.rawText !== wod.rawText ||
+            currentWod.imageData !== wod.imageData ||
+            currentWod.imageMimeType !== wod.imageMimeType
+          ) {
+            return null;
+          }
+          let analysis = await tx.wodAnalysis.upsert({
+            where: { wodId: wod.id },
+            create: {
+              wodId: wod.id,
+              format: output.format,
+              durationMinutes: output.durationMinutes,
+              stimulus: output.stimulus,
+              estimatedIntensity: output.estimatedIntensity,
+              engineDemand: output.estimatedDemand.engine,
+              gripDemand: output.estimatedDemand.grip,
+              legDemand: output.estimatedDemand.legs,
+              gymnasticsDemand: output.estimatedDemand.gymnastics,
+              technicalDemand: output.estimatedDemand.technical,
+              confidence: output.confidence,
+              warnings: output.warnings,
+              roundBreakdown: output.rounds ?? Prisma.JsonNull,
+              rawResponse: output,
+              movements: {
+                create: output.movements.map((movement, index) => ({
+                  order: index,
+                  name: movement.name,
+                  category: movement.category,
+                  reps: movement.reps ?? undefined,
+                  distanceMeters: movement.distanceMeters ?? undefined,
+                  loadDescription: movement.loadDescription ?? undefined,
+                  calories: movement.calories ?? undefined,
+                })),
               },
-              include: { result: true },
-            })
-          : null;
+            },
+            update: {
+              format: output.format,
+              durationMinutes: output.durationMinutes,
+              stimulus: output.stimulus,
+              estimatedIntensity: output.estimatedIntensity,
+              engineDemand: output.estimatedDemand.engine,
+              gripDemand: output.estimatedDemand.grip,
+              legDemand: output.estimatedDemand.legs,
+              gymnasticsDemand: output.estimatedDemand.gymnastics,
+              technicalDemand: output.estimatedDemand.technical,
+              confidence: output.confidence,
+              warnings: output.warnings,
+              roundBreakdown: output.rounds ?? Prisma.JsonNull,
+              rawResponse: output,
+              movements: {
+                deleteMany: {},
+                create: output.movements.map((movement, index) => ({
+                  order: index,
+                  name: movement.name,
+                  category: movement.category,
+                  reps: movement.reps ?? undefined,
+                  distanceMeters: movement.distanceMeters ?? undefined,
+                  loadDescription: movement.loadDescription ?? undefined,
+                  calories: movement.calories ?? undefined,
+                })),
+              },
+            },
+            include: { movements: { orderBy: { order: 'asc' } } },
+          });
 
-      return { analysis, wod: updatedWod };
-    });
+          analysis = await recordAnalysisVersion(tx, wod, analysis, 'AI', generation.metadata());
 
-    if (!persisted) {
-      return reply.code(409).send({
-        error: 'O WOD mudou durante a analise. Atualize o treino e analise novamente.',
-      });
-    }
-    const { analysis, wod: updatedWod } = persisted;
-    return reply.send({ analysis, wod: updatedWod });
+          // A strategy based on the previous analysis must not survive its replacement.
+          await tx.wodStrategy.deleteMany({ where: { wodId: wod.id } });
+
+          const extractedText = output.extractedText?.trim();
+          const updatedWod =
+            extractedText && !wod.rawText?.trim()
+              ? await tx.wod.update({
+                  where: { id: wod.id },
+                  data: {
+                    rawText: extractedText,
+                    sourceType: wod.imageData ? 'TEXT_AND_IMAGE' : 'TEXT',
+                  },
+                  include: { result: true },
+                })
+              : null;
+
+          return { analysis, wod: updatedWod };
+        });
+
+        if (!persisted) {
+          reply.code(409);
+          return {
+            error: 'O WOD mudou durante a analise. Atualize o treino e analise novamente.',
+          };
+        }
+        const { analysis, wod: updatedWod } = persisted;
+        return { analysis, wod: updatedWod };
+      },
+    );
   });
 
   app.patch('/wods/:id/analysis', async (request, reply) => {

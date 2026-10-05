@@ -156,8 +156,8 @@ nao significa sete bugs criticos comprovados: inclui melhorias e validacoes.
 | C1 | Timeout e respostas nao concluidas da IA | Corrigido e testado; e6c8408 |
 | C2 | Arquivar modelo, versao do prompt e tokens | Corrigido e testado; 3ed766e |
 | C3 | Visualizador de versoes anteriores | Corrigido e testado; 65a2a7e |
-| C4 | Erros de leitura e respostas tardias no frontend | Corrigido e testado; aguarda commit |
-| C5 | Evitar chamadas duplicadas de IA | Pendente |
+| C4 | Erros de leitura e respostas tardias no frontend | Corrigido e testado; 8fe5dbb |
+| C5 | Evitar chamadas duplicadas de IA | Bloqueio concorrente testado; aguarda commit |
 | C6 | Lint preexistente em sw.js | Pendente |
 | C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | Pendente |
 
@@ -338,14 +338,75 @@ Typecheck, build e lint dos arquivos alterados passaram. Lint global repetido
 permanece com o erro preexistente self em sw.js e o aviso em ui.tsx (C6).
 Capturas dos estados de erro em 390/1280 px inspecionadas, com
 verificacao de ausencia de overflow horizontal. E2E usa endpoints simulados.
-Corrigido e testado, aguardando aprovacao para commit.
+Corrigido e comitado: 8fe5dbb.
 
 Limites: abortar leitura/desconsiderar callback nao cancela gravacao ou IA
 ja em curso no servidor. Nao ha idempotencia entre abas/clientes (C5),
 polling nem leitura transacional das tres projecoes contra alteracoes em
 outra aba. Sem alteracao de backend, prompts, schema, banco ou HYROX;
 sem chamada paga, migracao no banco da aplicacao, push ou deploy.
-Tres frentes restantes: C5, C6 e C7. C5 e a proxima etapa.
+C5 segue abaixo.
+
+### C5. Reserva compartilhada antes das chamadas de IA
+
+Evidencia: POST /wods/:id/analyze e POST /wods/:id/strategy executavam IA
+antes de lockWodVersions. Esse lock serializa a persistencia, mas nao evita
+chamadas pagas simultaneas. Seis regressoes falharam antes, cobrindo analise
+inicial, reanalise, estrategia e sobreposicao entre as duas rotas. O ultimo
+caso tambem mostrou geracao de estrategia invalidada por reanalise concorrente.
+
+runWodGeneration agora reserva o WOD antes de montar/enviar a geracao.
+WodGenerationLease tem uma linha por WOD, token aleatorio, operacao e prazo
+de dez minutos, usando o relogio do banco. A aquisicao atomica usa INSERT
+ON CONFLICT DO UPDATE condicionado a expiracao; um concorrente recebe 409
+sem chamar IA. A mesma reserva protege ambas as rotas em todas as instancias
+que usam o mesmo banco. WODs diferentes continuam independentes.
+Referencia do mecanismo: [PostgreSQL 16 INSERT / ON CONFLICT](https://www.postgresql.org/docs/16/sql-insert.html).
+
+Cada tentativa (inclusive retry corretivo) confere o token/prazo antes de
+enviar a IA. A promocao confere a reserva com FOR UPDATE na transacao das
+versoes, mantendo as validacoes de fonte e analise alvo ja existentes.
+Finalmente libera somente o proprio token, em sucesso ou erro. Dono antigo
+nao promove dados nem remove a reserva sucessora. Queda do processo deixa
+reserva recuperavel apos o prazo. Falha do banco impede entrada na IA;
+falha de liberacao e registrada sem mascarar erro original ou resultado
+ja gravado, e a reserva fica recuperavel por expiracao.
+
+As rotas devolvem objetos/status depois da liberacao, em vez de enviar a
+resposta dentro do trabalho reservado. O teste real detectou reserva ainda
+presente depois de resposta 200 na implementacao intermediaria; a ordenacao
+foi corrigida e repetida. Isso evita 409 indevido na estrategia automatica
+imediatamente posterior a analise. Dois testes antigos que exigiam geracoes
+simultaneas foram adaptados para expiracao/edicao de duracao; continuam
+verificando rejeicao de resultado antigo e preservacao de fonte, contexto
+e versoes, em vez de remover essa cobertura.
+
+Validacao: 224 testes usuais passaram (36 PG opt-in pulados nessa execucao).
+Em PostgreSQL temporario: 36 testes passaram, incluindo duas instancias
+Fastify, reserva sucessora preservada, WODs independentes, liberacao antes
+da resposta, backfill legado e falhas atomicas; migrate diff sem divergencia.
+Vinte e quatro E2E passaram (tres novos de 409, tentativa explicita e estado
+preservado; os 21 anteriores repetidos). Typecheck, build e lint dos arquivos
+alterados passaram. Lint global continua com o erro preexistente em sw.js
+e o aviso em ui.tsx (C6). E2E e transporte usam mocks; nenhuma chamada paga.
+
+Migration criada: 20261005180000_add_wod_generation_leases. Aplicada somente
+no banco descartavel, nunca no banco da aplicacao. Cliente Prisma gerado;
+API local reiniciada para liberar sua DLL no Windows. A nova geracao exige
+a migration no ambiente de destino antes de usar/publicar o codigo. Nao
+ha fallback desprotegido se a tabela estiver ausente. Sem push ou deploy.
+Corrigido no escopo concorrente e testado, aguardando aprovacao para commit.
+
+Limites justificados: nao e replay duravel por Idempotency-Key nem cache de
+resultado. Pedidos sequenciais podem gerar novas versoes intencionalmente;
+repetir apos resposta perdida pode pagar novamente. Nao cancela cobranca do
+provedor ou garante exactly-once apos queda/pausa/expiracao: um dono expirado
+pode ja ter enviado uma chamada, embora nao consiga publicar o resultado.
+Nao ha renovacao automatica; dez minutos excedem as duas tentativas de
+120 segundos previstas no transporte, e operacoes que excedam o prazo sao
+recusadas nas verificacoes seguintes. Nao alterou prompts, schemas da IA,
+HYROX, limite diario ou politica financeira. Duas frentes restantes: C6 e C7.
+C6 e a proxima etapa.
 
 ## Pontos importantes e limites da revisao
 
@@ -357,8 +418,8 @@ Tres frentes restantes: C5, C6 e C7. C5 e a proxima etapa.
   nao ha restauracao nem comparacao automatica entre versoes.
 - WodDetailPage distingue falhas de leitura de ausencia e descarta conclusoes
   de telas abandonadas (C4); limites entre abas/servidor estao descritos acima.
-- Cliques simultaneos via varias abas/API ainda geram chamadas de IA distintas.
-  Serializacao das gravacoes nao significa idempotencia nem controle de custos.
+- C5 impede sobreposicao de geracao CrossFit por WOD no banco; nao fornece
+  replay apos resposta perdida, exactly-once financeiro ou limite diario.
 - Lint global tem erro preexistente de self em apps/web/public/sw.js.
 - Suites de API usam transporte mockado ou transporte real com fetch simulado;
   banco real e temporario. E2E atuais mockam endpoints. Nao houve teste com

@@ -182,7 +182,7 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
     expect(await prisma.wodStrategyVersion.count({ where: { wodId } })).toBe(0);
   });
 
-  it('allocates distinct version numbers for simultaneous analyses on a new WOD', async () => {
+  it('rejects overlapping analyses and allocates distinct versions for intentional sequential reanalysis', async () => {
     const fresh = await prisma.wod.create({
       data: {
         userId: 'version-legacy-user',
@@ -192,13 +192,32 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
       },
     });
     mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+    let started = () => {};
+    let release = () => {};
+    const observed = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const paused = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    mocks.sendMessage.mockImplementationOnce(async () => {
+      started();
+      await paused;
+      return { text: JSON.stringify(ANALYSIS) };
+    });
+    const first = app.inject({ method: 'POST', url: `/api/wods/${fresh.id}/analyze`, headers });
     try {
-      const responses = await Promise.all(
-        [1, 2].map(() =>
-          app.inject({ method: 'POST', url: `/api/wods/${fresh.id}/analyze`, headers }),
-        ),
-      );
-      expect(responses.map((response) => response.statusCode)).toEqual([200, 200]);
+      await observed;
+      expect(
+        (await app.inject({ method: 'POST', url: `/api/wods/${fresh.id}/analyze`, headers }))
+          .statusCode,
+      ).toBe(409);
+      release();
+      expect((await first).statusCode).toBe(200);
+      expect(
+        (await app.inject({ method: 'POST', url: `/api/wods/${fresh.id}/analyze`, headers }))
+          .statusCode,
+      ).toBe(200);
       const versions = await prisma.wodAnalysisVersion.findMany({
         where: { wodId: fresh.id },
         orderBy: { version: 'asc' },
@@ -208,7 +227,173 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
         (await prisma.wodAnalysis.findUniqueOrThrow({ where: { wodId: fresh.id } })).versionId,
       ).toBe(versions[1].id);
     } finally {
+      release();
+      await first;
       await prisma.wod.delete({ where: { id: fresh.id } });
+    }
+  });
+
+  it.each(['analyze', 'strategy'] as const)(
+    'shares the %s reservation across independent API instances',
+    async (operation) => {
+      const fresh = await prisma.wod.create({
+        data: {
+          userId: 'version-legacy-user',
+          date: new Date(),
+          sourceType: 'TEXT',
+          rawText: 'AMRAP 15: 10 T2B',
+        },
+      });
+      const otherApp = buildApp();
+      await otherApp.ready();
+      const url = `/api/wods/${fresh.id}`;
+      let release = () => {};
+      let pending: ReturnType<typeof app.inject> | undefined;
+      try {
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+        if (operation === 'strategy')
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+          ).toBe(200);
+        const output = operation === 'analyze' ? ANALYSIS : STRATEGY;
+        mocks.sendMessage.mockClear();
+        let started = () => {};
+        const observed = new Promise<void>((resolve) => {
+          started = resolve;
+        });
+        const paused = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        mocks.sendMessage.mockImplementationOnce(async () => {
+          started();
+          await paused;
+          return { text: JSON.stringify(output) };
+        });
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(output) });
+        pending = app.inject({ method: 'POST', url: `${url}/${operation}`, headers });
+        await observed;
+        expect(await prisma.wodGenerationLease.count({ where: { wodId: fresh.id } })).toBe(1);
+        expect(
+          (await otherApp.inject({ method: 'POST', url: `${url}/${operation}`, headers }))
+            .statusCode,
+        ).toBe(409);
+        expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
+        release();
+        expect((await pending).statusCode).toBe(200);
+        expect(await prisma.wodGenerationLease.count({ where: { wodId: fresh.id } })).toBe(0);
+      } finally {
+        release();
+        if (pending) await pending;
+        await prisma.wod.delete({ where: { id: fresh.id } });
+        await otherApp.close();
+      }
+    },
+  );
+
+  it('recovers an expired reservation without letting its old owner publish or delete the successor', async () => {
+    const fresh = await prisma.wod.create({
+      data: {
+        userId: 'version-legacy-user',
+        date: new Date(),
+        sourceType: 'TEXT',
+        rawText: 'AMRAP 15: 10 T2B',
+      },
+    });
+    const url = `/api/wods/${fresh.id}/analyze`;
+    let releaseOld = () => {};
+    let releaseNew = () => {};
+    let startOld = () => {};
+    let startNew = () => {};
+    const oldStarted = new Promise<void>((resolve) => {
+      startOld = resolve;
+    });
+    const newStarted = new Promise<void>((resolve) => {
+      startNew = resolve;
+    });
+    const oldPaused = new Promise<void>((resolve) => {
+      releaseOld = resolve;
+    });
+    const newPaused = new Promise<void>((resolve) => {
+      releaseNew = resolve;
+    });
+    mocks.sendMessage.mockImplementationOnce(async () => {
+      startOld();
+      await oldPaused;
+      return { text: JSON.stringify(ANALYSIS) };
+    });
+    mocks.sendMessage.mockImplementationOnce(async () => {
+      startNew();
+      await newPaused;
+      return { text: JSON.stringify(ANALYSIS) };
+    });
+    const old = app.inject({ method: 'POST', url, headers });
+    let successor: ReturnType<typeof app.inject> | undefined;
+    try {
+      await oldStarted;
+      await prisma.wodGenerationLease.update({
+        where: { wodId: fresh.id },
+        data: { expiresAt: new Date(0) },
+      });
+      successor = app.inject({ method: 'POST', url, headers });
+      await newStarted;
+      const owner = await prisma.wodGenerationLease.findUniqueOrThrow({
+        where: { wodId: fresh.id },
+      });
+      releaseOld();
+      expect((await old).statusCode).toBe(409);
+      expect(
+        (await prisma.wodGenerationLease.findUniqueOrThrow({ where: { wodId: fresh.id } })).token,
+      ).toBe(owner.token);
+      expect(await prisma.wodAnalysisVersion.count({ where: { wodId: fresh.id } })).toBe(0);
+      releaseNew();
+      expect((await successor).statusCode).toBe(200);
+      expect(await prisma.wodAnalysisVersion.count({ where: { wodId: fresh.id } })).toBe(1);
+      expect(await prisma.wodGenerationLease.count({ where: { wodId: fresh.id } })).toBe(0);
+    } finally {
+      releaseOld();
+      releaseNew();
+      await old;
+      if (successor) await successor;
+      await prisma.wod.delete({ where: { id: fresh.id } });
+    }
+  });
+
+  it('allows independent WODs while another generation is in progress', async () => {
+    const data = {
+      userId: 'version-legacy-user',
+      date: new Date(),
+      sourceType: 'TEXT' as const,
+      rawText: 'AMRAP 15: 10 T2B',
+    };
+    const firstWod = await prisma.wod.create({ data });
+    const secondWod = await prisma.wod.create({ data });
+    let release = () => {};
+    let started = () => {};
+    const observed = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const paused = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    mocks.sendMessage.mockImplementationOnce(async () => {
+      started();
+      await paused;
+      return { text: JSON.stringify(ANALYSIS) };
+    });
+    mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+    const first = app.inject({ method: 'POST', url: `/api/wods/${firstWod.id}/analyze`, headers });
+    try {
+      await observed;
+      expect(
+        (await app.inject({ method: 'POST', url: `/api/wods/${secondWod.id}/analyze`, headers }))
+          .statusCode,
+      ).toBe(200);
+      release();
+      expect((await first).statusCode).toBe(200);
+    } finally {
+      release();
+      await first;
+      await prisma.wod.deleteMany({ where: { id: { in: [firstWod.id, secondWod.id] } } });
     }
   });
 
@@ -409,7 +594,7 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
     );
   }
 
-  it.each(['reanalysis', 'text edit'] as const)(
+  it.each(['duration edit', 'text edit'] as const)(
     'keeps strategy context and structure on the same target snapshot during %s',
     async (change) => {
       const fresh = await prisma.wod.create({
@@ -459,17 +644,16 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
         };
         const pending = app.inject({ method: 'POST', url: `${url}/strategy`, headers });
         await observed;
-        if (change === 'reanalysis') {
-          mocks.sendMessage.mockResolvedValue({
-            text: JSON.stringify({
-              ...ANALYSIS,
-              durationMinutes: 12,
-              movements: [{ name: 'Burpee', category: 'monostructural', reps: 10 }],
-              rounds: null,
-            }),
-          });
+        if (change === 'duration edit') {
           expect(
-            (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+            (
+              await app.inject({
+                method: 'PATCH',
+                url: `${url}/analysis`,
+                headers,
+                payload: { durationMinutes: 12 },
+              })
+            ).statusCode,
           ).toBe(200);
         } else {
           expect(

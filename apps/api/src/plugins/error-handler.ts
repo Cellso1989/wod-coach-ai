@@ -1,6 +1,7 @@
 import fp from "fastify-plugin";
 import type { FastifyError, FastifyInstance } from "fastify";
 import { ZodError } from "zod";
+import { WodGenerationConflictError } from '../services/wod-generation-lease.js';
 
 /**
  * Centralized error handling (Fase 12 — hardening):
@@ -14,6 +15,10 @@ import { ZodError } from "zod";
 export default fp(async (app: FastifyInstance) => {
   app.setErrorHandler((error: FastifyError, request, reply) => {
     request.log.error({ err: error }, "Unhandled request error");
+
+    if (error instanceof WodGenerationConflictError) {
+      return reply.code(409).send({ error: error.message });
+    }
 
     if (error instanceof ZodError) {
       return reply.code(400).send({ error: "Dados inválidos", details: error.flatten() });
