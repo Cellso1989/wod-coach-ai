@@ -11,6 +11,7 @@ import {
 import { WodResultSection } from '../components/WodResultSection.js';
 import { AthleteContextSection } from '../components/AthleteContextSection.js';
 import { StrategySection } from '../components/StrategySection.js';
+import { WodVersionHistory } from '../components/WodVersionHistory.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
 import { PageHeader } from '../components/PageHeader.js';
@@ -246,6 +247,12 @@ export function WodDetailPage() {
           <p className="text-sm text-neutral-500">
             {new Date(wod.date).toLocaleDateString('pt-BR')}
           </p>
+          <WodVersionHistory
+            key={wod.id}
+            wodId={wod.id}
+            analysisVersionId={analysis?.versionId}
+            strategyVersionId={strategy?.versionId}
+          />
 
           {wod.imageData && wod.imageMimeType && (
             <img

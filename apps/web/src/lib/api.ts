@@ -3,6 +3,24 @@
 // rodando em outra porta via VITE_API_URL.
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
+export interface WodVersion {
+  id: string;
+  version: number;
+  createdAt: string;
+  reason?: string;
+  analysisVersionId?: string | null;
+  sourceSnapshot: Record<string, unknown>;
+  inputSnapshot?: unknown;
+  snapshot: Record<string, unknown>;
+}
+
+export interface WodVersions {
+  analysisVersions: WodVersion[];
+  strategyVersions: WodVersion[];
+  nextAnalysisBefore: number | null;
+  nextStrategyBefore: number | null;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -150,6 +168,7 @@ export interface WodRound {
 }
 
 export interface WodAnalysis {
+  versionId?: string | null;
   id: string;
   wodId: string;
   format: WodFormat | null;
@@ -226,6 +245,7 @@ export interface StrategyMovementNote {
 }
 
 export interface WodStrategy {
+  versionId?: string | null;
   id: string;
   wodId: string;
   recommendedIntensity: number;
@@ -421,6 +441,19 @@ export const api = {
     }),
 
   getWodAnalysis: (id: string) => request<{ analysis: WodAnalysis }>(`/wods/${id}/analysis`),
+
+  getWodVersions: (
+    id: string,
+    cursors: { analysisBefore?: number; strategyBefore?: number } = {},
+    signal?: AbortSignal,
+  ) => {
+    const query = new URLSearchParams();
+    if (cursors.analysisBefore !== undefined)
+      query.set('analysisBefore', String(cursors.analysisBefore));
+    if (cursors.strategyBefore !== undefined)
+      query.set('strategyBefore', String(cursors.strategyBefore));
+    return request<WodVersions>(`/wods/${encodeURIComponent(id)}/versions?${query}`, { signal });
+  },
 
   updateWodAnalysis: (id: string, input: { durationMinutes: number | null }) =>
     request<{ analysis: WodAnalysis }>(`/wods/${id}/analysis`, {

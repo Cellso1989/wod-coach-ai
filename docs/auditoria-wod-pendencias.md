@@ -154,8 +154,8 @@ nao significa sete bugs criticos comprovados: inclui melhorias e validacoes.
 | Frente | Demanda | Estado |
 | --- | --- | --- |
 | C1 | Timeout e respostas nao concluidas da IA | Corrigido e testado; e6c8408 |
-| C2 | Arquivar modelo, versao do prompt e tokens | Corrigido e testado; aguarda commit |
-| C3 | Visualizador de versoes anteriores | Proximo |
+| C2 | Arquivar modelo, versao do prompt e tokens | Corrigido e testado; 3ed766e |
+| C3 | Visualizador de versoes anteriores | Corrigido e testado; aguarda commit |
 | C4 | Erros de leitura e respostas tardias no frontend | Pendente |
 | C5 | Evitar chamadas duplicadas de IA | Pendente |
 | C6 | Lint preexistente em sw.js | Pendente |
@@ -204,7 +204,7 @@ do treino, que permanece na frente C7.
 
 ### C2. Metadados da geracao nas versoes CrossFit
 
-Corrigido e testado; aguardando aprovacao para commit. Evidencias:
+Corrigido e comitado: 3ed766e. Evidencias:
 packages/ai/src/index.ts retornava apenas texto, descartando id/model/usage;
 apps/api/src/services/wod-version-service.ts arquivava fonte/input/resultado,
 mas nao os metadados da geracao. Impacto: impossibilidade de rastrear o modelo,
@@ -258,13 +258,51 @@ estimativa financeira nem detalhes separados de cache/raciocinio nesta etapa.
 HYROX recebe metadados adicionais do transporte, mas sua persistencia nao foi
 alterada. Sem chamada paga, migracao no banco da aplicacao, push ou deploy.
 
+### C3. Consulta das versoes anteriores no frontend
+
+Evidencia: GET /api/wods/:id/versions ja entregava snapshots, mas api.ts nao
+oferecia esse metodo e WodDetailPage exibia apenas as projecoes ativas.
+Dois cenarios Playwright (390/1280 px) falharam antes pela ausencia do botao
+de historico. A lacuna era de acesso na interface, nao de arquivamento.
+
+Implementacao: WodVersionHistory abre um dialogo somente de leitura. Analises
+e estrategias tem seletores e paginacao independentes; atualizar/reabrir
+consulta novamente o endpoint. Exibe numero, data, motivo da analise e marca
+Ativa quando o versionId atual esta disponivel. Fonte textual/imagem, rounds,
+movimentos e campos da estrategia sao renderizados a partir do snapshot,
+sem combinar com fonte, perfil ou estrategia atuais. Contexto/input arquivado
+fica em uma secao expansivel, assim como identificadores, resposta bruta e
+metadados tecnicos. Dados legados ausentes ficam explicitos; campos extras
+sao preservados sem impor o schema mais restrito das novas geracoes.
+
+Historico nao escreve, regenera ou restaura versoes. Vinculo da estrategia
+mostra a versao da analise quando carregada; senao mostra o identificador,
+sem inferir vinculos legados. Requisicoes do visualizador sao canceladas ao
+fechar/desmontar/substituir a consulta. Nao altera os handlers assincronos
+da tela ativa (C4). Nao altera backend, banco, prompts ou persistencia HYROX.
+
+Validacao: 208 testes usuais passaram (32 de PostgreSQL opt-in pulados nesta
+etapa, sem mudanca de banco/backend); oito E2E passaram, incluindo os seis
+existentes de analise inicial/reanalise e os dois novos de historico.
+Os novos cenarios verificam erro e recuperacao, imagem renderizada, rounds,
+metadados, selecao/paginacao independente nos dois tipos, vinculo, contexto
+legado, lista vazia, fechamento por Escape e ausencia de escritas/alteracao
+da tela ativa. Capturas em 390/1280 px inspecionadas sem overflow horizontal.
+Typecheck, build e lint dos arquivos alterados passaram. Lint global continua
+falhando no erro preexistente self em sw.js (C6), com aviso em ui.tsx.
+E2E usa endpoints simulados; sem chamada paga, migracao no banco da aplicacao,
+push ou deploy. Corrigido e testado, aguardando aprovacao para commit.
+Quatro frentes restantes:
+C4, C5, C6 e C7. C4 e a proxima etapa.
+
 ## Pontos importantes e limites da revisao
 
 - O transporte agora exige resposta concluida e tem prazo por chamada (C1).
   Isso nao garante toda a completude semantica dos dados gerados (C7).
 - Metadados de modelo, hash do prompt de sistema e tokens agora acompanham novas
   versoes CrossFit (C2); limites de cobertura e custo estao descritos acima.
-- A consulta de versoes existe, mas nao ha visualizador de versoes antigas na interface.
+- A consulta de versoes agora tem visualizador somente de leitura (C3);
+  nao ha restauracao nem comparacao automatica entre versoes.
 - WodDetailPage trata qualquer erro de leitura de analise/estrategia como ausencia;
   respostas tardias de leitura/navegacao precisam de teste de concorrencia de frontend.
 - Cliques simultaneos via varias abas/API ainda geram chamadas de IA distintas.
