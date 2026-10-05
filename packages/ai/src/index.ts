@@ -22,6 +22,8 @@ export interface AiTextMessage {
   text: string;
 }
 
+export const OPENAI_REQUEST_TIMEOUT_MS = 120_000;
+
 class OpenAiApiError extends Error {
   constructor(
     public readonly status: number,
@@ -91,43 +93,73 @@ export function createOpenAiMessageSender(
   }
 
   return async (params) => {
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: params.model,
-        instructions: params.systemPrompt,
-        input: params.messages.map((message) => ({
-          role: message.role,
-          content: [
-            ...toOpenAiContent(message.content),
-            { type: 'input_text', text: 'Return JSON only.' },
-          ],
-        })),
-        max_output_tokens: params.maxTokens,
-        reasoning: { effort: normalizeReasoningEffort(params.effort) },
-        text: { format: { type: 'json_object' } },
-      }),
-    });
+    const controller = new AbortController();
+    // Keep the deadline active until the body has also been consumed.
+    const timeout = setTimeout(() => controller.abort(), OPENAI_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: params.model,
+          instructions: params.systemPrompt,
+          input: params.messages.map((message) => ({
+            role: message.role,
+            content: [
+              ...toOpenAiContent(message.content),
+              { type: 'input_text', text: 'Return JSON only.' },
+            ],
+          })),
+          max_output_tokens: params.maxTokens,
+          reasoning: { effort: normalizeReasoningEffort(params.effort) },
+          text: { format: { type: 'json_object' } },
+        }),
+      });
 
-    const body = (await response.json().catch(() => null)) as unknown;
+      const body = (await response.json().catch((err: unknown) => {
+        if (controller.signal.aborted) throw err;
+        return null;
+      })) as unknown;
 
-    if (!response.ok) {
-      const error =
-        typeof body === 'object' &&
-        body !== null &&
-        typeof (body as { error?: unknown }).error === 'object'
-          ? (body as { error: { message?: unknown; code?: unknown } }).error
-          : null;
-      const message = typeof error?.message === 'string' ? error.message : response.statusText;
-      const code = typeof error?.code === 'string' ? error.code : undefined;
-      throw new OpenAiApiError(response.status, message, code);
+      if (!response.ok) {
+        const error =
+          typeof body === 'object' &&
+          body !== null &&
+          typeof (body as { error?: unknown }).error === 'object'
+            ? (body as { error: { message?: unknown; code?: unknown } }).error
+            : null;
+        const message = typeof error?.message === 'string' ? error.message : response.statusText;
+        const code = typeof error?.code === 'string' ? error.code : undefined;
+        throw new OpenAiApiError(response.status, message, code);
+      }
+
+      if (
+        typeof body !== 'object' ||
+        body === null ||
+        (body as { status?: unknown }).status !== 'completed' ||
+        (body as { incomplete_details?: unknown }).incomplete_details != null ||
+        (body as { error?: unknown }).error != null
+      ) {
+        throw new OpenAiApiError(
+          502,
+          'OpenAI response was not completed',
+          'response_not_completed',
+        );
+      }
+
+      return { text: extractOutputText(body) };
+    } catch (err) {
+      if (controller.signal.aborted) {
+        throw new OpenAiApiError(504, 'OpenAI request timed out', 'request_timeout');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return { text: extractOutputText(body) };
   };
 }
 
@@ -139,6 +171,16 @@ export function createOpenAiMessageSender(
 export function describeOpenAiApiError(err: unknown): { status: number; message: string } | null {
   if (!(err instanceof OpenAiApiError)) {
     return null;
+  }
+
+  if (err.code === 'request_timeout') {
+    return {
+      status: 504,
+      message: 'A IA demorou demais para responder. Tente novamente em instantes',
+    };
+  }
+  if (err.code === 'response_not_completed') {
+    return { status: 502, message: 'A IA nao concluiu a resposta. Tente novamente em instantes' };
   }
 
   if (err.status === 401 || err.status === 403) {

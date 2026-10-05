@@ -266,6 +266,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
   await app.close();
 });
 
@@ -281,6 +283,88 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  for (const reanalysis of [false, true]) {
+    for (const operation of ['analyze', 'strategy'] as const) {
+      it.each(['incomplete', 'timeout'] as const)(
+        `preserves all data on HTTP %s during ${operation} (reanalysis: ${reanalysis})`,
+        async (failure) => {
+          if (reanalysis) await seedAnalyzedWod();
+          if (operation === 'strategy') {
+            expect((await request('POST', 'analyze')).statusCode).toBe(200);
+          }
+          const previous = structuredClone(store);
+          const transport = await vi.importActual<typeof import('@wod-coach-ai/ai')>(
+            '../../packages/ai/dist/index.js',
+          );
+          let started = () => {};
+          const observed = new Promise<void>((resolve) => {
+            started = resolve;
+          });
+          const fetchMock = vi.fn().mockImplementation((_url, options: RequestInit) => {
+            started();
+            if (failure === 'timeout') {
+              return new Promise((_resolve, reject) =>
+                options.signal!.addEventListener('abort', () => reject(options.signal!.reason), {
+                  once: true,
+                }),
+              );
+            }
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  status: 'incomplete',
+                  incomplete_details: { reason: 'max_output_tokens' },
+                  output_text: JSON.stringify(operation === 'analyze' ? ANALYSIS : STRATEGY),
+                }),
+              ),
+            );
+          });
+          vi.stubGlobal('fetch', fetchMock);
+          if (failure === 'timeout') vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+          mocks.sendMessage.mockImplementation(transport.createOpenAiMessageSender('test-key'));
+          const pending = request('POST', operation);
+          await observed;
+          if (failure === 'timeout') await vi.advanceTimersByTimeAsync(120_000);
+          const response = await pending;
+          expect(response.statusCode).toBe(failure === 'timeout' ? 504 : 502);
+          expect(response.json().error).toContain(
+            failure === 'timeout' ? 'demorou' : 'nao concluiu',
+          );
+          expect(fetchMock).toHaveBeenCalledTimes(1);
+          expect(store).toEqual(previous);
+        },
+      );
+    }
+    it(`saves completed HTTP analysis and strategy (reanalysis: ${reanalysis})`, async () => {
+      if (reanalysis) await seedAnalyzedWod();
+      const transport = await vi.importActual<typeof import('@wod-coach-ai/ai')>(
+        '../../packages/ai/dist/index.js',
+      );
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({ status: 'completed', output_text: JSON.stringify(ANALYSIS) }),
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({ status: 'completed', output_text: JSON.stringify(STRATEGY) }),
+          ),
+        );
+      vi.stubGlobal('fetch', fetchMock);
+      mocks.sendMessage.mockImplementation(transport.createOpenAiMessageSender('test-key'));
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      expect((await request('POST', 'strategy')).statusCode).toBe(200);
+      expect(store.analysis?.roundBreakdown).toEqual(ANALYSIS.rounds);
+      expect(store.analysisVersions).toHaveLength(reanalysis ? 2 : 1);
+      expect(store.strategyVersions).toHaveLength(reanalysis ? 2 : 1);
+      expect(store.strategyVersions.at(-1)).toMatchObject({
+        inputSnapshot: { wodAnalysis: ANALYSIS, athleteContext: CONTEXT, athleteProfile: PROFILE },
+      });
+    });
+  }
+
   for (const reanalysis of [false, true]) {
     it.each([null, ANALYSIS.rounds.slice(0, 3)])(
       `preserves the WOD and versions when explicit rounds are missing (reanalysis: ${reanalysis}): %j`,

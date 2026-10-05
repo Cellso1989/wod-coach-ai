@@ -3,7 +3,8 @@
 Revisao do codigo em 2026-10-05. Este documento nao substitui nem afirma recuperar
 o relatorio original da conversa, cuja copia nao foi encontrada no repositorio.
 Usa o pedido original de auditoria, os commits e a memoria do projeto como base.
-A auditoria ainda nao esta encerrada. HYROX nao foi alterado nesta etapa.
+A auditoria ainda nao esta encerrada. Prompts e persistencia HYROX nao foram
+alterados; a protecao do transporte de IA compartilhado tambem se aplica a HYROX.
 
 ## Fluxo conferido
 
@@ -37,6 +38,7 @@ a estrategia anterior desse WOD como exemplo. Isso nao e, por si so, um defeito.
 | 6 | Rejeitar analises e rounds declarados sem movimentos | 1ee6def |
 | 7 | Apresentar todos os campos da estrategia na tela | 8b1430f |
 | 8 | Preservar estrutura de rounds numericos explicitos | 905a263 |
+| 9 | Usar a mesma versao alvo no contexto e na estrutura | 10028d5 |
 
 ## Ponto 6: analise vazia
 
@@ -115,7 +117,7 @@ de revisao; nao considerar toda omissao parcial resolvida por esta etapa.
 
 ### 9. Coerencia entre contexto e estrutura da estrategia
 
-CRITICO, corrigido e testado; aguardando aprovacao para commit. Duas regressoes
+CRITICO, corrigido e testado; commit 10028d5. Duas regressoes
 em PostgreSQL falharam antes da correcao. getAthleteContextForWod lia a analise
 alvo para selecionar PRs e similares; wod-strategy.ts relia Wod/analise depois.
 Uma reanalise entre as leituras promovia estrategia com 200 apesar do contexto
@@ -144,11 +146,64 @@ Limite: coerencia da versao alvo nao significa snapshot transacional de todos
 os dados do atleta. Historico, check-ins, PRs e perfil continuam leituras atuais
 separadas; o input efetivamente usado continua arquivado para rastreabilidade.
 
+## Demandas complementares: fila de sete frentes
+
+Autorizadas em 2026-10-05 para execucao incremental, uma por etapa. Esta fila
+nao significa sete bugs criticos comprovados: inclui melhorias e validacoes.
+
+| Frente | Demanda | Estado |
+| --- | --- | --- |
+| C1 | Timeout e respostas nao concluidas da IA | Corrigido e testado; aguarda commit |
+| C2 | Arquivar modelo, versao do prompt e tokens | Proximo |
+| C3 | Visualizador de versoes anteriores | Pendente |
+| C4 | Erros de leitura e respostas tardias no frontend | Pendente |
+| C5 | Evitar chamadas duplicadas de IA | Pendente |
+| C6 | Lint preexistente em sw.js | Pendente |
+| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | Pendente |
+
+### C1. Timeout e conclusao da resposta da IA
+
+Evidencia: packages/ai/src/index.ts, createOpenAiMessageSender. O transporte
+extraia texto de qualquer HTTP 200 sem verificar status/incomplete_details,
+e fetch nao tinha prazo. Onze regressoes falharam antes: texto JSON parseavel
+com status nao concluido era aceito e nenhum sinal de cancelamento era passado.
+Impacto: dados marcados pelo provedor como incompletos poderiam ser salvos;
+espera sem prazo deixava a operacao pendente.
+
+Correcao: AbortController com prazo de 120 segundos por chamada, incluindo a
+leitura do corpo, e limpeza do timer em finally. Somente status completed sem
+error/incomplete_details pode chegar ao parsing dos agentes. Status ausente,
+incomplete, failed, cancelled, queued e in_progress retornam 502 com mensagem
+explicita; timeout retorna 504. Falhas HTTP continuam no mapeamento anterior.
+Nao ha retry automatico dessas falhas. O retry corretivo de JSON/schema invalido
+permanece; nesse caso uma operacao pode ter duas chamadas de ate 120 segundos.
+Modelo, prompts e limites de tokens nao mudaram. Nenhuma migracao foi criada.
+
+Referencia consultada: [OpenAI Docs - Structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
+A documentacao orienta verificar status e motivos de incompletude antes de
+consumir o resultado. Os testes nao dependem do provedor real.
+
+Cobertura nova: 12 testes de transporte (estados, metadados contraditorios,
+cancelamento de fetch/corpo, limpeza de timer, sucesso e erro HTTP); 10 de API
+com transporte real e fetch simulado (analise/estrategia inicial e apos reanalise,
+sucesso e preservacao de dados em falhas); 8 em PostgreSQL descartavel conferem
+integralmente o estado antes/depois de incomplete/timeout, nos dois fluxos.
+Timeout e simulado com relogio controlado, sem esperar dois minutos por teste.
+Validacao: 190 testes usuais, 28 em PostgreSQL temporario, 6 E2E de analise,
+reanalise e exibicao da estrategia, typecheck, build e
+ESLint dos arquivos alterados passaram. Lint global foi repetido e falhou
+somente no self de sw.js, com aviso preexistente de Fast Refresh em ui.tsx.
+Nao houve chamada paga, push, deploy ou migracao no banco da aplicacao.
+
+Limites: o prazo nao e um teto para toda a operacao nem cancela trabalho remoto
+garantidamente; abortar a conexao nao garante ausencia de cobranca pelo provedor.
+Conclusao do transporte e validacao de schema nao provam integridade semantica
+do treino, que permanece na frente C7.
+
 ## Pontos importantes e limites da revisao
 
-- O transporte extrai texto, mas nao verifica explicitamente status/incomplete_details
-  da resposta do provedor e nao configura prazo com AbortSignal. Parsing invalido
-  ja e rejeitado; nao afirmar que todas as respostas incompletas sao identificadas.
+- O transporte agora exige resposta concluida e tem prazo por chamada (C1).
+  Isso nao garante toda a completude semantica dos dados gerados (C7).
 - Metadados de modelo, versao do prompt e uso de tokens nao sao arquivados com as versoes.
 - A consulta de versoes existe, mas nao ha visualizador de versoes antigas na interface.
 - WodDetailPage trata qualquer erro de leitura de analise/estrategia como ausencia;
@@ -156,8 +211,9 @@ separadas; o input efetivamente usado continua arquivado para rastreabilidade.
 - Cliques simultaneos via varias abas/API ainda geram chamadas de IA distintas.
   Serializacao das gravacoes nao significa idempotencia nem controle de custos.
 - Lint global tem erro preexistente de self em apps/web/public/sw.js.
-- Suites de API mockam transporte de IA; banco real e temporario. E2E atuais
-  mockam endpoints. Nao houve teste com provedor real nem migracao na aplicacao.
+- Suites de API usam transporte mockado ou transporte real com fetch simulado;
+  banco real e temporario. E2E atuais mockam endpoints. Nao houve teste com
+  provedor real nem migracao na aplicacao.
 
 ## Criterio de encerramento
 

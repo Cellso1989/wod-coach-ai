@@ -520,6 +520,94 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
     },
   );
 
+  for (const reanalysis of [false, true]) {
+    for (const operation of ['analyze', 'strategy'] as const) {
+      it.each(['incomplete', 'timeout'] as const)(
+        `preserves PostgreSQL state on HTTP %s during ${operation} (reanalysis: ${reanalysis})`,
+        async (failure) => {
+          const fresh = await prisma.wod.create({
+            data: {
+              userId: 'version-legacy-user',
+              date: new Date(),
+              sourceType: 'TEXT',
+              rawText: 'AMRAP 15: 10 T2B',
+            },
+          });
+          const url = `/api/wods/${fresh.id}`;
+          const include = {
+            analysis: { include: { movements: true } },
+            strategy: true,
+            analysisVersions: true,
+            strategyVersions: true,
+          };
+          try {
+            mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+            if (reanalysis || operation === 'strategy') {
+              expect(
+                (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+              ).toBe(200);
+            }
+            if (reanalysis) {
+              mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+              expect(
+                (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+              ).toBe(200);
+              if (operation === 'strategy') {
+                mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+                expect(
+                  (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+                ).toBe(200);
+              }
+            }
+            const before = await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include });
+            const transport = await vi.importActual<typeof import('@wod-coach-ai/ai')>(
+              '../../packages/ai/dist/index.js',
+            );
+            let started = () => {};
+            const observed = new Promise<void>((resolve) => {
+              started = resolve;
+            });
+            const fetchMock = vi.fn().mockImplementation((_url, options: RequestInit) => {
+              started();
+              if (failure === 'timeout') {
+                return new Promise((_resolve, reject) =>
+                  options.signal!.addEventListener('abort', () => reject(options.signal!.reason), {
+                    once: true,
+                  }),
+                );
+              }
+              return Promise.resolve(
+                new Response(
+                  JSON.stringify({
+                    status: 'incomplete',
+                    incomplete_details: { reason: 'max_output_tokens' },
+                    output_text: JSON.stringify(operation === 'analyze' ? ANALYSIS : STRATEGY),
+                  }),
+                ),
+              );
+            });
+            vi.stubGlobal('fetch', fetchMock);
+            if (failure === 'timeout') vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            mocks.sendMessage.mockImplementation(transport.createOpenAiMessageSender('test-key'));
+            const pending = app.inject({ method: 'POST', url: `${url}/${operation}`, headers });
+            await observed;
+            if (failure === 'timeout') await vi.advanceTimersByTimeAsync(120_000);
+            expect((await pending).statusCode).toBe(failure === 'timeout' ? 504 : 502);
+            vi.useRealTimers();
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(
+              await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include }),
+            ).toEqual(before);
+          } finally {
+            vi.useRealTimers();
+            vi.unstubAllGlobals();
+            await prisma.wod.delete({ where: { id: fresh.id } });
+          }
+        },
+      );
+    }
+  }
+
   it.each(['initial', 'reanalysis', 'image'] as const)(
     'rejects stale %s analysis after a real WOD edit and preserves history',
     async (scenario) => {
