@@ -57,6 +57,144 @@ const MINIMAL_INPUT: StrategyCoachInput = {
 };
 
 describe('generateStrategy', () => {
+  it.each([
+    ['no records', []],
+    ['rep capacity', [{ movementName: 'Toes to Bar', value: 22, unit: 'reps' }]],
+    ['time record', [{ movementName: 'Toes to Bar', value: 22, unit: 'seconds' }]],
+    ['unrelated load record', [{ movementName: 'Back Squat', value: 100, unit: 'kg' }]],
+    ['zero record', [{ movementName: 'Toes to Bar', value: 0, unit: 'kg' }]],
+    ['unknown unit', [{ movementName: 'Toes to Bar', value: 100, unit: 'unknown' }]],
+    ['nonfinite record', [{ movementName: 'Toes to Bar', value: Infinity, unit: 'kg' }]],
+  ])('rejects a load recommendation with %s', async (_name, records) => {
+    const sendMessage = vi.fn().mockResolvedValue(
+      textMessage(
+        JSON.stringify({
+          ...VALID_STRATEGY,
+          loadRecommendation: '60kg',
+        }),
+      ),
+    );
+    await expect(
+      generateStrategy(
+        {
+          ...MINIMAL_INPUT,
+          athleteContext: {
+            ...MINIMAL_INPUT.athleteContext,
+            relevantPersonalRecords: records.map((record) => ({
+              ...record,
+              achievedAt: new Date(),
+            })),
+          },
+        },
+        sendMessage,
+      ),
+    ).rejects.toBeInstanceOf(StrategyGenerationError);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries an unsupported load and returns only the explicit correction', async () => {
+    const sendMessage = vi
+      .fn()
+      .mockResolvedValueOnce(
+        textMessage(JSON.stringify({ ...VALID_STRATEGY, loadRecommendation: '60kg' })),
+      )
+      .mockResolvedValueOnce(textMessage(JSON.stringify(VALID_STRATEGY)));
+    expect((await generateStrategy(MINIMAL_INPUT, sendMessage)).loadRecommendation).toBeNull();
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage.mock.calls[1][0].messages[1].content[0].text).toContain(
+      'loadRecommendation',
+    );
+  });
+
+  it('does not use prescribed WOD loads or free-text scores as athlete load evidence', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(
+      textMessage(
+        JSON.stringify({
+          ...VALID_STRATEGY,
+          loadRecommendation: '60kg',
+        }),
+      ),
+    );
+    await expect(
+      generateStrategy(
+        {
+          ...MINIMAL_INPUT,
+          wodAnalysis: {
+            ...MINIMAL_INPUT.wodAnalysis,
+            movements: [{ name: 'Back Squat', category: 'weightlifting', loadDescription: '60kg' }],
+          },
+          athleteContext: {
+            ...MINIMAL_INPUT.athleteContext,
+            similarWods: [
+              {
+                wodId: 'historical',
+                date: new Date(),
+                similarityScore: 1,
+                analysis: {
+                  format: 'STRENGTH',
+                  durationMinutes: null,
+                  stimulus: null,
+                  movements: [{ name: 'Back Squat', category: 'weightlifting' }],
+                },
+                result: { score: '60kg' },
+                previousStrategy: null,
+              },
+            ],
+          },
+        },
+        sendMessage,
+      ),
+    ).rejects.toBeInstanceOf(StrategyGenerationError);
+  });
+
+  it('honors maxAttempts without silently dropping an unsupported recommendation', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(
+      textMessage(
+        JSON.stringify({
+          ...VALID_STRATEGY,
+          loadRecommendation: '60kg',
+        }),
+      ),
+    );
+    await expect(
+      generateStrategy(MINIMAL_INPUT, sendMessage, { maxAttempts: 1 }),
+    ).rejects.toBeInstanceOf(StrategyGenerationError);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['kg', 'lb', 'lbs'])(
+    'preserves a load recommendation with a matching %s PR',
+    async (unit) => {
+      const sendMessage = vi.fn().mockResolvedValue(
+        textMessage(
+          JSON.stringify({
+            ...VALID_STRATEGY,
+            loadRecommendation: `20${unit} (PR 40${unit})`,
+          }),
+        ),
+      );
+      const result = await generateStrategy(
+        {
+          ...MINIMAL_INPUT,
+          athleteContext: {
+            ...MINIMAL_INPUT.athleteContext,
+            relevantPersonalRecords: [
+              {
+                movementName: ' Toes-to-Bar ',
+                value: 40,
+                unit,
+                achievedAt: new Date(),
+              },
+            ],
+          },
+        },
+        sendMessage,
+      );
+      expect(result.loadRecommendation).toBe(`20${unit} (PR 40${unit})`);
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('parses and validates a well-formed strategy on the first attempt', async () => {
     const sendMessage: SendMessage = vi
       .fn()

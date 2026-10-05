@@ -476,6 +476,60 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
   );
 
   for (const reanalysis of [false, true]) {
+    it(`preserves PostgreSQL state after unsupported load guidance (reanalysis: ${reanalysis})`, async () => {
+      const fresh = await prisma.wod.create({
+        data: {
+          userId: 'version-legacy-user',
+          date: new Date(),
+          sourceType: 'TEXT',
+          rawText: 'AMRAP 15: 10 T2B',
+        },
+      });
+      const url = `/api/wods/${fresh.id}`;
+      const include = {
+        analysis: { include: { movements: true } },
+        strategy: true,
+        analysisVersions: true,
+        strategyVersions: true,
+        result: true,
+      } as const;
+      try {
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+        expect(
+          (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+        ).toBe(200);
+        if (reanalysis) {
+          mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+          ).toBe(200);
+          mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+          ).toBe(200);
+        }
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+        expect(
+          (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+        ).toBe(200);
+        const before = await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include });
+        mocks.sendMessage.mockResolvedValue({
+          text: JSON.stringify({ ...STRATEGY, loadRecommendation: '60kg' }),
+        });
+        const calls = mocks.sendMessage.mock.calls.length;
+        expect(
+          (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+        ).toBe(502);
+        expect(mocks.sendMessage.mock.calls.length - calls).toBe(2);
+        expect(await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include })).toEqual(
+          before,
+        );
+        expect(await prisma.wodGenerationLease.count({ where: { wodId: fresh.id } })).toBe(0);
+      } finally {
+        await prisma.wod.delete({ where: { id: fresh.id } });
+      }
+    });
+
     it(`rejects inconsistent totals without changing real data (reanalysis: ${reanalysis})`, async () => {
       const fresh = await prisma.wod.create({
         data: {
@@ -642,6 +696,73 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
       },
     );
   }
+
+  it.each([false, true])(
+    'persists corrected or supported load guidance in PostgreSQL (load PR: %s)',
+    async (supported) => {
+      const fresh = await prisma.wod.create({
+        data: {
+          userId: 'version-legacy-user',
+          date: new Date(),
+          sourceType: 'TEXT',
+          rawText: 'AMRAP 15: 10 T2B',
+        },
+      });
+      const record = supported
+        ? await prisma.personalRecord.create({
+            data: {
+              userId: 'version-legacy-user',
+              movementName: 'Toes to Bar',
+              value: 40,
+              unit: 'kg',
+            },
+          })
+        : null;
+      const url = `/api/wods/${fresh.id}`;
+      try {
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+        expect(
+          (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+        ).toBe(200);
+        const loadRecommendation = supported ? '20kg (PR Toes to Bar 40kg)' : null;
+        mocks.sendMessage.mockReset();
+        if (!supported) {
+          mocks.sendMessage.mockResolvedValueOnce({
+            text: JSON.stringify({ ...STRATEGY, loadRecommendation: '60kg' }),
+          });
+        }
+        mocks.sendMessage.mockResolvedValueOnce({
+          text: JSON.stringify({ ...STRATEGY, loadRecommendation }),
+        });
+        expect(
+          (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+        ).toBe(200);
+        expect(mocks.sendMessage).toHaveBeenCalledTimes(supported ? 1 : 2);
+        const strategy = await prisma.wodStrategy.findUniqueOrThrow({ where: { wodId: fresh.id } });
+        expect(strategy.loadRecommendation).toBe(loadRecommendation);
+        const versions = await prisma.wodStrategyVersion.findMany({ where: { wodId: fresh.id } });
+        expect(versions).toHaveLength(1);
+        expect(versions[0].snapshot).toMatchObject({ loadRecommendation });
+        if (supported) {
+          expect(versions[0].inputSnapshot).toMatchObject({
+            athleteContext: {
+              relevantPersonalRecords: expect.arrayContaining([
+                expect.objectContaining({
+                  movementName: 'Toes to Bar',
+                  value: 40,
+                  unit: 'kg',
+                }),
+              ]),
+            },
+          });
+        }
+        expect(await prisma.wodGenerationLease.count({ where: { wodId: fresh.id } })).toBe(0);
+      } finally {
+        if (record) await prisma.personalRecord.delete({ where: { id: record.id } });
+        await prisma.wod.delete({ where: { id: fresh.id } });
+      }
+    },
+  );
 
   it.each(['duration edit', 'text edit'] as const)(
     'keeps strategy context and structure on the same target snapshot during %s',

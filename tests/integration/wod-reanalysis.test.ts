@@ -313,6 +313,75 @@ async function seedAnalyzedWod() {
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
   for (const reanalysis of [false, true]) {
+    it.each([false, true])(
+      `preserves saved data after unsupported load guidance (reanalysis: ${reanalysis}, active strategy: %s)`,
+      async (activeStrategy) => {
+        if (reanalysis) await seedAnalyzedWod();
+        expect((await request('POST', 'analyze')).statusCode).toBe(200);
+        if (activeStrategy) {
+          mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+          expect((await request('POST', 'strategy')).statusCode).toBe(200);
+        }
+        const before = structuredClone(store);
+        const calls = mocks.sendMessage.mock.calls.length;
+        mocks.sendMessage.mockResolvedValue({
+          text: JSON.stringify({ ...STRATEGY, loadRecommendation: '60kg' }),
+        });
+        expect((await request('POST', 'strategy')).statusCode).toBe(502);
+        expect(mocks.sendMessage.mock.calls.length - calls).toBe(2);
+        expect(store).toEqual(before);
+        expect((await request('GET', 'analysis')).statusCode).toBe(200);
+        expect((await request('GET', 'strategy')).statusCode).toBe(activeStrategy ? 200 : 404);
+      },
+    );
+
+    it(`persists only corrected load guidance (reanalysis: ${reanalysis})`, async () => {
+      if (reanalysis) await seedAnalyzedWod();
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      const previousVersions = structuredClone(store.strategyVersions);
+      mocks.sendMessage
+        .mockResolvedValueOnce({
+          text: JSON.stringify({ ...STRATEGY, loadRecommendation: '60kg' }),
+        })
+        .mockResolvedValueOnce({ text: JSON.stringify(STRATEGY) });
+      expect((await request('POST', 'strategy')).statusCode).toBe(200);
+      expect(store.strategy?.loadRecommendation).toBeNull();
+      expect(store.strategyVersions.slice(0, previousVersions.length)).toEqual(previousVersions);
+      expect(store.strategyVersions).toHaveLength(previousVersions.length + 1);
+      expect(store.strategyVersions.at(-1)).toMatchObject({
+        inputSnapshot: { athleteContext: CONTEXT, athleteProfile: PROFILE, wodAnalysis: ANALYSIS },
+      });
+    });
+  }
+
+  it('retains a supported load and its exact athlete record in the strategy snapshot', async () => {
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    const context = {
+      ...CONTEXT,
+      relevantPersonalRecords: [
+        {
+          movementName: 'Thruster',
+          value: 100,
+          unit: 'kg',
+          achievedAt: '2026-09-01',
+        },
+      ],
+    };
+    mocks.context.mockImplementation(async () => ({
+      context,
+      targetWod: structuredClone({ ...store.wod, analysis: store.analysis }),
+    }));
+    mocks.sendMessage.mockResolvedValue({
+      text: JSON.stringify({ ...STRATEGY, loadRecommendation: '60kg (PR Thruster 100kg)' }),
+    });
+    expect((await request('POST', 'strategy')).statusCode).toBe(200);
+    expect(store.strategy?.loadRecommendation).toBe('60kg (PR Thruster 100kg)');
+    expect(store.strategyVersions.at(-1)).toMatchObject({
+      inputSnapshot: { athleteContext: context },
+    });
+  });
+
+  for (const reanalysis of [false, true]) {
     it.each(wodFormatCases)(
       `preserves format/source/structure/context: $name (reanalysis: ${reanalysis})`,
       async ({ rawText, analysis }) => {

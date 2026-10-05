@@ -68,9 +68,18 @@ correcao do coaching gerado. Uma resposta com movimentos/cargas inventados, mas
 coerentes entre resumo e blocos, ainda pode passar. Descricoes de cargas variaveis
 sao texto livre; nao ha parser universal de percentuais, kg/lb ou prescricao.
 
-C7b permanece pendente: fidelidade semantica entre fonte/analise e entre
-analise/PRs/perfil/estrategia. O StrategyCoachAgent atualmente valida forma e
-limites do JSON e instrui fidelidade no prompt; nao garante essa correspondencia
-em codigo. Fonte e resposta precisam ser avaliadas por exemplos representativos,
+C7a comitada: 57a1be3. C7b1 protege agora a existencia de base para o campo
+loadRecommendation: PR positivo/finito de movimento do WOD em kg/kgs/lb/lbs.
+Treze unitarios, sete casos de API e quatro PostgreSQL novos protegem o campo,
+retry e snapshots. Total: 286 testes gerais e 42 PostgreSQL passaram; typecheck,
+build e lint passaram. E2E: 23/24 na primeira execucao com seis workers, caso
+de navegacao passou 3/3 isolado, repeticao com dois workers passou 24/24.
+Ocorrencia sem causa confirmada documentada em auditoria-wod-pendencias.md;
+nenhuma assertion ou espera de UI alterada para esconder a falha.
+
+C7b2 permanece pendente: fidelidade semantica entre fonte/analise e entre
+analise/PRs/perfil/estrategia. Ter um PR de carga nao valida todos os pesos,
+movimentos, percentuais ou conversoes sugeridos, nem impede pesos inventados
+em outros campos de texto. Fonte e resposta precisam de exemplos representativos,
 incluindo imagens e aliases, antes de definir guardas que nao rejeitem escalas
 ou substituicoes legitimas. Nao considerar a auditoria integral encerrada.

@@ -159,7 +159,7 @@ nao significa sete bugs criticos comprovados: inclui melhorias e validacoes.
 | C4 | Erros de leitura e respostas tardias no frontend | Corrigido e testado; 8fe5dbb |
 | C5 | Evitar chamadas duplicadas de IA | Bloqueio concorrente comitado: 7f9955c |
 | C6 | Lint preexistente em sw.js | Comitado: a277aa3 |
-| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | C7a corrigida/testada, aguarda commit; C7b pendente |
+| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | C7a comitada: 57a1be3; C7b1 testada, aguarda commit; C7b2 pendente |
 
 ### C1. Timeout e conclusao da resposta da IA
 
@@ -473,14 +473,62 @@ frontend, banco, HYROX ou prompts de estrategia; sem chamada paga/push/deploy.
 
 Detalhes de precondicoes, passos, resultados e limites:
 [Matriz automatizada C7a](auditoria-wod-matriz.md).
-Corrigida/testada, aguardando aprovacao para commit.
+Corrigida/testada e comitada: 57a1be3.
 
-### C7b. Fidelidade semantica a fonte e ao atleta - pendente
+### C7b1. Recomendacao de carga sem base do atleta
+
+Problema comprovado: generateStrategy em
+packages/coach-engine/src/strategy-coach-agent.ts passava somente pelo schema
+de forma/limites. O prompt exigia base de carga do atleta, mas loadRecommendation
+aceitava 60kg sem PR utilizavel. POST /wods/:id/strategy podia persistir/exibir
+essa sugestao no alerta de StrategySection. Sete regressoes falharam antes,
+incluindo PR de reps, tempo, outro movimento, zero e unidade desconhecida.
+
+Causa: ausencia de refinamento do schema condicionado ao contexto recebido.
+AthleteContext tem PRs estruturados, mas similarWods nao possui registro tipado
+de carga executada; score ou estrategia anterior sao texto livre, nao prova
+deterministica de capacidade de carga. Carga prescrita pelo WOD tambem nao e PR.
+
+Correcao restrita ao agente: loadRecommendation nao nula exige pelo menos um
+PR positivo/finito em kg/kgs/lb/lbs de movimento presente no resumo ou blocos
+do WOD. Normalizacao de nome cobre caixa, espacos e hifens; aliases sem essa
+correspondencia ou unidades livres nao reconhecidas nao liberam o campo.
+Sem base, a resposta deve usar null e orientar por RPE; usa o retry corretivo
+existente, sem apagar silenciosamente o campo ou alterar intensidade/RPE alvo.
+Prompt alinhado ao dado realmente disponivel. Contrato de saida inalterado;
+nenhuma alteracao em rotas, UI, banco, dados legados ou HYROX.
+
+Validacao: 286 testes gerais passaram (42 PG opt-in pulados nessa execucao),
+42 passaram em PostgreSQL temporario e migrate diff sem diferenca. Treze
+novos testes unitarios, sete de API e quatro reais cobrem rejeicao, retry,
+PR reconhecido, contexto arquivado e ausencia de persistencia parcial.
+Inicial/reanalise e estrategia ativa existente foram preservadas em falha.
+Typecheck, build, lint global e lint dos quatro arquivos alterados passaram;
+aviso preexistente de Fast Refresh em ui.tsx permanece.
+
+E2E: primeira execucao com seis workers teve 23/24, por Fonte b nao aparecer
+em cinco segundos apos navegacao; snapshot mostrava Carregando. O caso passou
+tres vezes isolado com trace e um worker; repeticao completa com dois workers
+e trace passou 24/24. Nenhum timeout/assertion/teste de UI foi alterado. Causa
+da ocorrencia nao confirmada; registrar estabilidade da navegacao como risco
+de teste a investigar, nao como bug corrigido nem como prova de regressao
+causada por este agente (endpoints desses E2E sao simulados).
+
+Runner PostgreSQL repetido diretamente apos codigo de saida anomalo da
+invocacao com pipeline: 42/42 novamente, diff limpo e exit 0; containers
+descartaveis removidos. Sem provedor pago, migracao na aplicacao, push ou deploy.
+Corrigida/testada neste escopo, aguardando aprovacao para commit.
+
+### C7b2. Fidelidade semantica restante - pendente
 
 Ainda nao ha garantia de que um JSON internamente coerente corresponde ao
-WOD textual/imagem original. Cargas variaveis sao descricoes livres. O agente
-de estrategia valida forma/limites e orienta por prompt, mas nao verifica em
-codigo toda correspondencia com movimentos, cargas e PRs recebidos. Testes
+WOD textual/imagem original. Cargas variaveis sao descricoes livres. C7b1
+garante somente existencia de base para loadRecommendation, nao associa cada
+peso sugerido ao movimento/PR especifico nem verifica conta percentual ou
+conversao de unidade. Um PR de um movimento nao prova carga para todos os
+outros movimentos do WOD. Pesos/PRs podem ainda ser inventados em outros campos
+textuais; movimentos, escalas e substituicoes tambem precisam de avaliacao.
+O agente nao verifica em codigo toda essa correspondencia. Testes
 mockados nao substituem avaliacao de extracao/interpretacao/coaching reais.
 Tratar em etapa separada: exemplos de fonte e atleta, aliases e substituicoes
 legitimas precisam fundamentar guardas sem rejeitar adaptacoes corretas.

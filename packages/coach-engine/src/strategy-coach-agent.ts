@@ -166,6 +166,11 @@ Regras críticas:
   deve ter no máximo 1-2 frases curtas e diretas, sem repetir contexto já dado em outro
   campo. Prefira frases curtas tipo "Quebre em 3x antes de falhar" a explicações longas.
 - NUNCA invente PRs, cargas ou histórico que não estejam nos dados recebidos (seção 38).
+  Para loadRecommendation, exija PR numerico positivo de carga em kg/kgs/lb/lbs de
+  um movimento deste WOD. PR de reps/tempo, carga prescrita no WOD e score textual
+  nao comprovam capacidade de carga do atleta. O historico recebido nao tem registro
+  estruturado de carga executada. Sem PR de carga utilizavel, use null nesse campo
+  e oriente a execucao por RPE nos demais campos, sem inventar pesos.
   Se athleteContext.dataSufficiency for "low", diga isso explicitamente em "warnings" e
   reduza "confidence" de acordo — não compense a falta de dados com suposições.
 - Segurança em primeiro lugar (seção 28): você NUNCA diagnostica lesões nem substitui
@@ -206,6 +211,27 @@ function buildUserContent(input: StrategyCoachInput): string {
   return `Dados para a recomendação de hoje:\n\n${JSON.stringify(input, null, 2)}`;
 }
 
+function hasUsableLoadRecord(input: StrategyCoachInput): boolean {
+  const key = (name: string) =>
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, ' ');
+  const movements = new Set([
+    ...input.wodAnalysis.movements.map((movement) => key(movement.name)),
+    ...(input.wodAnalysis.rounds ?? []).flatMap((round) =>
+      round.movements.map((movement) => key(movement.name)),
+    ),
+  ]);
+  return input.athleteContext.relevantPersonalRecords.some(
+    (record) =>
+      movements.has(key(record.movementName)) &&
+      Number.isFinite(record.value) &&
+      record.value > 0 &&
+      /^(?:kgs?|lbs?)$/i.test(record.unit.trim()),
+  );
+}
+
 export interface GenerateStrategyOptions {
   maxAttempts?: number;
 }
@@ -221,7 +247,16 @@ export async function generateStrategy(
 ): Promise<StrategyOutput> {
   try {
     const result = await callAiForJson({
-      schema: strategyOutputSchema,
+      schema: strategyOutputSchema.superRefine((output, ctx) => {
+        if (output.loadRecommendation != null && !hasUsableLoadRecord(input)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['loadRecommendation'],
+            message:
+              'Use null em loadRecommendation: nao ha PR de carga positivo em kg/lb para um movimento deste WOD. Oriente por RPE sem inventar pesos.',
+          });
+        }
+      }),
       systemPrompt: SYSTEM_PROMPT,
       userContent: [{ type: 'text', text: buildUserContent(input) }],
       sendMessage,
