@@ -476,6 +476,55 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
   );
 
   for (const reanalysis of [false, true]) {
+    it(`rejects inconsistent totals without changing real data (reanalysis: ${reanalysis})`, async () => {
+      const fresh = await prisma.wod.create({
+        data: {
+          userId: 'version-legacy-user',
+          date: new Date(),
+          sourceType: 'TEXT',
+          rawText: 'AMRAP 15: 10 T2B',
+        },
+      });
+      const url = `/api/wods/${fresh.id}`;
+      const include = {
+        analysis: { include: { movements: true } },
+        strategy: true,
+        analysisVersions: true,
+        strategyVersions: true,
+        result: true,
+      } as const;
+      try {
+        if (reanalysis) {
+          mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+          ).toBe(200);
+          mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+          ).toBe(200);
+        }
+        const before = await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include });
+        mocks.sendMessage.mockResolvedValue({
+          text: JSON.stringify({
+            ...ANALYSIS,
+            movements: [{ ...ANALYSIS.movements[0], reps: 100 }],
+          }),
+        });
+        const calls = mocks.sendMessage.mock.calls.length;
+        expect(
+          (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+        ).toBe(502);
+        expect(mocks.sendMessage.mock.calls.length - calls).toBe(2);
+        expect(await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include })).toEqual(
+          before,
+        );
+        expect(await prisma.wodGenerationLease.count({ where: { wodId: fresh.id } })).toBe(0);
+      } finally {
+        await prisma.wod.delete({ where: { id: fresh.id } });
+      }
+    });
+
     it.each([null, [{ roundNumber: 1, movements: ANALYSIS.movements }]])(
       `preserves real data when fixed rounds are missing (reanalysis: ${reanalysis}): %j`,
       async (rounds) => {

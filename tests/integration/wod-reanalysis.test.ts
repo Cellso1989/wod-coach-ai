@@ -1,6 +1,8 @@
 import { createHash, createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
+import { Prisma } from '../../packages/database/dist/index.js';
+import { wodFormatCases } from '../fixtures/wod-format-cases.js';
 
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
@@ -185,9 +187,17 @@ function databaseClient(current: () => Store) {
         current().analysis = {
           ...current().analysis,
           ...data,
+          roundBreakdown: data.roundBreakdown === Prisma.JsonNull ? null : data.roundBreakdown,
           id: 'analysis-1',
           wodId: current().wod.id,
-          movements: movements.map((movement, index) => ({ ...movement, id: `movement-${index}` })),
+          movements: movements.map((movement, index) => ({
+            ...movement,
+            reps: movement.reps ?? null,
+            distanceMeters: movement.distanceMeters ?? null,
+            calories: movement.calories ?? null,
+            loadDescription: movement.loadDescription ?? null,
+            id: `movement-${index}`,
+          })),
         };
         return current().analysis;
       },
@@ -302,6 +312,104 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  for (const reanalysis of [false, true]) {
+    it.each(wodFormatCases)(
+      `preserves format/source/structure/context: $name (reanalysis: ${reanalysis})`,
+      async ({ rawText, analysis }) => {
+        store.wod.rawText = rawText;
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(analysis) });
+        if (reanalysis) {
+          expect((await request('POST', 'analyze')).statusCode).toBe(200);
+          mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+          expect((await request('POST', 'strategy')).statusCode).toBe(200);
+        }
+        const previous = structuredClone(store.analysisVersions);
+        const originalWod = structuredClone(store.wod);
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(analysis) });
+        expect((await request('POST', 'analyze')).statusCode).toBe(200);
+        expect(mocks.sendMessage.mock.calls.at(-1)?.[0].messages[0].content[0]).toMatchObject({
+          type: 'text',
+          text: `Treino recebido (texto):\n\n${rawText}`,
+        });
+        expect(store.wod).toEqual(originalWod);
+        expect(store.analysis).toMatchObject({
+          format: analysis.format,
+          durationMinutes: analysis.durationMinutes,
+          roundBreakdown: analysis.rounds,
+          rawResponse: analysis,
+          movements: analysis.movements.map((movement) =>
+            expect.objectContaining({
+              ...movement,
+            }),
+          ),
+        });
+        expect(store.analysisVersions.slice(0, previous.length)).toEqual(previous);
+        expect(store.analysisVersions).toHaveLength(reanalysis ? 2 : 1);
+        expect(store.strategy).toBeNull();
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+        expect((await request('POST', 'strategy')).statusCode).toBe(200);
+        expect(store.strategyVersions.at(-1)).toMatchObject({
+          inputSnapshot: {
+            wodAnalysis: analysis,
+            athleteContext: CONTEXT,
+            athleteProfile: PROFILE,
+          },
+        });
+      },
+    );
+
+    it.each([
+      {
+        movements: ANALYSIS.movements.map((movement) => ({
+          ...movement,
+          reps: movement.reps == null ? undefined : movement.reps * 10,
+        })),
+      },
+      { movements: ANALYSIS.movements.slice(1) },
+      {
+        rounds: ANALYSIS.rounds.map((round) => ({
+          ...round,
+          movements: round.movements.map((movement) =>
+            movement.name === 'Thruster' ? { ...movement, loadDescription: '80kg' } : movement,
+          ),
+        })),
+      },
+    ])(
+      `preserves all saved data after inconsistent analysis (reanalysis: ${reanalysis}): %j`,
+      async (change) => {
+        if (reanalysis) await seedAnalyzedWod();
+        const before = structuredClone(store);
+        const calls = mocks.sendMessage.mock.calls.length;
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify({ ...ANALYSIS, ...change }) });
+        expect((await request('POST', 'analyze')).statusCode).toBe(502);
+        expect(mocks.sendMessage.mock.calls.length - calls).toBe(2);
+        expect(store).toEqual(before);
+      },
+    );
+  }
+
+  it('preserves every historical snapshot across three successive reanalyses', async () => {
+    await seedAnalyzedWod();
+    const wod = structuredClone(store.wod);
+    for (const durationMinutes of [18, 19, 20]) {
+      const analyses = structuredClone(store.analysisVersions);
+      const strategies = structuredClone(store.strategyVersions);
+      mocks.sendMessage.mockResolvedValue({
+        text: JSON.stringify({ ...ANALYSIS, durationMinutes }),
+      });
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      expect(store.analysisVersions.slice(0, analyses.length)).toEqual(analyses);
+      expect(store.strategyVersions).toEqual(strategies);
+      expect(store.strategy).toBeNull();
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+      expect((await request('POST', 'strategy')).statusCode).toBe(200);
+      expect(store.strategyVersions.slice(0, strategies.length)).toEqual(strategies);
+      expect(store.wod).toEqual(wod);
+    }
+    expect(store.analysisVersions).toHaveLength(4);
+    expect(store.strategyVersions).toHaveLength(4);
+  });
+
   for (const reanalysis of [false, true]) {
     it.each(['analyze', 'strategy'] as const)(
       `rejects overlapping %s without a second AI call (reanalysis: ${reanalysis})`,

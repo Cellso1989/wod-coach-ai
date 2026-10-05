@@ -158,8 +158,8 @@ nao significa sete bugs criticos comprovados: inclui melhorias e validacoes.
 | C3 | Visualizador de versoes anteriores | Corrigido e testado; 65a2a7e |
 | C4 | Erros de leitura e respostas tardias no frontend | Corrigido e testado; 8fe5dbb |
 | C5 | Evitar chamadas duplicadas de IA | Bloqueio concorrente comitado: 7f9955c |
-| C6 | Lint preexistente em sw.js | Corrigido e verificado; aguarda commit |
-| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | Pendente |
+| C6 | Lint preexistente em sw.js | Comitado: a277aa3 |
+| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | C7a corrigida/testada, aguarda commit; C7b pendente |
 
 ### C1. Timeout e conclusao da resposta da IA
 
@@ -429,9 +429,63 @@ Service worker em dist identico byte a byte ao fonte. Typecheck e build
 passaram com cache. Suites de IA/DB/E2E nao repetidas nesta etapa, pois apenas
 a configuracao de lint mudou; resultados anteriores permanecem os da C5.
 
-Corrigido e verificado, aguardando aprovacao para commit. Sem migracao,
+Corrigido, verificado e comitado: a277aa3. Sem migracao,
 chamada paga, push ou deploy. Resta C7: matriz de formatos e integridade
 semantica de movimentos, volumes e cargas. Auditoria ainda nao encerrada.
+
+### C7a. Coerencia interna e matriz de formatos
+
+Problema: analyzeWod em packages/coach-engine/src/wod-analyzer-agent.ts
+conferia a quantidade de rounds, mas aceitava resumo e blocos com movimentos,
+categorias, volumes ou cargas uniformes diferentes. A reconstrucao automatica
+associava linhas aos movimentos apenas por posicao e volume, ignorando nome
+e numeros adicionais de carga. POST /wods/:id/analyze podia persistir essa
+interpretacao e repassa-la ao StrategyCoachAgent.
+
+Evidencia: doze regressoes falharam antes da correcao em
+tests/unit/wod-analysis-integrity.test.ts. A causa era ausencia de validacao
+cruzada apos schema/normalizacao, nao erro transacional ou de leitura da tela.
+
+Correcao restrita ao analisador: validateRoundIntegrity confere numeracao de
+todos os blocos, identidade/categoria, nomes duplicados no resumo, somas de
+reps/metros/calorias e carga uniforme conhecida. Total conhecido com parcela
+desconhecida e recusado; null permanece permitido sem inventar valor. Cargas
+variaveis continuam preservadas por bloco e nao sao reduzidas a carga unica.
+Falhas usam o retry corretivo existente; nenhuma resposta invalida e promovida.
+Prompt passou a explicitar esses invariantes, sem mudar o contrato de saida.
+
+Reconstrucao uniforme exige agora nome verificavel na mesma linha, sem outros
+numeros, e ausencia de carga no resumo. Aliases T2B/HSW sao reconhecidos;
+outros nomes ambiguos exigem resposta completa do modelo. Linhas nao parseadas
+nao sao puladas para completar artificialmente a lista. O caso de reconstrucao
+simples existente continua passando. Historico legado nao e revalidado/reescrito.
+
+Validacao: 266 testes gerais, 38 em PostgreSQL temporario e 24 E2E passaram;
+migrate diff sem diferenca. Typecheck, build, lint global e lint dos arquivos
+alterados passaram; aviso ui.tsx permanece. Matriz cobre os oito formatos,
+blocos mistos/cargas variaveis e texto de 10000 caracteres, cada um inicial e
+reanalisado; verifica fonte, score, estrutura, snapshots e contexto. Seis casos
+de API protegem estado apos inconsistencias, dois reais protegem gravacoes;
+teste adicional cobre tres reanalises sucessivas. Mock passou a representar
+JsonNull e campos nullable como o Prisma real; fixture antiga de rounds teve
+seus totais corrigidos, sem remover a cobertura. Nenhuma mudanca em rotas,
+frontend, banco, HYROX ou prompts de estrategia; sem chamada paga/push/deploy.
+
+Detalhes de precondicoes, passos, resultados e limites:
+[Matriz automatizada C7a](auditoria-wod-matriz.md).
+Corrigida/testada, aguardando aprovacao para commit.
+
+### C7b. Fidelidade semantica a fonte e ao atleta - pendente
+
+Ainda nao ha garantia de que um JSON internamente coerente corresponde ao
+WOD textual/imagem original. Cargas variaveis sao descricoes livres. O agente
+de estrategia valida forma/limites e orienta por prompt, mas nao verifica em
+codigo toda correspondencia com movimentos, cargas e PRs recebidos. Testes
+mockados nao substituem avaliacao de extracao/interpretacao/coaching reais.
+Tratar em etapa separada: exemplos de fonte e atleta, aliases e substituicoes
+legitimas precisam fundamentar guardas sem rejeitar adaptacoes corretas.
+Nao ha aprovacao para usar provedor pago ou migrar o banco da aplicacao.
+Nao considerar C7 inteira nem a auditoria integral encerradas.
 
 ## Pontos importantes e limites da revisao
 

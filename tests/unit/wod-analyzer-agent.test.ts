@@ -79,11 +79,22 @@ describe('analyzeWod', () => {
       roundNumber: index + 1,
       movements: VALID_OUTPUT.movements,
     }));
-    const sendMessage: SendMessage = vi
-      .fn()
-      .mockResolvedValue(
-        textMessage(JSON.stringify({ ...VALID_OUTPUT, extractedText: text, rounds })),
-      );
+    const sendMessage: SendMessage = vi.fn().mockResolvedValue(
+      textMessage(
+        JSON.stringify({
+          ...VALID_OUTPUT,
+          extractedText: text,
+          movements: VALID_OUTPUT.movements.map((movement) => ({
+            ...movement,
+            ...(movement.reps != null ? { reps: movement.reps * 3 } : {}),
+            ...(movement.distanceMeters != null
+              ? { distanceMeters: movement.distanceMeters * 3 }
+              : {}),
+          })),
+          rounds,
+        }),
+      ),
+    );
     expect((await analyzeWod({ rawText: text }, sendMessage)).rounds).toEqual(rounds);
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });

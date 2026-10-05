@@ -5,6 +5,7 @@ import {
   type WodRoundOutput,
 } from '@wod-coach-ai/validation';
 import { WOD_FORMATS, MOVEMENT_CATEGORIES } from '@wod-coach-ai/types';
+import type { RefinementCtx } from 'zod';
 import {
   callAiForJson,
   AiJsonError,
@@ -81,6 +82,9 @@ Regra crítica sobre "rounds" (WODs com estrutura por round):
 - Quando preencher "rounds", o campo "movements" no nível raiz continua obrigatório e
   deve conter o TOTAL somado de cada movimento (soma de todos os rounds) — "rounds" é
   informação adicional para pacing, não substitui o resumo agregado.
+- Use os mesmos nomes e categorias entre resumo e blocos. Confira as somas de reps,
+  metros e calorias; se qualquer parcela for desconhecida, o total deve ser null.
+  Preserve cargas uniformes e descreva explicitamente as cargas variaveis por bloco.
 - Leia o WOD com atenção para não confundir "rounds" (a estrutura de repetição do treino)
   com "sets" dentro de um único movimento — só use "rounds" para a estrutura macro do WOD.
 
@@ -157,6 +161,7 @@ function executionBlockCount(text: string): number {
 interface ParsedMovementLine {
   value: number;
   unit: 'distance' | 'reps' | 'calories' | null;
+  name: string;
 }
 
 function parseMovementLine(line: string): ParsedMovementLine | null {
@@ -180,7 +185,79 @@ function parseMovementLine(line: string): ParsedMovementLine | null {
           ? 'calories'
           : 'reps';
 
-  return { value: Number(match[1]), unit };
+  const name = start
+    ? normalized.slice(start[0].length).trim()
+    : normalized.slice(0, end!.index).trim();
+  // Additional numbers can be loads, ladders or another movement: ask the model again.
+  if (!name || /\d|%/.test(movementKey(name))) return null;
+  return { value: Number(match[1]), unit, name };
+}
+
+function movementKey(name: string): string {
+  const key = name
+    .toLowerCase()
+    .trim()
+    .replace(/[\s-]+/g, ' ');
+  if (key === 't2b') return 'toes to bar';
+  if (key === 'hsw') return 'handstand walk';
+  return key;
+}
+
+function validateRoundIntegrity(output: WodAnalysisOutput, ctx: RefinementCtx): void {
+  if (!output.rounds?.length) return;
+  const issue = (message: string) => ctx.addIssue({ code: 'custom', path: ['rounds'], message });
+  if (output.rounds.some((round, index) => round.roundNumber !== index + 1)) {
+    issue('Numere todos os rounds/blocos em ordem, sem saltos ou duplicatas.');
+  }
+
+  const summary = new Map(
+    output.movements.map((movement) => [movementKey(movement.name), movement]),
+  );
+  if (summary.size !== output.movements.length)
+    issue('Nao duplique movimentos no resumo agregado.');
+  const blocks = new Map<string, WodMovementOutput[]>();
+  for (const round of output.rounds) {
+    for (const movement of round.movements) {
+      const key = movementKey(movement.name);
+      const items = blocks.get(key) ?? [];
+      items.push(movement);
+      blocks.set(key, items);
+      if (!summary.has(key))
+        issue(`Inclua ${movement.name} no resumo agregado usando o mesmo nome.`);
+    }
+  }
+  for (const [key, movement] of summary) {
+    const items = blocks.get(key);
+    if (!items) {
+      issue(`Preserve ${movement.name} na sequencia de execucao.`);
+      continue;
+    }
+    if (items.some((item) => item.category !== movement.category)) {
+      issue(`Mantenha a categoria de ${movement.name} coerente entre resumo e blocos.`);
+    }
+    for (const metric of ['reps', 'distanceMeters', 'calories'] as const) {
+      const total = movement[metric];
+      if (total == null) continue;
+      const known = items.filter((item) => item[metric] != null);
+      const sum = known.reduce((value, item) => value + item[metric]!, 0);
+      if (known.length !== items.length || Math.abs(sum - total) > 0.001) {
+        issue(
+          `Confira ${metric} de ${movement.name}: o total deve corresponder a todos os blocos; use null se desconhecido.`,
+        );
+      }
+    }
+    const loads = items.map(
+      (item) => item.loadDescription?.toLowerCase().replace(/\s/g, '') ?? null,
+    );
+    const totalLoad = movement.loadDescription?.toLowerCase().replace(/\s/g, '');
+    if (
+      totalLoad &&
+      loads.every((load) => load != null && load === loads[0]) &&
+      totalLoad !== loads[0]
+    ) {
+      issue(`Preserve a carga uniforme de ${movement.name} no resumo e nos blocos.`);
+    }
+  }
 }
 
 function findRoundMovementLines(text: string, roundCount: number, movementCount: number) {
@@ -193,9 +270,9 @@ function findRoundMovementLines(text: string, roundCount: number, movementCount:
 
   return lines
     .slice(roundLineIndex + 1)
+    .slice(0, movementCount)
     .map(parseMovementLine)
-    .filter((line): line is ParsedMovementLine => line != null)
-    .slice(0, movementCount);
+    .filter((line): line is ParsedMovementLine => line != null);
 }
 
 function metricForMovement(movement: WodMovementOutput): 'distance' | 'reps' | 'calories' | null {
@@ -231,6 +308,7 @@ function inferUniformRoundsFromText(
   sourceText: string,
 ): WodAnalysisOutput {
   if (output.rounds?.length) return output;
+  if (output.movements.some((movement) => movement.loadDescription)) return output;
 
   const roundCount = extractExplicitRoundCount(sourceText);
   if (!roundCount || roundCount < 2 || roundCount > 20) return output;
@@ -248,6 +326,7 @@ function inferUniformRoundsFromText(
   for (let index = 0; index < output.movements.length; index++) {
     const movement = output.movements[index]!;
     const line = parsedLines[index]!;
+    if (movementKey(movement.name) !== movementKey(line.name)) return output;
     const metric = metricForMovement(movement);
     if (!metric) return output;
     if (line.unit && line.unit !== metric) return output;
@@ -301,6 +380,7 @@ export async function analyzeWod(
         .transform((output) => normalizeAnalysisOutput(output, input))
         .pipe(wodAnalysisOutputSchema)
         .superRefine((output, ctx) => {
+          validateRoundIntegrity(output, ctx);
           // Check each source separately: extracted text may repeat the user's text.
           const expected = Math.max(
             executionBlockCount(input.rawText ?? ''),
