@@ -157,8 +157,8 @@ nao significa sete bugs criticos comprovados: inclui melhorias e validacoes.
 | C2 | Arquivar modelo, versao do prompt e tokens | Corrigido e testado; 3ed766e |
 | C3 | Visualizador de versoes anteriores | Corrigido e testado; 65a2a7e |
 | C4 | Erros de leitura e respostas tardias no frontend | Corrigido e testado; 8fe5dbb |
-| C5 | Evitar chamadas duplicadas de IA | Bloqueio concorrente testado; aguarda commit |
-| C6 | Lint preexistente em sw.js | Pendente |
+| C5 | Evitar chamadas duplicadas de IA | Bloqueio concorrente comitado: 7f9955c |
+| C6 | Lint preexistente em sw.js | Corrigido e verificado; aguarda commit |
 | C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | Pendente |
 
 ### C1. Timeout e conclusao da resposta da IA
@@ -395,7 +395,7 @@ no banco descartavel, nunca no banco da aplicacao. Cliente Prisma gerado;
 API local reiniciada para liberar sua DLL no Windows. A nova geracao exige
 a migration no ambiente de destino antes de usar/publicar o codigo. Nao
 ha fallback desprotegido se a tabela estiver ausente. Sem push ou deploy.
-Corrigido no escopo concorrente e testado, aguardando aprovacao para commit.
+Corrigido no escopo concorrente e comitado: 7f9955c.
 
 Limites justificados: nao e replay duravel por Idempotency-Key nem cache de
 resultado. Pedidos sequenciais podem gerar novas versoes intencionalmente;
@@ -407,6 +407,31 @@ Nao ha renovacao automatica; dez minutos excedem as duas tentativas de
 recusadas nas verificacoes seguintes. Nao alterou prompts, schemas da IA,
 HYROX, limite diario ou politica financeira. Duas frentes restantes: C6 e C7.
 C6 e a proxima etapa.
+
+### C6. Global do service worker reconhecido pelo lint
+
+Evidencia antes: pnpm lint e verificacao direta pela API do ESLint falharam
+com no-undef para self em apps/web/public/sw.js:4. A configuracao raiz nao
+declarava esse global do ambiente de service worker.
+
+Correcao restrita em eslint.config.js: self readonly somente para o caminho
+apps/web/public/sw.js. Nenhuma regra desativada, dependencia adicionada ou
+mudanca no codigo de runtime/registro do service worker.
+
+Validacao: lint global repetido com pnpm exec turbo run lint --force passou
+nas 12 tarefas, sem cache e sem erros. Permanece um aviso preexistente de
+react-refresh/only-export-components em ui.tsx, fora desta correcao.
+Verificacao executavel pela API do ESLint confirmou: arquivo real sem erros,
+global desconhecido rejeitado, atribuicao a self rejeitada e self ainda
+rejeitado fora do caminho autorizado. Execucao isolada em node:vm confirmou
+registro do listener fetch sem respondWith, preservando o fluxo pela rede.
+Service worker em dist identico byte a byte ao fonte. Typecheck e build
+passaram com cache. Suites de IA/DB/E2E nao repetidas nesta etapa, pois apenas
+a configuracao de lint mudou; resultados anteriores permanecem os da C5.
+
+Corrigido e verificado, aguardando aprovacao para commit. Sem migracao,
+chamada paga, push ou deploy. Resta C7: matriz de formatos e integridade
+semantica de movimentos, volumes e cargas. Auditoria ainda nao encerrada.
 
 ## Pontos importantes e limites da revisao
 
@@ -420,7 +445,7 @@ C6 e a proxima etapa.
   de telas abandonadas (C4); limites entre abas/servidor estao descritos acima.
 - C5 impede sobreposicao de geracao CrossFit por WOD no banco; nao fornece
   replay apos resposta perdida, exactly-once financeiro ou limite diario.
-- Lint global tem erro preexistente de self em apps/web/public/sw.js.
+- Lint global sem erros apos C6; permanece aviso de Fast Refresh em ui.tsx.
 - Suites de API usam transporte mockado ou transporte real com fetch simulado;
   banco real e temporario. E2E atuais mockam endpoints. Nao houve teste com
   provedor real nem migracao na aplicacao.
