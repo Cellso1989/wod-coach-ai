@@ -145,10 +145,15 @@ export default async function wodRoutes(app: FastifyInstance) {
     }
 
     const { rawText, name, notes } = parsed.data;
-    const rawTextChanged = rawText !== undefined && rawText !== existing.rawText;
 
     const wod = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await lockWodVersions(tx, id);
+      const current = await tx.wod.findFirst({
+        where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
+        select: { rawText: true },
+      });
+      if (!current) return null;
+      const rawTextChanged = rawText !== undefined && rawText !== current.rawText;
       if (rawTextChanged) {
         // O texto mudou: a análise e a estratégia anteriores não valem mais.
         await tx.wodAnalysis.deleteMany({ where: { wodId: id } });
@@ -162,6 +167,7 @@ export default async function wodRoutes(app: FastifyInstance) {
       });
     });
 
+    if (!wod) return reply.code(404).send({ error: 'WOD nao encontrado' });
     return reply.send({ wod });
   });
 

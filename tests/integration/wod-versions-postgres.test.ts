@@ -3,7 +3,32 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from '../../packages/database/dist/index.js';
 import { buildApp } from '../../apps/api/src/app.js';
 
-const mocks = vi.hoisted(() => ({ sendMessage: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  sendMessage: vi.fn(),
+  pauseRead: null as (() => Promise<void>) | null,
+}));
+vi.mock('../../packages/database/dist/index.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@wod-coach-ai/database')>();
+  return {
+    ...original,
+    // Pause a real query result to reproduce the read-before-lock race deterministically.
+    prisma: original.prisma.$extends({
+      query: {
+        wod: {
+          async findFirst({ args, query }) {
+            const row = await query(args);
+            const pause = mocks.pauseRead;
+            if (pause) {
+              mocks.pauseRead = null;
+              await pause();
+            }
+            return row;
+          },
+        },
+      },
+    }),
+  };
+});
 vi.mock('../../packages/ai/dist/index.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@wod-coach-ai/ai')>()),
   createOpenAiMessageSender: () => mocks.sendMessage,
@@ -178,6 +203,84 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
       await prisma.wod.delete({ where: { id: fresh.id } });
     }
   });
+
+  it.each([true, false])(
+    'compares the locked text during concurrent edits (changes current text: %s)',
+    async (changesCurrentText) => {
+      const oldText = 'AMRAP 15: 10 T2B';
+      const newText = 'AMRAP 18: 10 T2B';
+      const fresh = await prisma.wod.create({
+        data: {
+          userId: 'version-legacy-user',
+          date: new Date(),
+          sourceType: 'TEXT',
+          rawText: oldText,
+        },
+      });
+      const url = `/api/wods/${fresh.id}`;
+      let release: () => void = () => {};
+      let started: () => void = () => {};
+      const observed = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const paused = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      mocks.pauseRead = async () => {
+        started();
+        await paused;
+      };
+      const pending = app.inject({
+        method: 'PUT',
+        url,
+        headers,
+        payload: { rawText: changesCurrentText ? oldText : newText },
+      });
+      try {
+        await observed;
+        expect(
+          (await app.inject({ method: 'PUT', url, headers, payload: { rawText: newText } }))
+            .statusCode,
+        ).toBe(200);
+        mocks.sendMessage.mockResolvedValue({
+          text: JSON.stringify({ ...ANALYSIS, durationMinutes: 18 }),
+        });
+        expect(
+          (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+        ).toBe(200);
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+        expect(
+          (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+        ).toBe(200);
+        const analysis = await prisma.wodAnalysis.findUniqueOrThrow({ where: { wodId: fresh.id } });
+        const strategy = await prisma.wodStrategy.findUniqueOrThrow({ where: { wodId: fresh.id } });
+        const history = await prisma.wodAnalysisVersion.findMany({ where: { wodId: fresh.id } });
+        const strategies = await prisma.wodStrategyVersion.findMany({ where: { wodId: fresh.id } });
+        release();
+        expect((await pending).statusCode).toBe(200);
+        expect((await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id } })).rawText).toBe(
+          changesCurrentText ? oldText : newText,
+        );
+        expect(await prisma.wodAnalysis.findUnique({ where: { wodId: fresh.id } })).toEqual(
+          changesCurrentText ? null : analysis,
+        );
+        expect(await prisma.wodStrategy.findUnique({ where: { wodId: fresh.id } })).toEqual(
+          changesCurrentText ? null : strategy,
+        );
+        expect(await prisma.wodAnalysisVersion.findMany({ where: { wodId: fresh.id } })).toEqual(
+          history,
+        );
+        expect(await prisma.wodStrategyVersion.findMany({ where: { wodId: fresh.id } })).toEqual(
+          strategies,
+        );
+      } finally {
+        release();
+        await pending;
+        mocks.pauseRead = null;
+        await prisma.wod.delete({ where: { id: fresh.id } });
+      }
+    },
+  );
 
   it.each(['initial', 'reanalysis', 'image'] as const)(
     'rejects stale %s analysis after a real WOD edit and preserves history',

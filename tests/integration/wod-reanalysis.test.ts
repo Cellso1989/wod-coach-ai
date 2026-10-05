@@ -153,7 +153,10 @@ function databaseClient(current: () => Store) {
       findUniqueOrThrow: async () => ({ ...current().wod, analysis: current().analysis }),
       update: async ({ data }: { data: Row }) => {
         if (failWrite === 'wod') throw new Error('WOD write failed');
-        Object.assign(current().wod, data);
+        Object.assign(
+          current().wod,
+          Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)),
+        );
         return current().wod;
       },
     },
@@ -275,6 +278,100 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  it.each([true, false])(
+    'uses the locked WOD text for invalidation (delayed edit changes current text: %s)',
+    async (changesCurrentText) => {
+      await seedAnalyzedWod();
+      let release: () => void = () => {};
+      let started: () => void = () => {};
+      const observed = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const paused = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const original = structuredClone(store.wod);
+      mocks.prisma.wod.findFirst.mockImplementationOnce(async () => {
+        started();
+        await paused;
+        return original;
+      });
+      const newText = RAW_WOD.replace('20 min', '18 min');
+      const pending = app.inject({
+        method: 'PUT',
+        url: '/api/wods/wod-1',
+        headers,
+        payload: { rawText: changesCurrentText ? RAW_WOD : newText },
+      });
+      await observed;
+      expect(
+        (
+          await app.inject({
+            method: 'PUT',
+            url: '/api/wods/wod-1',
+            headers,
+            payload: { rawText: newText },
+          })
+        ).statusCode,
+      ).toBe(200);
+      mocks.sendMessage.mockResolvedValue({
+        text: JSON.stringify({ ...ANALYSIS, durationMinutes: 18 }),
+      });
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+      expect((await request('POST', 'strategy')).statusCode).toBe(200);
+      const fresh = structuredClone(store);
+      release();
+      expect((await pending).statusCode).toBe(200);
+      expect(store.wod.rawText).toBe(changesCurrentText ? RAW_WOD : newText);
+      expect(store.analysis).toEqual(changesCurrentText ? null : fresh.analysis);
+      expect(store.strategy).toEqual(changesCurrentText ? null : fresh.strategy);
+      expect(store.analysisVersions).toEqual(fresh.analysisVersions);
+      expect(store.strategyVersions).toEqual(fresh.strategyVersions);
+      expect(store.wod.result).toEqual(fresh.wod.result);
+    },
+  );
+
+  it('preserves active analysis and strategy when only metadata is edited', async () => {
+    await seedAnalyzedWod();
+    const previous = structuredClone(store);
+    expect(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: '/api/wods/wod-1',
+          headers,
+          payload: { name: 'Updated name', notes: 'Updated notes' },
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(store.analysis).toEqual(previous.analysis);
+    expect(store.strategy).toEqual(previous.strategy);
+    expect(store.analysisVersions).toEqual(previous.analysisVersions);
+    expect(store.strategyVersions).toEqual(previous.strategyVersions);
+    expect(store.wod.rawText).toBe(previous.wod.rawText);
+  });
+
+  it.each(['strategy', 'wod'] as const)(
+    'rolls back text edit invalidation when %s write fails',
+    async (failure) => {
+      await seedAnalyzedWod();
+      const previous = structuredClone(store);
+      failWrite = failure;
+      expect(
+        (
+          await app.inject({
+            method: 'PUT',
+            url: '/api/wods/wod-1',
+            headers,
+            payload: { rawText: 'AMRAP 10: 5 Burpees' },
+          })
+        ).statusCode,
+      ).toBe(500);
+      expect(store).toEqual(previous);
+    },
+  );
+
   it.each(['initial', 'reanalysis', 'image'] as const)(
     'rejects stale %s analysis after a text edit without changing the edited state',
     async (scenario) => {
