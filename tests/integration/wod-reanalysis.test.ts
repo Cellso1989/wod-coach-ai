@@ -247,7 +247,10 @@ beforeEach(async () => {
     },
   );
   mocks.prisma.athleteProfile.findUnique.mockResolvedValue(PROFILE);
-  mocks.context.mockResolvedValue({ context: CONTEXT });
+  mocks.context.mockImplementation(async () => ({
+    context: CONTEXT,
+    targetWod: structuredClone({ ...store.wod, analysis: store.analysis }),
+  }));
   mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
   app = buildApp();
   await app.ready();
@@ -677,6 +680,39 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
     expect(store.strategyVersions).toHaveLength(1);
     expect((await request('GET', 'strategy')).json().strategy).toMatchObject(STRATEGY);
   });
+
+  it.each([false, true])(
+    'rejects replacement after context assembly without mixing strategy input (reanalysis: %s)',
+    async (reanalysis) => {
+      if (reanalysis) await seedAnalyzedWod();
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      const targetWod = structuredClone({ ...store.wod, analysis: store.analysis });
+      mocks.context.mockImplementationOnce(async () => {
+        store.analysis = {
+          ...store.analysis,
+          versionId: 'replacement-version',
+          durationMinutes: 12,
+        };
+        store.strategy = null;
+        return { targetWod, context: CONTEXT };
+      });
+      const previousVersions = structuredClone(store.strategyVersions);
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+      expect((await request('POST', 'strategy')).statusCode).toBe(409);
+      const prompt = mocks.sendMessage.mock.calls.at(-1)![0].messages[0].content[0].text;
+      expect(JSON.parse(prompt.slice(prompt.indexOf('{')))).toMatchObject({
+        wodAnalysis: { durationMinutes: 20, rounds: ANALYSIS.rounds },
+        athleteContext: CONTEXT,
+      });
+      expect(store.analysis).toMatchObject({
+        versionId: 'replacement-version',
+        durationMinutes: 12,
+      });
+      expect(store.strategy).toBeNull();
+      expect(store.strategyVersions).toEqual(previousVersions);
+      expect(mocks.prisma.wod.findUniqueOrThrow).not.toHaveBeenCalled();
+    },
+  );
 
   it('saves initial analysis and strategy with the complete WOD and athlete context', async () => {
     await seedAnalyzedWod();

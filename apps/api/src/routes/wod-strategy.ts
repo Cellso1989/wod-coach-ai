@@ -42,11 +42,8 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
       throw err;
     }
 
-    const wodWithAnalysis = await prisma.wod.findUniqueOrThrow({
-      where: { id },
-      include: { analysis: { include: { movements: true } } },
-    });
-    const analysis = wodWithAnalysis.analysis!;
+    const wodWithAnalysis = athleteContextResult.targetWod;
+    const analysis = wodWithAnalysis.analysis;
     if (!analysis.versionId) {
       return reply.code(409).send({ error: 'Reanalise este WOD antes de gerar uma estrategia' });
     }

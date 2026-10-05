@@ -36,6 +36,7 @@ a estrategia anterior desse WOD como exemplo. Isso nao e, por si so, um defeito.
 | 5 | Decidir invalidacao da edicao sob bloqueio | ace37e0 |
 | 6 | Rejeitar analises e rounds declarados sem movimentos | 1ee6def |
 | 7 | Apresentar todos os campos da estrategia na tela | 8b1430f |
+| 8 | Preservar estrutura de rounds numericos explicitos | 905a263 |
 
 ## Ponto 6: analise vazia
 
@@ -79,7 +80,7 @@ Lint global continua falhando no erro preexistente de self em sw.js.
 
 ### 8. Preservacao de rounds explicitos
 
-CRITICO, corrigido e testado; aguardando aprovacao para commit. Sete regressoes
+CRITICO, corrigido e testado; commit 905a263. Sete regressoes
 falharam antes da correcao. Exemplo: "5 rounds de 10 T2B + 15 Wall Ball" aceitava
 apenas totais agregados. O prompt permitia rounds null em treinos uniformes,
 contradizendo a regra prioritaria; o fallback limitado rodava depois da validacao,
@@ -112,16 +113,36 @@ estao cobertos. Quantidade e labels nao provam correspondencia integral de cada
 movimento, volume e carga com a fonte. Essa integridade semantica segue na matriz
 de revisao; nao considerar toda omissao parcial resolvida por esta etapa.
 
-### 9. Contexto e estrutura podem vir de analises diferentes
+### 9. Coerencia entre contexto e estrutura da estrategia
 
-CRITICO, janela de concorrencia identificada; precisa de regressao deterministica.
-getAthleteContextForWod le a analise alvo e usa seus movimentos para selecionar
-PRs e similares. wod-strategy.ts depois rele Wod com analise separadamente.
-Se houver reanalise entre as leituras, o contexto pode ser da versao anterior e
-a estrutura da atual; o guard de versionId da persistencia verifica apenas a
-segunda versao. Se a analise for removida nesse intervalo, analysis! pode falhar.
-Proposta: montar contexto e estrutura a partir do mesmo snapshot/versionId,
-sem manter uma transacao aberta durante a chamada da IA.
+CRITICO, corrigido e testado; aguardando aprovacao para commit. Duas regressoes
+em PostgreSQL falharam antes da correcao. getAthleteContextForWod lia a analise
+alvo para selecionar PRs e similares; wod-strategy.ts relia Wod/analise depois.
+Uma reanalise entre as leituras promovia estrategia com 200 apesar do contexto
+anterior, pois o guard verificava apenas a segunda versao. Uma edicao que
+removia a analise causava 500 ao acessar analysis!.versionId.
+
+Correcao: o servico retorna internamente targetWod com a analise/movimentos
+ja lidos; a rota usa esse mesmo objeto para estrutura, versionId e snapshot de
+fonte, sem reler a analise. O endpoint GET /context continua expondo somente
+context. Sem mudanca de prompt/schema da estrategia, migracao ou fluxo HYROX.
+Nao ha transacao/bloqueio durante a chamada da IA. O guard existente sob
+bloqueio rejeita com 409 se a versao usada deixou de ser ativa, preservando
+analise/estrategia/historico mais recentes.
+
+Testes de banco pausam uma consulta real da analise alvo e executam reanalise
+ou edicao concorrente por rotas reais. Conferem retorno 409, estrutura original
+enviada a IA, contexto com PR real do movimento original e estado sem novas
+gravacoes. Testes usuais cobrem tambem geracao apos analise inicial e reanalise,
+sem segunda leitura; casos existentes de sucesso conferem o input arquivado.
+Validacao: 168 testes usuais, 20 em PostgreSQL temporario, 6 E2E, typecheck,
+build e ESLint dos arquivos alterados passaram. Os 20 opt-in sao executados
+separadamente. Lint global tem o erro preexistente de self em sw.js. Nao houve
+IA paga, migracao no banco da aplicacao, push ou deploy.
+
+Limite: coerencia da versao alvo nao significa snapshot transacional de todos
+os dados do atleta. Historico, check-ins, PRs e perfil continuam leituras atuais
+separadas; o input efetivamente usado continua arquivado para rastreabilidade.
 
 ## Pontos importantes e limites da revisao
 

@@ -31,7 +31,11 @@ export class WodNotAnalyzedError extends Error {}
 export async function getAthleteContextForWod(
   userId: string,
   wodId: string,
-): Promise<{ targetAnalysis: WodAnalysisSummary; context: AthleteContext }> {
+): Promise<{
+  targetWod: Wod & { analysis: WodAnalysis & { movements: WodMovement[] } };
+  targetAnalysis: WodAnalysisSummary;
+  context: AthleteContext;
+}> {
   const targetWod = await prisma.wod.findFirst({
     where: { id: wodId, userId },
     include: { analysis: { include: { movements: true } } },
@@ -121,5 +125,6 @@ export async function getAthleteContextForWod(
     })),
   });
 
-  return { targetAnalysis, context };
+  // Strategy structure and context must refer to the same target analysis read.
+  return { targetWod: { ...targetWod, analysis: targetWod.analysis }, targetAnalysis, context };
 }

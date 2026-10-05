@@ -6,6 +6,7 @@ import { buildApp } from '../../apps/api/src/app.js';
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   pauseRead: null as (() => Promise<void>) | null,
+  pauseTarget: null as (() => Promise<void>) | null,
 }));
 vi.mock('../../packages/database/dist/index.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('@wod-coach-ai/database')>();
@@ -17,6 +18,11 @@ vi.mock('../../packages/database/dist/index.js', async (importOriginal) => {
         wod: {
           async findFirst({ args, query }) {
             const row = await query(args);
+            if (args.include?.analysis && mocks.pauseTarget) {
+              const pause = mocks.pauseTarget;
+              mocks.pauseTarget = null;
+              await pause();
+            }
             const pause = mocks.pauseRead;
             if (pause) {
               mocks.pauseRead = null;
@@ -400,6 +406,119 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
       },
     );
   }
+
+  it.each(['reanalysis', 'text edit'] as const)(
+    'keeps strategy context and structure on the same target snapshot during %s',
+    async (change) => {
+      const fresh = await prisma.wod.create({
+        data: {
+          userId: 'version-legacy-user',
+          date: new Date(),
+          sourceType: 'TEXT',
+          rawText: 'AMRAP 15: 10 T2B',
+        },
+      });
+      const url = `/api/wods/${fresh.id}`;
+      let release = () => {};
+      let started = () => {};
+      const observed = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const barrier = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const personalRecord = await prisma.personalRecord.create({
+        data: {
+          userId: 'version-legacy-user',
+          movementName: 'Toes to Bar',
+          value: 22,
+          unit: 'reps',
+        },
+      });
+      try {
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+        expect(
+          (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+        ).toBe(200);
+        const oldAnalysis = await prisma.wodAnalysis.findUniqueOrThrow({
+          where: { wodId: fresh.id },
+        });
+        const contextResponse = await app.inject({ method: 'GET', url: `${url}/context`, headers });
+        expect(contextResponse.statusCode).toBe(200);
+        const originalContext = contextResponse.json().context;
+        expect(originalContext.relevantPersonalRecords).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ movementName: 'Toes to Bar', value: 22 }),
+          ]),
+        );
+        mocks.pauseTarget = async () => {
+          started();
+          await barrier;
+        };
+        const pending = app.inject({ method: 'POST', url: `${url}/strategy`, headers });
+        await observed;
+        if (change === 'reanalysis') {
+          mocks.sendMessage.mockResolvedValue({
+            text: JSON.stringify({
+              ...ANALYSIS,
+              durationMinutes: 12,
+              movements: [{ name: 'Burpee', category: 'monostructural', reps: 10 }],
+              rounds: null,
+            }),
+          });
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+          ).toBe(200);
+        } else {
+          expect(
+            (
+              await app.inject({
+                method: 'PUT',
+                url,
+                headers,
+                payload: { rawText: 'AMRAP 10: 5 Burpees' },
+              })
+            ).statusCode,
+          ).toBe(200);
+        }
+        const before = await prisma.wod.findUniqueOrThrow({
+          where: { id: fresh.id },
+          include: {
+            analysis: true,
+            strategy: true,
+            analysisVersions: true,
+            strategyVersions: true,
+          },
+        });
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+        release();
+        expect((await pending).statusCode).toBe(409);
+        const prompt = mocks.sendMessage.mock.calls.at(-1)![0].messages[0].content[0].text;
+        const input = JSON.parse(prompt.slice(prompt.indexOf('{')));
+        expect(input.wodAnalysis.durationMinutes).toBe(oldAnalysis.durationMinutes);
+        expect(input.wodAnalysis.movements).toEqual([
+          expect.objectContaining({ name: 'Toes to Bar' }),
+        ]);
+        expect(input.athleteContext).toEqual(originalContext);
+        expect(
+          await prisma.wod.findUniqueOrThrow({
+            where: { id: fresh.id },
+            include: {
+              analysis: true,
+              strategy: true,
+              analysisVersions: true,
+              strategyVersions: true,
+            },
+          }),
+        ).toEqual(before);
+      } finally {
+        release();
+        mocks.pauseTarget = null;
+        await prisma.personalRecord.delete({ where: { id: personalRecord.id } });
+        await prisma.wod.delete({ where: { id: fresh.id } });
+      }
+    },
+  );
 
   it.each(['initial', 'reanalysis', 'image'] as const)(
     'rejects stale %s analysis after a real WOD edit and preserves history',
