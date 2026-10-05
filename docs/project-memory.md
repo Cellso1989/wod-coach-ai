@@ -36,8 +36,8 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 - Geracao de estrategia usa `gpt-5-mini`.
 - A analise de treino tem `maxTokens: 2500`.
 - A estrategia tem `maxTokens: 3500`.
-- O app ainda nao grava uso exato de tokens por chamada.
-- Um ajuste futuro util e registrar input tokens, output tokens, total tokens e custo estimado por usuario/WOD.
+- Novas versoes CrossFit arquivam tokens reportados pelo provedor por tentativa e o total da geracao, incluindo retry corretivo, em snapshot.generationMetadata. Uso ausente/invalido fica null; dados legados nao sao estimados. Chamadas sem versao promovida nao formam um livro de custos.
+- Custo financeiro estimado, detalhamento de cache/raciocinio e contabilizacao de chamadas que falham continuam fora desta implementacao.
 - Evitar chamadas desnecessarias a IA.
 - Se houver imagem, a extracao do texto ocorre dentro da chamada de analise do WOD.
 
@@ -58,8 +58,9 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 ## Demandas complementares da auditoria
 
 - Sete frentes autorizadas em 2026-10-05, em etapas separadas: C1 timeout/incomplete; C2 metadados de modelo/prompt/tokens; C3 visualizador de versoes; C4 erros/respostas tardias de frontend; C5 chamadas duplicadas; C6 lint sw.js; C7 matriz de formatos e integridade semantica. Detalhes e limites em docs/auditoria-wod-pendencias.md.
-- C1 corrigida e testada, aguardando aprovacao para commit. Onze regressoes falharam antes. createOpenAiMessageSender usa AbortController com 120 segundos por chamada, incluindo leitura do corpo, e limpa o timer. Exige status completed sem error/incomplete_details; resposta nao concluida retorna 502, timeout 504, ambos sem retry automatico nem persistencia. O retry corretivo de JSON/schema invalido permanece, com prazo renovado na segunda chamada. Transporte compartilhado protege tambem HYROX, sem alterar seus prompts/schema/persistencia. Validacao: 190 testes usuais, 28 em PostgreSQL temporario, 6 E2E, typecheck, build e lint dos arquivos alterados passaram. Lint global repetido falhou no erro preexistente self em sw.js; nenhum provedor real/banco da aplicacao foi usado.
-- C2 e a proxima etapa; C3 a C7 seguem pendentes. Nao considerar a auditoria encerrada.
+- C1 corrigida e testada; commit e6c8408. Onze regressoes falharam antes. createOpenAiMessageSender usa AbortController com 120 segundos por chamada, incluindo leitura do corpo, e limpa o timer. Exige status completed sem error/incomplete_details; resposta nao concluida retorna 502, timeout 504, ambos sem retry automatico nem persistencia. O retry corretivo de JSON/schema invalido permanece, com prazo renovado na segunda chamada. Transporte compartilhado protege tambem HYROX, sem alterar seus prompts/schema/persistencia. Validacao: 190 testes usuais, 28 em PostgreSQL temporario, 6 E2E, typecheck, build e lint dos arquivos alterados passaram. Lint global repetido falhou no erro preexistente self em sw.js; nenhum provedor real/banco da aplicacao foi usado.
+- C2 corrigida e testada, aguardando aprovacao para commit. Onze regressoes falharam antes. Transporte retorna id/model/usage opcionais; captureAiGeneration nas rotas CrossFit arquiva modelo solicitado/informado, hash SHA-256 do prompt de sistema, responseId, parametros e tokens de cada tentativa. Metadados ficam em snapshot.generationMetadata, na mesma transacao das versoes, sem migracao ou alteracao dos prompts/retornos dos agentes. Soma inclui retry; total desconhecido fica null, nao zero. Versoes legadas permanecem intactas; edicoes manuais tem metadados nulos. Validacao: 208 testes usuais, 32 em PostgreSQL temporario, 6 E2E, typecheck, build e lint dos arquivos alterados passaram; lint global mantem erro preexistente em sw.js. Limites de cobertura do hash/consumo em docs/auditoria-wod-pendencias.md.
+- C3 e a proxima etapa; C4 a C7 seguem pendentes. Nao considerar a auditoria encerrada.
 
 ## Analise de WOD
 

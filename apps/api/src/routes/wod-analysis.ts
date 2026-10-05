@@ -5,6 +5,7 @@ import { analyzeWod, WodAnalysisError } from '@wod-coach-ai/coach-engine';
 import { wodAnalysisUpdateSchema } from '@wod-coach-ai/validation';
 import { z } from 'zod';
 import { lockWodVersions, recordAnalysisVersion } from '../services/wod-version-service.js';
+import { captureAiGeneration } from '../services/ai-generation-metadata.js';
 
 export default async function wodAnalysisRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -26,11 +27,12 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
       return reply.code(503).send({ error: 'A análise por IA ainda não foi configurada' });
     }
 
+    const generation = captureAiGeneration(sendMessage, 'WodAnalyzerAgent');
     let output;
     try {
       output = await analyzeWod(
         { rawText: wod.rawText, imageBase64: wod.imageData, imageMimeType: wod.imageMimeType },
-        sendMessage,
+        generation.sendMessage,
       );
     } catch (err) {
       if (err instanceof WodAnalysisError) {
@@ -117,7 +119,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
         include: { movements: { orderBy: { order: 'asc' } } },
       });
 
-      analysis = await recordAnalysisVersion(tx, wod, analysis, 'AI');
+      analysis = await recordAnalysisVersion(tx, wod, analysis, 'AI', generation.metadata());
 
       // A strategy based on the previous analysis must not survive its replacement.
       await tx.wodStrategy.deleteMany({ where: { wodId: wod.id } });

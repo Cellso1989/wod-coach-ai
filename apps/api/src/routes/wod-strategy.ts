@@ -13,6 +13,7 @@ import {
   WodNotAnalyzedError,
 } from '../services/athlete-context-service.js';
 import { lockWodVersions, recordStrategyVersion } from '../services/wod-version-service.js';
+import { captureAiGeneration } from '../services/ai-generation-metadata.js';
 
 export default async function wodStrategyRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -97,9 +98,10 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
         : null,
     };
 
+    const generation = captureAiGeneration(sendMessage, 'StrategyCoachAgent');
     let output;
     try {
-      output = await generateStrategy(strategyInput, sendMessage);
+      output = await generateStrategy(strategyInput, generation.sendMessage);
     } catch (err) {
       if (err instanceof StrategyGenerationError) {
         request.log.warn(
@@ -165,7 +167,14 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
           rawResponse: output,
         },
       });
-      return recordStrategyVersion(tx, wodWithAnalysis, saved, analysisVersionId, strategyInput);
+      return recordStrategyVersion(
+        tx,
+        wodWithAnalysis,
+        saved,
+        analysisVersionId,
+        strategyInput,
+        generation.metadata(),
+      );
     });
 
     if (!strategy) {

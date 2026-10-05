@@ -20,6 +20,41 @@ export interface SendMessageParams {
 
 export interface AiTextMessage {
   text: string;
+  metadata?: AiResponseMetadata;
+}
+
+export interface AiTokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+export interface AiResponseMetadata {
+  responseId: string | null;
+  model: string | null;
+  usage: AiTokenUsage | null;
+}
+
+function tokenCount(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function responseMetadata(body: Record<string, unknown>): AiResponseMetadata {
+  const usage =
+    typeof body.usage === 'object' && body.usage !== null
+      ? (body.usage as Record<string, unknown>)
+      : {};
+  const inputTokens = tokenCount(usage.input_tokens);
+  const outputTokens = tokenCount(usage.output_tokens);
+  const totalTokens = tokenCount(usage.total_tokens);
+  return {
+    responseId: typeof body.id === 'string' && body.id.trim() ? body.id : null,
+    model: typeof body.model === 'string' && body.model.trim() ? body.model : null,
+    usage:
+      inputTokens !== null && outputTokens !== null && totalTokens !== null
+        ? { inputTokens, outputTokens, totalTokens }
+        : null,
+  };
 }
 
 export const OPENAI_REQUEST_TIMEOUT_MS = 120_000;
@@ -151,7 +186,10 @@ export function createOpenAiMessageSender(
         );
       }
 
-      return { text: extractOutputText(body) };
+      return {
+        text: extractOutputText(body),
+        metadata: responseMetadata(body as Record<string, unknown>),
+      };
     } catch (err) {
       if (controller.signal.aborted) {
         throw new OpenAiApiError(504, 'OpenAI request timed out', 'request_timeout');

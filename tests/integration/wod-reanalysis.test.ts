@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
 
@@ -283,6 +283,75 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  for (const reanalysis of [false, true]) {
+    it.each(['analyze', 'strategy'] as const)(
+      `archives generation metadata including the corrective retry during %s (reanalysis: ${reanalysis})`,
+      async (operation) => {
+        if (reanalysis) await seedAnalyzedWod();
+        if (operation === 'strategy')
+          expect((await request('POST', 'analyze')).statusCode).toBe(200);
+        const versions = operation === 'analyze' ? store.analysisVersions : store.strategyVersions;
+        const previous = structuredClone(versions);
+        mocks.sendMessage
+          .mockResolvedValueOnce({
+            text: 'invalid json',
+            metadata: {
+              responseId: 'resp-first',
+              model: 'gpt-5-mini-snapshot',
+              usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+            },
+          })
+          .mockResolvedValueOnce({
+            text: JSON.stringify(operation === 'analyze' ? ANALYSIS : STRATEGY),
+            metadata: {
+              responseId: 'resp-retry',
+              model: 'gpt-5-mini-snapshot',
+              usage: { inputTokens: 150, outputTokens: 30, totalTokens: 180 },
+            },
+          });
+        const calls = mocks.sendMessage.mock.calls.length;
+        expect((await request('POST', operation)).statusCode).toBe(200);
+        const saved = (
+          operation === 'analyze' ? store.analysisVersions : store.strategyVersions
+        ).at(-1)!;
+        const prompt = mocks.sendMessage.mock.calls[calls][0].systemPrompt;
+        expect(saved).toMatchObject({
+          snapshot: {
+            generationMetadata: {
+              schemaVersion: 1,
+              provider: 'openai',
+              agent: operation === 'analyze' ? 'WodAnalyzerAgent' : 'StrategyCoachAgent',
+              attempts: [
+                {
+                  attempt: 1,
+                  requestedModel: 'gpt-5-mini',
+                  model: 'gpt-5-mini-snapshot',
+                  responseId: 'resp-first',
+                  promptVersion: `sha256:${createHash('sha256').update(prompt).digest('hex')}`,
+                  usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+                },
+                {
+                  attempt: 2,
+                  responseId: 'resp-retry',
+                  usage: { inputTokens: 150, outputTokens: 30, totalTokens: 180 },
+                },
+              ],
+              totalUsage: { inputTokens: 250, outputTokens: 50, totalTokens: 300 },
+            },
+          },
+        });
+        expect(
+          (operation === 'analyze' ? store.analysisVersions : store.strategyVersions).slice(0, -1),
+        ).toEqual(previous);
+        const response = (await request('GET', 'versions')).json();
+        expect(
+          (operation === 'analyze' ? response.analysisVersions : response.strategyVersions)[0]
+            .snapshot.generationMetadata,
+        ).toEqual((saved.snapshot as Row).generationMetadata);
+      },
+    );
+  }
+
   for (const reanalysis of [false, true]) {
     for (const operation of ['analyze', 'strategy'] as const) {
       it.each(['incomplete', 'timeout'] as const)(

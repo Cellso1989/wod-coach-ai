@@ -25,6 +25,52 @@ afterEach(() => {
 });
 
 describe('OpenAI transport completion and deadline', () => {
+  it('preserves reported zero usage rather than treating it as absent', async () => {
+    respond({
+      status: 'completed',
+      output_text: '{}',
+      usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+    });
+    expect(await createOpenAiMessageSender('test-key')(PARAMS)).toMatchObject({
+      metadata: { usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+    });
+  });
+  it('preserves the response model, ID and provider token counts', async () => {
+    respond({
+      status: 'completed',
+      id: 'resp-123',
+      model: 'gpt-5-mini-snapshot',
+      output_text: '{}',
+      usage: { input_tokens: 100, output_tokens: 25, total_tokens: 125 },
+    });
+    expect(await createOpenAiMessageSender('test-key')(PARAMS)).toEqual({
+      text: '{}',
+      metadata: {
+        responseId: 'resp-123',
+        model: 'gpt-5-mini-snapshot',
+        usage: { inputTokens: 100, outputTokens: 25, totalTokens: 125 },
+      },
+    });
+  });
+
+  it.each([
+    undefined,
+    { input_tokens: 1 },
+    { input_tokens: -1, output_tokens: 2, total_tokens: 1 },
+    { input_tokens: '10', output_tokens: 2, total_tokens: 12 },
+    { input_tokens: 1.5, output_tokens: 2, total_tokens: 3.5 },
+    {
+      input_tokens: Number.MAX_SAFE_INTEGER + 1,
+      output_tokens: 0,
+      total_tokens: Number.MAX_SAFE_INTEGER + 1,
+    },
+  ])('keeps absent or invalid usage unknown: %j', async (usage) => {
+    respond({ status: 'completed', output_text: '{}', usage });
+    expect(await createOpenAiMessageSender('test-key')(PARAMS)).toMatchObject({
+      metadata: { responseId: null, model: null, usage: null },
+    });
+  });
+
   it.each(['incomplete', 'failed', 'cancelled', 'queued', 'in_progress', undefined])(
     'rejects status %s even with syntactically valid JSON text',
     async (status) => {
@@ -62,7 +108,7 @@ describe('OpenAI transport completion and deadline', () => {
         },
       ],
     });
-    expect(await createOpenAiMessageSender('test-key')(PARAMS)).toEqual({
+    expect(await createOpenAiMessageSender('test-key')(PARAMS)).toMatchObject({
       text: '{"format":"AMRAP"}',
     });
     const options = fetchMock.mock.calls[0][1];
@@ -119,7 +165,7 @@ describe('OpenAI transport completion and deadline', () => {
   it('cleans up the timer on success and preserves HTTP error handling', async () => {
     vi.useFakeTimers();
     respond({ status: 'completed', output_text: '{}' });
-    expect(await createOpenAiMessageSender('test-key')(PARAMS)).toEqual({ text: '{}' });
+    expect(await createOpenAiMessageSender('test-key')(PARAMS)).toMatchObject({ text: '{}' });
     expect(vi.getTimerCount()).toBe(0);
     respond({ error: { code: 'rate_limit_exceeded', message: 'Rate limit' } }, 429);
     const error = await createOpenAiMessageSender('test-key')(PARAMS).catch((err: unknown) => err);

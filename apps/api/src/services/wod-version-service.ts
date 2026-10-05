@@ -6,6 +6,7 @@ import {
   type WodStrategy,
 } from '@wod-coach-ai/database';
 import type { StrategyCoachInput } from '@wod-coach-ai/coach-engine';
+import type { AiGenerationMetadata } from './ai-generation-metadata.js';
 
 type AnalysisWithMovements = WodAnalysis & { movements: WodMovement[] };
 
@@ -36,6 +37,7 @@ export async function recordAnalysisVersion(
   wod: Wod,
   analysis: AnalysisWithMovements,
   reason: 'AI' | 'DURATION_EDIT',
+  generationMetadata?: AiGenerationMetadata,
 ) {
   const latest = await tx.wodAnalysisVersion.findFirst({
     where: { wodId: wod.id },
@@ -48,7 +50,11 @@ export async function recordAnalysisVersion(
       version: (latest?.version ?? 0) + 1,
       reason,
       sourceSnapshot: sourceSnapshot(wod),
-      snapshot: jsonSnapshot({ ...analysis, versionId: undefined }),
+      snapshot: jsonSnapshot({
+        ...analysis,
+        versionId: undefined,
+        generationMetadata: generationMetadata ?? null,
+      }),
     },
   });
   return tx.wodAnalysis.update({
@@ -64,6 +70,7 @@ export async function recordStrategyVersion(
   strategy: WodStrategy,
   analysisVersionId: string,
   input: StrategyCoachInput,
+  generationMetadata?: AiGenerationMetadata,
 ) {
   const latest = await tx.wodStrategyVersion.findFirst({
     where: { wodId: wod.id },
@@ -77,7 +84,11 @@ export async function recordStrategyVersion(
       analysisVersionId,
       sourceSnapshot: sourceSnapshot(wod),
       inputSnapshot: jsonSnapshot(input),
-      snapshot: jsonSnapshot({ ...strategy, versionId: undefined }),
+      snapshot: jsonSnapshot({
+        ...strategy,
+        versionId: undefined,
+        generationMetadata: generationMetadata ?? null,
+      }),
     },
   });
   return tx.wodStrategy.update({ where: { wodId: wod.id }, data: { versionId: version.id } });

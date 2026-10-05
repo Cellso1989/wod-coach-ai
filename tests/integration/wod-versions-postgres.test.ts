@@ -122,6 +122,8 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
       inputSnapshot: null,
       analysisVersionId: null,
     });
+    expect(versions.analysisVersions[0].snapshot.generationMetadata).toBeUndefined();
+    expect(versions.strategyVersions[0].snapshot.generationMetadata).toBeUndefined();
     expect(
       (await prisma.wodAnalysis.findUniqueOrThrow({ where: { wodId: 'version-legacy-hyrox' } }))
         .versionId,
@@ -606,6 +608,180 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
         },
       );
     }
+  }
+
+  for (const reanalysis of [false, true]) {
+    it.each([false, true])(
+      `archives provider metadata and distinguishes manual edits (reanalysis: ${reanalysis}, partial usage: %s)`,
+      async (partialUsage) => {
+        const fresh = await prisma.wod.create({
+          data: {
+            userId: 'version-legacy-user',
+            date: new Date(),
+            sourceType: 'TEXT',
+            rawText: 'AMRAP 15: 10 T2B',
+          },
+        });
+        const url = `/api/wods/${fresh.id}`;
+        try {
+          if (reanalysis) {
+            mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+            expect(
+              (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+            ).toBe(200);
+            mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+            expect(
+              (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+            ).toBe(200);
+          }
+          const oldAnalyses = await prisma.wodAnalysisVersion.findMany({
+            where: { wodId: fresh.id },
+            orderBy: { version: 'asc' },
+          });
+          const oldStrategies = await prisma.wodStrategyVersion.findMany({
+            where: { wodId: fresh.id },
+            orderBy: { version: 'asc' },
+          });
+          const transport = await vi.importActual<typeof import('@wod-coach-ai/ai')>(
+            '../../packages/ai/dist/index.js',
+          );
+          const bodies = [
+            {
+              status: 'completed',
+              id: 'resp-analysis-invalid',
+              model: 'gpt-5-mini-snapshot',
+              output_text: 'invalid json',
+              usage: partialUsage
+                ? undefined
+                : { input_tokens: 100, output_tokens: 20, total_tokens: 120 },
+            },
+            {
+              status: 'completed',
+              id: 'resp-analysis-valid',
+              model: 'gpt-5-mini-snapshot',
+              output_text: JSON.stringify(ANALYSIS),
+              usage: { input_tokens: 150, output_tokens: 30, total_tokens: 180 },
+            },
+            {
+              status: 'completed',
+              id: 'resp-strategy-invalid',
+              model: 'gpt-5-mini-snapshot',
+              output_text: 'invalid json',
+              usage: { input_tokens: 200, output_tokens: 40, total_tokens: 240 },
+            },
+            {
+              status: 'completed',
+              id: 'resp-strategy-valid',
+              model: 'gpt-5-mini-snapshot',
+              output_text: JSON.stringify(STRATEGY),
+              usage: { input_tokens: 250, output_tokens: 50, total_tokens: 300 },
+            },
+          ];
+          const fetchMock = vi.fn();
+          for (const body of bodies)
+            fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(body)));
+          vi.stubGlobal('fetch', fetchMock);
+          mocks.sendMessage.mockImplementation(transport.createOpenAiMessageSender('test-key'));
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+          ).toBe(200);
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+          ).toBe(200);
+          expect(fetchMock).toHaveBeenCalledTimes(4);
+          const versionsResponse = await app.inject({
+            method: 'GET',
+            url: `${url}/versions`,
+            headers,
+          });
+          expect(versionsResponse.statusCode).toBe(200);
+          const versions = versionsResponse.json();
+          const analysisMetadata = versions.analysisVersions[0].snapshot.generationMetadata;
+          const strategyMetadata = versions.strategyVersions[0].snapshot.generationMetadata;
+          expect(analysisMetadata).toMatchObject({
+            schemaVersion: 1,
+            agent: 'WodAnalyzerAgent',
+            provider: 'openai',
+            attempts: [
+              {
+                attempt: 1,
+                requestedModel: 'gpt-5-mini',
+                model: 'gpt-5-mini-snapshot',
+                responseId: 'resp-analysis-invalid',
+                promptVersion: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+                usage: partialUsage
+                  ? null
+                  : { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+              },
+              { attempt: 2, responseId: 'resp-analysis-valid' },
+            ],
+            totalUsage: partialUsage
+              ? null
+              : { inputTokens: 250, outputTokens: 50, totalTokens: 300 },
+          });
+          expect(strategyMetadata).toMatchObject({
+            agent: 'StrategyCoachAgent',
+            attempts: [
+              { responseId: 'resp-strategy-invalid' },
+              { responseId: 'resp-strategy-valid' },
+            ],
+            totalUsage: { inputTokens: 450, outputTokens: 90, totalTokens: 540 },
+          });
+          expect(strategyMetadata.attempts[0].promptVersion).not.toBe(
+            analysisMetadata.attempts[0].promptVersion,
+          );
+          expect(versions.strategyVersions[0].analysisVersionId).toBe(
+            versions.analysisVersions[0].id,
+          );
+          const savedAnalyses = await prisma.wodAnalysisVersion.findMany({
+            where: { wodId: fresh.id },
+            orderBy: { version: 'asc' },
+          });
+          const savedStrategies = await prisma.wodStrategyVersion.findMany({
+            where: { wodId: fresh.id },
+            orderBy: { version: 'asc' },
+          });
+          expect(savedAnalyses.slice(0, -1)).toEqual(oldAnalyses);
+          expect(savedStrategies.slice(0, -1)).toEqual(oldStrategies);
+          expect(
+            (
+              await app.inject({
+                method: 'PATCH',
+                url: `${url}/analysis`,
+                headers,
+                payload: { durationMinutes: 18 },
+              })
+            ).statusCode,
+          ).toBe(200);
+          const edited = await prisma.wodAnalysisVersion.findFirstOrThrow({
+            where: { wodId: fresh.id },
+            orderBy: { version: 'desc' },
+          });
+          expect(edited).toMatchObject({
+            reason: 'DURATION_EDIT',
+            snapshot: { generationMetadata: null },
+          });
+          expect(
+            (
+              await prisma.wodAnalysisVersion.findMany({
+                where: { wodId: fresh.id },
+                orderBy: { version: 'asc' },
+              })
+            ).slice(0, -1),
+          ).toEqual(savedAnalyses);
+          expect(
+            await prisma.wodStrategyVersion.findMany({
+              where: { wodId: fresh.id },
+              orderBy: { version: 'asc' },
+            }),
+          ).toEqual(savedStrategies);
+          expect(fetchMock).toHaveBeenCalledTimes(4);
+        } finally {
+          vi.unstubAllGlobals();
+          await prisma.wod.delete({ where: { id: fresh.id } });
+        }
+      },
+    );
   }
 
   it.each(['initial', 'reanalysis', 'image'] as const)(

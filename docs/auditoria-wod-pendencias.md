@@ -153,15 +153,17 @@ nao significa sete bugs criticos comprovados: inclui melhorias e validacoes.
 
 | Frente | Demanda | Estado |
 | --- | --- | --- |
-| C1 | Timeout e respostas nao concluidas da IA | Corrigido e testado; aguarda commit |
-| C2 | Arquivar modelo, versao do prompt e tokens | Proximo |
-| C3 | Visualizador de versoes anteriores | Pendente |
+| C1 | Timeout e respostas nao concluidas da IA | Corrigido e testado; e6c8408 |
+| C2 | Arquivar modelo, versao do prompt e tokens | Corrigido e testado; aguarda commit |
+| C3 | Visualizador de versoes anteriores | Proximo |
 | C4 | Erros de leitura e respostas tardias no frontend | Pendente |
 | C5 | Evitar chamadas duplicadas de IA | Pendente |
 | C6 | Lint preexistente em sw.js | Pendente |
 | C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | Pendente |
 
 ### C1. Timeout e conclusao da resposta da IA
+
+Corrigido e comitado: e6c8408.
 
 Evidencia: packages/ai/src/index.ts, createOpenAiMessageSender. O transporte
 extraia texto de qualquer HTTP 200 sem verificar status/incomplete_details,
@@ -200,11 +202,68 @@ garantidamente; abortar a conexao nao garante ausencia de cobranca pelo provedor
 Conclusao do transporte e validacao de schema nao provam integridade semantica
 do treino, que permanece na frente C7.
 
+### C2. Metadados da geracao nas versoes CrossFit
+
+Corrigido e testado; aguardando aprovacao para commit. Evidencias:
+packages/ai/src/index.ts retornava apenas texto, descartando id/model/usage;
+apps/api/src/services/wod-version-service.ts arquivava fonte/input/resultado,
+mas nao os metadados da geracao. Impacto: impossibilidade de rastrear o modelo,
+identificar mudancas no prompt ou consultar tokens das tentativas arquivadas.
+Onze regressoes falharam antes: sete de transporte e quatro de API, cobrindo
+analise/estrategia inicial e apos reanalise.
+
+Correcao sem migracao e sem mudar o retorno dos agentes: transporte preserva
+metadados opcionais, e captureAiGeneration coleta cada resposta concluida nas
+rotas CrossFit. recordAnalysisVersion/recordStrategyVersion acrescentam
+snapshot.generationMetadata na mesma transacao ja usada pelo historico.
+GET /versions disponibiliza esse campo dentro dos snapshots existentes;
+projecoes ativas, sourceSnapshot e inputSnapshot mantem seus contratos.
+
+Formato schemaVersion 1: provider, agent, attempts e totalUsage. Cada tentativa
+registra modelo solicitado, modelo informado pelo provedor, responseId,
+promptVersion, requestedReasoningEffort, maxOutputTokens e usage com
+inputTokens/outputTokens/totalTokens. promptVersion e SHA-256 do prompt de
+sistema efetivamente enviado; muda automaticamente quando esse texto muda,
+independentemente dos dados do atleta. Nao arquiva prompt privado ou credenciais.
+Modelo do provedor ausente nao e substituido pelo modelo solicitado.
+
+O retry corretivo integra a mesma geracao: tokens da resposta JSON invalida
+e da resposta valida sao mantidos separadamente e somados. totalUsage e null
+se qualquer tentativa nao informar contagem completa/valida ou se a soma
+exceder inteiro seguro. Dados ausentes/malformados ficam null, nunca zero
+estimado; zero explicitamente informado e preservado. maxOutputTokens nao e
+usado como consumo. Versoes legadas nao sao reescritas; edicao manual de
+duracao tem generationMetadata null, sem copiar consumo da versao de IA.
+
+Testes novos: oito de transporte, seis do coletor, quatro de API e quatro em
+PostgreSQL, com respostas simuladas do provedor. Banco real verifica percurso
+transporte -> agentes -> versoes -> GET /versions, retries, uso parcial,
+imutabilidade das versoes anteriores e edicao manual sem chamada de IA.
+Testes existentes de erro/rollback/concorrencia continuam preservando snapshots.
+Resultado: 208 testes usuais, 32 em PostgreSQL descartavel com esquema sem
+diferencas, 6 E2E, typecheck, build e ESLint dos arquivos alterados passaram.
+Os 32 opt-in foram executados pelo runner separado; no comando usual sao skipped.
+Lint global repetido falhou no self preexistente de sw.js, com aviso de ui.tsx.
+
+Referencia: [OpenAI Docs - Counting tokens](https://developers.openai.com/api/docs/guides/token-counting)
+e [Responses API - Get a model response](https://developers.openai.com/api/reference/resources/responses/methods/retrieve).
+Os campos sao lidos da resposta, nao estimados pelo tamanho do texto.
+
+Limites: promptVersion identifica o prompt de sistema, nao todo o template do
+usuario/correcao ou a versao do parser/schema. SHA-256 identifica o conteudo,
+mas nao permite reconstruir um prompt antigo sem o codigo correspondente.
+So geracoes promovidas ao historico CrossFit sao arquivadas; chamadas que
+falham, conflitos 409 ou rollback nao formam um livro de custos. Nao ha
+estimativa financeira nem detalhes separados de cache/raciocinio nesta etapa.
+HYROX recebe metadados adicionais do transporte, mas sua persistencia nao foi
+alterada. Sem chamada paga, migracao no banco da aplicacao, push ou deploy.
+
 ## Pontos importantes e limites da revisao
 
 - O transporte agora exige resposta concluida e tem prazo por chamada (C1).
   Isso nao garante toda a completude semantica dos dados gerados (C7).
-- Metadados de modelo, versao do prompt e uso de tokens nao sao arquivados com as versoes.
+- Metadados de modelo, hash do prompt de sistema e tokens agora acompanham novas
+  versoes CrossFit (C2); limites de cobertura e custo estao descritos acima.
 - A consulta de versoes existe, mas nao ha visualizador de versoes antigas na interface.
 - WodDetailPage trata qualquer erro de leitura de analise/estrategia como ausencia;
   respostas tardias de leitura/navegacao precisam de teste de concorrencia de frontend.
