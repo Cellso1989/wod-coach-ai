@@ -18,4 +18,5 @@ coverage
 /playwright/.cache
 /output/playwright/strategy-*.png
 /output/playwright/history-*.png
+/output/playwright/detail-loading-*.png
 .pnpm-store/

@@ -155,8 +155,8 @@ nao significa sete bugs criticos comprovados: inclui melhorias e validacoes.
 | --- | --- | --- |
 | C1 | Timeout e respostas nao concluidas da IA | Corrigido e testado; e6c8408 |
 | C2 | Arquivar modelo, versao do prompt e tokens | Corrigido e testado; 3ed766e |
-| C3 | Visualizador de versoes anteriores | Corrigido e testado; aguarda commit |
-| C4 | Erros de leitura e respostas tardias no frontend | Pendente |
+| C3 | Visualizador de versoes anteriores | Corrigido e testado; 65a2a7e |
+| C4 | Erros de leitura e respostas tardias no frontend | Corrigido e testado; aguarda commit |
 | C5 | Evitar chamadas duplicadas de IA | Pendente |
 | C6 | Lint preexistente em sw.js | Pendente |
 | C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | Pendente |
@@ -291,9 +291,61 @@ da tela ativa. Capturas em 390/1280 px inspecionadas sem overflow horizontal.
 Typecheck, build e lint dos arquivos alterados passaram. Lint global continua
 falhando no erro preexistente self em sw.js (C6), com aviso em ui.tsx.
 E2E usa endpoints simulados; sem chamada paga, migracao no banco da aplicacao,
-push ou deploy. Corrigido e testado, aguardando aprovacao para commit.
-Quatro frentes restantes:
-C4, C5, C6 e C7. C4 e a proxima etapa.
+push ou deploy. Corrigido e comitado: 65a2a7e. C4 segue abaixo.
+
+### C4. Estado de leitura e respostas tardias na tela do WOD
+
+Evidencia: WodDetailPage carregava WOD, analise e estrategia em paralelo,
+mas encerrava loading apos apenas GET /wods/:id. Os catches das projecoes
+ignoravam qualquer falha, nao somente 404. O efeito nao tinha cleanup nem
+isolamento por id; handlers de mutacao atualizavam estado/navegavam mesmo
+apos trocar de WOD. Raiz: null representava leitura pendente, falha e ausencia.
+Cinco regressoes falharam antes; o caso de resposta atrasada foi repetido
+com sincronizacao explicita antes da correcao. A captura mostrou WOD B com
+a analise atrasada de A. O caso de reanalise tambem mostrou continuacao de
+geracao de estrategia de A apos navegar para B.
+
+Correcao restrita ao frontend: WodDetailContent tem ciclo de vida por id.
+As tres leituras iniciais usam AbortSignal e Promise.allSettled; loading
+termina apenas quando todas possuem resultado. Ausencia de projecao e
+confirmada somente por ApiError 404, com falha da fonte impedindo exibir o
+WOD. Demais falhas aparecem com nova tentativa de leitura, sem gerar IA.
+Dados conhecidos podem ser vistos quando ha erro de projecao, mas as acoes
+que dependem do estado ativo ficam bloqueadas. Durante leitura pendente,
+o conteudo ativo aguarda as consultas; navegacao continua disponivel.
+
+Handlers de texto, duracao, analise/estrategia automatica e exclusao ignoram
+conclusoes apos desmontar; reanalise nao inicia a segunda chamada de IA se
+a tela ja foi abandonada. StrategySection informa geracao manual em curso
+para bloquear acoes conflitantes na mesma tela; seu callback nao atualiza
+uma tela abandonada. Contexto e estrategia locais sao reiniciados quando
+muda a revisao da analise, com chaves distintas por secao. Uma regressao
+adicional com PR exibido detectou colisao das chaves React na implementacao
+intermediaria; usar prefixos context-/strategy- corrigiu o caso, repetido
+isoladamente antes da matriz final. Falha na estrategia automatica fica visivel sem
+apagar a analise bem-sucedida; gerar manualmente permanece disponivel.
+
+Validacao: nova suite cobre falhas 500/401/rede, erro
+404 da fonte, recuperacao sem escritas, leituras pendentes, navegacao com
+leitura atrasada, saida durante reanalise e mutacoes de texto/duracao/exclusao,
+geracao manual e bloqueio de acoes conflitantes. Suites anteriores de
+analise inicial/reanalise, exibicao completa e historico continuam na matriz.
+O teste de contexto carrega PR anterior, reanalisa, verifica sua remocao e
+consulta o PR atualizado, preservando fonte e resultado.
+Resultado final: 21 E2E passaram (13 novos e oito anteriores), 208 testes
+usuais passaram (32 PostgreSQL opt-in pulados; sem mudanca de banco/backend).
+Typecheck, build e lint dos arquivos alterados passaram. Lint global repetido
+permanece com o erro preexistente self em sw.js e o aviso em ui.tsx (C6).
+Capturas dos estados de erro em 390/1280 px inspecionadas, com
+verificacao de ausencia de overflow horizontal. E2E usa endpoints simulados.
+Corrigido e testado, aguardando aprovacao para commit.
+
+Limites: abortar leitura/desconsiderar callback nao cancela gravacao ou IA
+ja em curso no servidor. Nao ha idempotencia entre abas/clientes (C5),
+polling nem leitura transacional das tres projecoes contra alteracoes em
+outra aba. Sem alteracao de backend, prompts, schema, banco ou HYROX;
+sem chamada paga, migracao no banco da aplicacao, push ou deploy.
+Tres frentes restantes: C5, C6 e C7. C5 e a proxima etapa.
 
 ## Pontos importantes e limites da revisao
 
@@ -303,8 +355,8 @@ C4, C5, C6 e C7. C4 e a proxima etapa.
   versoes CrossFit (C2); limites de cobertura e custo estao descritos acima.
 - A consulta de versoes agora tem visualizador somente de leitura (C3);
   nao ha restauracao nem comparacao automatica entre versoes.
-- WodDetailPage trata qualquer erro de leitura de analise/estrategia como ausencia;
-  respostas tardias de leitura/navegacao precisam de teste de concorrencia de frontend.
+- WodDetailPage distingue falhas de leitura de ausencia e descarta conclusoes
+  de telas abandonadas (C4); limites entre abas/servidor estao descritos acima.
 - Cliques simultaneos via varias abas/API ainda geram chamadas de IA distintas.
   Serializacao das gravacoes nao significa idempotencia nem controle de custos.
 - Lint global tem erro preexistente de self em apps/web/public/sw.js.

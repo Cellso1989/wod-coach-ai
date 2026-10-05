@@ -72,6 +72,7 @@ for (const initialAnalysis of [false, true]) {
       page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }),
     ).toBeVisible();
     expect(analysisCalls).toBe(1);
+    await expect(page.getByRole('alert')).toContainText('Strategy failed');
     await expect(page.getByText('8-9 rounds', { exact: true })).toHaveCount(0);
 
     await page.reload();
@@ -85,6 +86,7 @@ for (const initialAnalysis of [false, true]) {
     failStrategy = false;
     await page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }).click();
     await expect(page.getByText('10-11 rounds', { exact: true })).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
     await page.reload();
     await expect(page.getByText('10-11 rounds', { exact: true })).toBeVisible();
     await page.getByRole('link', { name: 'Voltar', exact: true }).click();

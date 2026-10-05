@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   api,
@@ -78,6 +79,10 @@ function WodFlowCard({
 
 export function WodDetailPage() {
   const { id } = useParams<{ id: string }>();
+  return <WodDetailContent key={id} id={id} />;
+}
+
+function WodDetailContent({ id }: { id: string | undefined }) {
   const navigate = useNavigate();
   const [wod, setWod] = useState<Wod | null>(null);
   const [analysis, setAnalysis] = useState<WodAnalysis | null>(null);
@@ -97,29 +102,64 @@ export function WodDetailPage() {
   const [durationError, setDurationError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [readErrors, setReadErrors] = useState<string[]>([]);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [analysisRevision, setAnalysisRevision] = useState(0);
+  const [generatingStrategy, setGeneratingStrategy] = useState(false);
+  const [strategyGenerationError, setStrategyGenerationError] = useState<string | null>(null);
+  const active = useRef(false);
+  const busy = loading || analyzing || saving || savingDuration || deleting || generatingStrategy;
+  const blocked = busy || readErrors.length > 0 || Boolean(error);
+
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!id) return;
-    api
-      .getWod(id)
-      .then(({ wod }) => setWod(wod))
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Erro ao carregar.'))
-      .finally(() => setLoading(false));
-
-    api
-      .getWodAnalysis(id)
-      .then(({ analysis }) => setAnalysis(analysis))
-      .catch(() => {
-        // Ainda não analisado — botão "Analisar" fica disponível.
-      });
-
-    api
-      .getStrategy(id)
-      .then(({ strategy }) => setStrategy(strategy))
-      .catch(() => {
-        // Ainda sem estratégia — botão "Gerar estratégia" fica disponível.
-      });
-  }, [id]);
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+    setReadErrors([]);
+    // No mutation is offered until all active projections have a known read state.
+    void Promise.allSettled([
+      api.getWod(id, controller.signal),
+      api.getWodAnalysis(id, controller.signal),
+      api.getStrategy(id, controller.signal),
+    ]).then(([source, analysisResult, strategyResult]) => {
+      if (controller.signal.aborted) return;
+      if (source.status === 'rejected') {
+        setWod(null);
+        setError(
+          source.reason instanceof ApiError ? source.reason.message : 'Erro ao carregar WOD.',
+        );
+      } else {
+        setWod(source.value.wod);
+      }
+      setAnalysis(analysisResult.status === 'fulfilled' ? analysisResult.value.analysis : null);
+      setStrategy(strategyResult.status === 'fulfilled' ? strategyResult.value.strategy : null);
+      const failures: string[] = [];
+      for (const [label, result] of [
+        ['analise', analysisResult],
+        ['estrategia', strategyResult],
+      ] as const) {
+        if (
+          result.status === 'rejected' &&
+          !(result.reason instanceof ApiError && result.reason.status === 404)
+        ) {
+          failures.push(
+            `Erro ao carregar ${label}: ${result.reason instanceof ApiError ? result.reason.message : 'Falha de conexao.'}`,
+          );
+        }
+      }
+      setReadErrors(failures);
+      setLoading(false);
+    });
+    return () => controller.abort();
+  }, [id, loadAttempt]);
 
   function startEditing() {
     setEditedText(wod?.rawText ?? '');
@@ -128,21 +168,24 @@ export function WodDetailPage() {
   }
 
   async function handleSaveEdit() {
-    if (!id) return;
+    if (!id || blocked) return;
     setSaving(true);
     setSaveError(null);
     try {
       const { wod: updated } = await api.updateWod(id, { rawText: editedText.trim() });
+      if (!active.current) return;
       setWod(updated);
       if (updated.rawText !== wod?.rawText) {
         setAnalysis(null);
         setStrategy(null);
+        setStrategyGenerationError(null);
       }
       setEditing(false);
     } catch (err) {
+      if (!active.current) return;
       setSaveError(err instanceof ApiError ? err.message : 'Não foi possível salvar a edição.');
     } finally {
-      setSaving(false);
+      if (active.current) setSaving(false);
     }
   }
 
@@ -153,7 +196,7 @@ export function WodDetailPage() {
   }
 
   async function handleSaveDuration() {
-    if (!id) return;
+    if (!id || blocked) return;
     const trimmed = editedDuration.trim();
     const parsedValue = trimmed ? Number(trimmed) : null;
     if (trimmed && (!Number.isFinite(parsedValue) || parsedValue! < 0 || parsedValue! > 180)) {
@@ -166,18 +209,22 @@ export function WodDetailPage() {
       const { analysis: updated } = await api.updateWodAnalysis(id, {
         durationMinutes: parsedValue,
       });
+      if (!active.current) return;
       setAnalysis(updated);
+      setAnalysisRevision((value) => value + 1);
       setStrategy(null);
+      setStrategyGenerationError(null);
       setEditingDuration(false);
     } catch (err) {
+      if (!active.current) return;
       setDurationError(err instanceof ApiError ? err.message : 'Não foi possível salvar o tempo.');
     } finally {
-      setSavingDuration(false);
+      if (active.current) setSavingDuration(false);
     }
   }
 
   async function handleDeleteWod() {
-    if (!id) return;
+    if (!id || blocked) return;
     const confirmed = window.confirm(
       'Apagar este WOD? Essa acao nao pode ser desfeita e tambem remove analise, estrategia e resultado.',
     );
@@ -187,39 +234,50 @@ export function WodDetailPage() {
     setDeleteError(null);
     try {
       await api.deleteWod(id);
+      if (!active.current) return;
       navigate('/wods', { replace: true });
     } catch (err) {
+      if (!active.current) return;
       setDeleteError(err instanceof ApiError ? err.message : 'Nao foi possivel apagar o WOD.');
     } finally {
-      setDeleting(false);
+      if (active.current) setDeleting(false);
     }
   }
 
   async function handleAnalyze() {
-    if (!id) return;
+    if (!id || blocked) return;
     setAnalyzing(true);
     setAnalysisError(null);
+    setStrategyGenerationError(null);
     setAnalysisStatus('Lendo o WOD e identificando movimentos...');
     try {
       const { analysis, wod: updatedWod } = await api.analyzeWod(id);
+      if (!active.current) return;
       setAnalysis(analysis);
+      setAnalysisRevision((value) => value + 1);
       setStrategy(null);
       if (updatedWod) setWod(updatedWod);
       try {
         setAnalysisStatus('Montando estratégia com base no seu histórico...');
         const { strategy } = await api.generateStrategy(id);
+        if (!active.current) return;
         setStrategy(strategy);
-      } catch {
-        // A análise deu certo, só a estratégia falhou — o usuário ainda
-        // consegue gerá-la manualmente pelo botão que aparece abaixo.
+      } catch (err) {
+        if (!active.current) return;
+        setStrategyGenerationError(
+          err instanceof ApiError ? err.message : 'Nao foi possivel gerar a estrategia.',
+        );
       }
     } catch (err) {
+      if (!active.current) return;
       setAnalysisError(
         err instanceof ApiError ? err.message : 'Não foi possível analisar este WOD.',
       );
     } finally {
-      setAnalyzing(false);
-      setAnalysisStatus(null);
+      if (active.current) {
+        setAnalyzing(false);
+        setAnalysisStatus(null);
+      }
     }
   }
 
@@ -239,10 +297,32 @@ export function WodDetailPage() {
 
       <NavBar />
 
-      {loading && <p className="text-neutral-400">Carregando...</p>}
-      {error && <Alert>{error}</Alert>}
+      {loading && (
+        <p role="status" className="text-neutral-400">
+          Carregando...
+        </p>
+      )}
+      {(error || readErrors.length > 0) && (
+        <div className="space-y-2">
+          <div role="alert" className="space-y-2">
+            {error && <Alert>{error}</Alert>}
+            {readErrors.map((message) => (
+              <Alert key={message}>{message}</Alert>
+            ))}
+          </div>
+          <Button
+            variant="secondary"
+            className="gap-2"
+            disabled={busy}
+            onClick={() => setLoadAttempt((value) => value + 1)}
+          >
+            <RefreshCw size={18} aria-hidden="true" />
+            Tentar carregar novamente
+          </Button>
+        </div>
+      )}
 
-      {wod && (
+      {!loading && !error && wod && (
         <div className="space-y-4">
           <p className="text-sm text-neutral-500">
             {new Date(wod.date).toLocaleDateString('pt-BR')}
@@ -271,10 +351,14 @@ export function WodDetailPage() {
               )}
               {deleteError && <Alert>{deleteError}</Alert>}
               <div className="grid grid-cols-2 gap-2">
-                <Button onClick={startEditing} disabled={deleting} variant="secondary">
+                <Button
+                  onClick={startEditing}
+                  disabled={blocked || editingDuration}
+                  variant="secondary"
+                >
                   {wod.rawText ? 'Editar' : 'Adicionar texto'}
                 </Button>
-                <Button onClick={() => void handleDeleteWod()} disabled={deleting} variant="danger">
+                <Button onClick={() => void handleDeleteWod()} disabled={blocked} variant="danger">
                   {deleting ? 'Apagando...' : 'Apagar'}
                 </Button>
               </div>
@@ -304,7 +388,7 @@ export function WodDetailPage() {
                 </Button>
                 <Button
                   onClick={() => void handleSaveEdit()}
-                  disabled={saving || !editedText.trim()}
+                  disabled={blocked || !editedText.trim()}
                   className="flex-1"
                 >
                   {saving ? 'Salvando...' : 'Salvar'}
@@ -326,7 +410,11 @@ export function WodDetailPage() {
             <div className="space-y-2">
               {analysisError && <Alert>{analysisError}</Alert>}
               {analysisStatus && <Alert variant="info">{analysisStatus}</Alert>}
-              <Button onClick={() => void handleAnalyze()} disabled={analyzing} fullWidth>
+              <Button
+                onClick={() => void handleAnalyze()}
+                disabled={blocked || editing || editingDuration}
+                fullWidth
+              >
                 {analyzing ? 'Trabalhando no treino...' : 'Analisar treino'}
               </Button>
             </div>
@@ -340,6 +428,7 @@ export function WodDetailPage() {
                 </span>
                 {!editingDuration && (
                   <button
+                    disabled={blocked || editing}
                     onClick={startEditingDuration}
                     className="text-sm text-neutral-400 underline decoration-dotted"
                   >
@@ -381,7 +470,7 @@ export function WodDetailPage() {
                     </Button>
                     <Button
                       onClick={() => void handleSaveDuration()}
-                      disabled={savingDuration}
+                      disabled={blocked}
                       className="flex-1"
                     >
                       {savingDuration ? 'Salvando...' : 'Salvar'}
@@ -456,7 +545,7 @@ export function WodDetailPage() {
               {analysisStatus && <Alert variant="info">{analysisStatus}</Alert>}
               <Button
                 onClick={() => void handleAnalyze()}
-                disabled={analyzing}
+                disabled={blocked || editing || editingDuration}
                 variant="secondary"
                 fullWidth
               >
@@ -465,14 +554,33 @@ export function WodDetailPage() {
             </div>
           )}
 
-          {analysis && <AthleteContextSection wodId={wod.id} />}
-
           {analysis && (
+            <AthleteContextSection
+              key={`context-${analysis.versionId ?? analysisRevision}`}
+              wodId={wod.id}
+            />
+          )}
+
+          {strategyGenerationError && (
+            <div role="alert">
+              <Alert>{strategyGenerationError}</Alert>
+            </div>
+          )}
+          {analysis && readErrors.length === 0 && !analyzing && !saving && !savingDuration && (
             <StrategySection
+              key={`strategy-${analysis.versionId ?? analysisRevision}`}
               wodId={wod.id}
               initialStrategy={strategy}
               workoutName={wod.name}
-              onStrategyGenerated={setStrategy}
+              disabled={blocked || editing || editingDuration}
+              onGeneratingChange={(generating) => {
+                if (active.current) setGeneratingStrategy(generating);
+              }}
+              onStrategyGenerated={(generated) => {
+                if (!active.current) return;
+                setStrategy(generated);
+                setStrategyGenerationError(null);
+              }}
             />
           )}
 

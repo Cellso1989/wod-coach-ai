@@ -425,7 +425,7 @@ export const api = {
 
   listWods: (limit?: number) => request<{ wods: Wod[] }>(`/wods${limit ? `?limit=${limit}` : ''}`),
 
-  getWod: (id: string) => request<{ wod: Wod }>(`/wods/${id}`),
+  getWod: (id: string, signal?: AbortSignal) => request<{ wod: Wod }>(`/wods/${id}`, { signal }),
 
   updateWod: (id: string, input: { rawText?: string; name?: string; notes?: string }) =>
     request<{ wod: Wod }>(`/wods/${id}`, {
@@ -440,7 +440,8 @@ export const api = {
       method: 'POST',
     }),
 
-  getWodAnalysis: (id: string) => request<{ analysis: WodAnalysis }>(`/wods/${id}/analysis`),
+  getWodAnalysis: (id: string, signal?: AbortSignal) =>
+    request<{ analysis: WodAnalysis }>(`/wods/${id}/analysis`, { signal }),
 
   getWodVersions: (
     id: string,
@@ -490,7 +491,8 @@ export const api = {
   generateStrategy: (wodId: string) =>
     request<{ strategy: WodStrategy }>(`/wods/${wodId}/strategy`, { method: 'POST' }),
 
-  getStrategy: (wodId: string) => request<{ strategy: WodStrategy }>(`/wods/${wodId}/strategy`),
+  getStrategy: (wodId: string, signal?: AbortSignal) =>
+    request<{ strategy: WodStrategy }>(`/wods/${wodId}/strategy`, { signal }),
 
   generateHyroxStrategy: (input: HyroxStrategyInput) =>
     request<{ strategy: HyroxStrategy }>('/hyrox/strategy', {

@@ -9,6 +9,8 @@ interface StrategySectionProps {
   workoutName?: string | null;
   initialStrategy: WodStrategy | null;
   onStrategyGenerated?: (strategy: WodStrategy) => void;
+  onGeneratingChange?: (generating: boolean) => void;
+  disabled?: boolean;
 }
 
 function StrategyNoteList({
@@ -40,6 +42,8 @@ export function StrategySection({
   workoutName,
   initialStrategy,
   onStrategyGenerated,
+  onGeneratingChange,
+  disabled = false,
 }: StrategySectionProps) {
   const [strategy, setStrategy] = useState<WodStrategy | null>(initialStrategy);
   const [generating, setGenerating] = useState(false);
@@ -50,7 +54,9 @@ export function StrategySection({
   }, [initialStrategy]);
 
   async function handleGenerate() {
+    if (disabled || generating) return;
     setGenerating(true);
+    onGeneratingChange?.(true);
     setError(null);
     try {
       const { strategy } = await api.generateStrategy(wodId);
@@ -60,6 +66,7 @@ export function StrategySection({
       setError(err instanceof ApiError ? err.message : 'Nao foi possivel gerar a estrategia.');
     } finally {
       setGenerating(false);
+      onGeneratingChange?.(false);
     }
   }
 
@@ -74,7 +81,7 @@ export function StrategySection({
         )}
         <Button
           onClick={() => void handleGenerate()}
-          disabled={generating}
+          disabled={disabled || generating}
           fullWidth
           className="py-4 font-bold"
         >
