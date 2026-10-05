@@ -43,77 +43,84 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
       throw err;
     }
 
-    const analysis = await prisma.wodAnalysis.upsert({
-      where: { wodId: wod.id },
-      create: {
-        wodId: wod.id,
-        format: output.format,
-        durationMinutes: output.durationMinutes,
-        stimulus: output.stimulus,
-        estimatedIntensity: output.estimatedIntensity,
-        engineDemand: output.estimatedDemand.engine,
-        gripDemand: output.estimatedDemand.grip,
-        legDemand: output.estimatedDemand.legs,
-        gymnasticsDemand: output.estimatedDemand.gymnastics,
-        technicalDemand: output.estimatedDemand.technical,
-        confidence: output.confidence,
-        warnings: output.warnings,
-        roundBreakdown: output.rounds ?? Prisma.JsonNull,
-        rawResponse: output,
-        movements: {
-          create: output.movements.map((movement, index) => ({
-            order: index,
-            name: movement.name,
-            category: movement.category,
-            reps: movement.reps ?? undefined,
-            distanceMeters: movement.distanceMeters ?? undefined,
-            loadDescription: movement.loadDescription ?? undefined,
-            calories: movement.calories ?? undefined,
-          })),
+    const { analysis, wod: updatedWod } = await prisma.$transaction(async (tx) => {
+      const analysis = await tx.wodAnalysis.upsert({
+        where: { wodId: wod.id },
+        create: {
+          wodId: wod.id,
+          format: output.format,
+          durationMinutes: output.durationMinutes,
+          stimulus: output.stimulus,
+          estimatedIntensity: output.estimatedIntensity,
+          engineDemand: output.estimatedDemand.engine,
+          gripDemand: output.estimatedDemand.grip,
+          legDemand: output.estimatedDemand.legs,
+          gymnasticsDemand: output.estimatedDemand.gymnastics,
+          technicalDemand: output.estimatedDemand.technical,
+          confidence: output.confidence,
+          warnings: output.warnings,
+          roundBreakdown: output.rounds ?? Prisma.JsonNull,
+          rawResponse: output,
+          movements: {
+            create: output.movements.map((movement, index) => ({
+              order: index,
+              name: movement.name,
+              category: movement.category,
+              reps: movement.reps ?? undefined,
+              distanceMeters: movement.distanceMeters ?? undefined,
+              loadDescription: movement.loadDescription ?? undefined,
+              calories: movement.calories ?? undefined,
+            })),
+          },
         },
-      },
-      update: {
-        format: output.format,
-        durationMinutes: output.durationMinutes,
-        stimulus: output.stimulus,
-        estimatedIntensity: output.estimatedIntensity,
-        engineDemand: output.estimatedDemand.engine,
-        gripDemand: output.estimatedDemand.grip,
-        legDemand: output.estimatedDemand.legs,
-        gymnasticsDemand: output.estimatedDemand.gymnastics,
-        technicalDemand: output.estimatedDemand.technical,
-        confidence: output.confidence,
-        warnings: output.warnings,
-        roundBreakdown: output.rounds ?? Prisma.JsonNull,
-        rawResponse: output,
-        movements: {
-          deleteMany: {},
-          create: output.movements.map((movement, index) => ({
-            order: index,
-            name: movement.name,
-            category: movement.category,
-            reps: movement.reps ?? undefined,
-            distanceMeters: movement.distanceMeters ?? undefined,
-            loadDescription: movement.loadDescription ?? undefined,
-            calories: movement.calories ?? undefined,
-          })),
+        update: {
+          format: output.format,
+          durationMinutes: output.durationMinutes,
+          stimulus: output.stimulus,
+          estimatedIntensity: output.estimatedIntensity,
+          engineDemand: output.estimatedDemand.engine,
+          gripDemand: output.estimatedDemand.grip,
+          legDemand: output.estimatedDemand.legs,
+          gymnasticsDemand: output.estimatedDemand.gymnastics,
+          technicalDemand: output.estimatedDemand.technical,
+          confidence: output.confidence,
+          warnings: output.warnings,
+          roundBreakdown: output.rounds ?? Prisma.JsonNull,
+          rawResponse: output,
+          movements: {
+            deleteMany: {},
+            create: output.movements.map((movement, index) => ({
+              order: index,
+              name: movement.name,
+              category: movement.category,
+              reps: movement.reps ?? undefined,
+              distanceMeters: movement.distanceMeters ?? undefined,
+              loadDescription: movement.loadDescription ?? undefined,
+              calories: movement.calories ?? undefined,
+            })),
+          },
         },
-      },
-      include: { movements: { orderBy: { order: 'asc' } } },
-    });
+        include: { movements: { orderBy: { order: 'asc' } } },
+      });
 
-    const extractedText = output.extractedText?.trim();
-    const updatedWod =
-      extractedText && !wod.rawText?.trim()
-        ? await prisma.wod.update({
-            where: { id: wod.id },
-            data: {
-              rawText: extractedText,
-              sourceType: wod.imageData ? 'TEXT_AND_IMAGE' : 'TEXT',
-            },
-            include: { result: true },
-          })
-        : null;
+      // A strategy based on the previous analysis must not survive its replacement.
+      await tx.wodStrategy.deleteMany({ where: { wodId: wod.id } });
+
+      const extractedText = output.extractedText?.trim();
+      const updatedWod =
+        extractedText && !wod.rawText?.trim()
+          ? await tx.wod.update({
+              where: { id: wod.id },
+              data: {
+                rawText: extractedText,
+                sourceType: wod.imageData ? 'TEXT_AND_IMAGE' : 'TEXT',
+              },
+              include: { result: true },
+            })
+          : null;
+
+      return { analysis, wod: updatedWod };
+    });
 
     return reply.send({ analysis, wod: updatedWod });
   });

@@ -1,0 +1,334 @@
+import { createHmac } from 'node:crypto';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildApp } from '../../apps/api/src/app.js';
+
+const mocks = vi.hoisted(() => ({
+  sendMessage: vi.fn(),
+  context: vi.fn(),
+  prisma: {
+    wod: { findFirst: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn() },
+    wodAnalysis: { upsert: vi.fn(), findUnique: vi.fn() },
+    wodStrategy: { deleteMany: vi.fn(), findUnique: vi.fn(), upsert: vi.fn() },
+    athleteProfile: { findUnique: vi.fn() },
+    $transaction: vi.fn(),
+    $disconnect: vi.fn(),
+  },
+}));
+
+vi.mock('../../packages/database/dist/index.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@wod-coach-ai/database')>()),
+  prisma: mocks.prisma,
+}));
+vi.mock('../../packages/ai/dist/index.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@wod-coach-ai/ai')>()),
+  createOpenAiMessageSender: () => mocks.sendMessage,
+}));
+vi.mock('../../apps/api/src/services/athlete-context-service.js', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('../../apps/api/src/services/athlete-context-service.js')
+  >()),
+  getAthleteContextForWod: mocks.context,
+}));
+
+const RAW_WOD =
+  'Buy-in: 25 thrusters 40kg\n3 rounds: 10 T2B, 200m run\nBuy-out: 25 thrusters 40kg\nTime cap: 20 min';
+const ANALYSIS = {
+  format: 'ROUNDS_FOR_TIME',
+  durationMinutes: 20,
+  stimulus: 'mixed_modal',
+  movements: [
+    { name: 'Thruster', category: 'weightlifting', reps: 50, loadDescription: '40kg' },
+    { name: 'Toes to Bar', category: 'gymnastics', reps: 30 },
+    { name: 'Run', category: 'monostructural', distanceMeters: 600 },
+  ],
+  rounds: [
+    {
+      roundNumber: 1,
+      label: 'Buy-in',
+      movements: [
+        { name: 'Thruster', category: 'weightlifting', reps: 25, loadDescription: '40kg' },
+      ],
+    },
+    ...Array.from({ length: 3 }, (_, index) => ({
+      roundNumber: index + 2,
+      label: `Round ${index + 1}`,
+      movements: [
+        { name: 'Toes to Bar', category: 'gymnastics', reps: 10 },
+        { name: 'Run', category: 'monostructural', distanceMeters: 200 },
+      ],
+    })),
+    {
+      roundNumber: 5,
+      label: 'Buy-out',
+      movements: [
+        { name: 'Thruster', category: 'weightlifting', reps: 25, loadDescription: '40kg' },
+      ],
+    },
+  ],
+  estimatedDemand: { engine: 8, grip: 7, legs: 7, gymnastics: 6, technical: 5 },
+  estimatedIntensity: 8,
+  confidence: 0.9,
+  warnings: [],
+};
+const STRATEGY = {
+  recommendedIntensity: 9,
+  targetRpe: 10,
+  loadRecommendation: null,
+  pacing: 'Controle o buy-in; acelere no buy-out.',
+  breakStrategy: [{ movement: 'Toes to Bar (10 por round)', strategy: '6/4.' }],
+  restStrategy: 'Pausas de 5 segundos.',
+  movementStrategy: [{ movement: 'Run', strategy: 'Ritmo constante.' }],
+  transitionStrategy: 'Transicoes curtas.',
+  energyManagement: 'Preserve o grip.',
+  goal: 'Terminar dentro do cap.',
+  target: '16-19 min',
+  criticalPoint: 'Grip',
+  confidence: 0.85,
+  warnings: [],
+};
+const PROFILE = {
+  level: 'INTERMEDIATE',
+  goals: ['performance'],
+  injuries: [],
+  limitedMovements: [],
+  weeklyFrequency: 5,
+};
+const CONTEXT = {
+  trainingLoad: {
+    last7Days: { days: 7, sessionCount: 2 },
+    last14Days: { days: 14, sessionCount: 4 },
+    last28Days: { days: 28, sessionCount: 8 },
+  },
+  similarWods: [],
+  relevantPersonalRecords: [
+    { movementName: 'Toes to Bar', value: 22, unit: 'reps', achievedAt: '2026-09-01' },
+  ],
+  dataSufficiency: 'moderate',
+};
+
+type Row = Record<string, unknown>;
+type Store = {
+  wod: {
+    id: string;
+    userId: string;
+    rawText: string | null;
+    imageData: string | null;
+    imageMimeType: string | null;
+    sourceType: string;
+    result: { score: string };
+  };
+  analysis: Row | null;
+  strategy: Row | null;
+};
+let store: Store;
+let failWrite: 'analysis' | 'strategy' | 'wod' | null;
+let app: ReturnType<typeof buildApp>;
+let headers: { authorization: string };
+
+// Transaction writes use a draft; failed writes never publish partial state.
+function databaseClient(current: () => Store) {
+  return {
+    wod: {
+      findFirst: async () => current().wod,
+      findUniqueOrThrow: async () => ({ ...current().wod, analysis: current().analysis }),
+      update: async ({ data }: { data: Row }) => {
+        if (failWrite === 'wod') throw new Error('WOD write failed');
+        Object.assign(current().wod, data);
+        return current().wod;
+      },
+    },
+    wodAnalysis: {
+      upsert: async ({ create, update }: { create: Row; update: Row }) => {
+        if (failWrite === 'analysis') throw new Error('Analysis write failed');
+        const data = current().analysis ? update : create;
+        const movements = (data.movements as { create: Row[] }).create;
+        current().analysis = {
+          ...data,
+          id: 'analysis-1',
+          wodId: current().wod.id,
+          movements: movements.map((movement, index) => ({ ...movement, id: `movement-${index}` })),
+        };
+        return current().analysis;
+      },
+      findUnique: async () => current().analysis,
+    },
+    wodStrategy: {
+      deleteMany: async ({ where }: { where: { wodId: string } }) => {
+        if (failWrite === 'strategy') throw new Error('Strategy invalidation failed');
+        expect(where).toEqual({ wodId: current().wod.id });
+        const count = current().strategy ? 1 : 0;
+        current().strategy = null;
+        return { count };
+      },
+      findUnique: async () => current().strategy,
+      upsert: async ({ create, update }: { create: Row; update: Row }) => {
+        current().strategy = { ...(current().strategy ? update : create), id: 'strategy-1' };
+        return current().strategy;
+      },
+    },
+  };
+}
+
+beforeEach(async () => {
+  vi.resetAllMocks();
+  failWrite = null;
+  store = {
+    wod: {
+      id: 'wod-1',
+      userId: 'athlete-1',
+      rawText: RAW_WOD,
+      imageData: null,
+      imageMimeType: null,
+      sourceType: 'TEXT',
+      result: { score: '18:30' },
+    },
+    analysis: null,
+    strategy: null,
+  };
+  const client = databaseClient(() => store);
+  for (const model of ['wod', 'wodAnalysis', 'wodStrategy'] as const) {
+    for (const [name, implementation] of Object.entries(client[model])) {
+      const method = mocks.prisma[model][name as keyof (typeof mocks.prisma)[typeof model]];
+      method.mockImplementation(implementation);
+    }
+  }
+  mocks.prisma.$transaction.mockImplementation(
+    async (work: (tx: ReturnType<typeof databaseClient>) => Promise<unknown>) => {
+      const draft = structuredClone(store);
+      const result = await work(databaseClient(() => draft));
+      store = draft;
+      return result;
+    },
+  );
+  mocks.prisma.athleteProfile.findUnique.mockResolvedValue(PROFILE);
+  mocks.context.mockResolvedValue({ context: CONTEXT });
+  mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+  app = buildApp();
+  await app.ready();
+  const tokenHeader = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString(
+    'base64url',
+  );
+  const tokenPayload = Buffer.from(JSON.stringify({ sub: 'athlete-1' })).toString('base64url');
+  const unsignedToken = `${tokenHeader}.${tokenPayload}`;
+  const signature = createHmac('sha256', process.env.JWT_SECRET!)
+    .update(unsignedToken)
+    .digest('base64url');
+  headers = { authorization: `Bearer ${unsignedToken}.${signature}` };
+});
+
+afterEach(async () => {
+  await app.close();
+});
+
+async function request(method: 'POST' | 'GET', suffix: string) {
+  return app.inject({ method, url: `/api/wods/wod-1/${suffix}`, headers });
+}
+
+async function seedAnalyzedWod() {
+  expect((await request('POST', 'analyze')).statusCode).toBe(200);
+  mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+  expect((await request('POST', 'strategy')).statusCode).toBe(200);
+  mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+}
+
+describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  it('saves initial analysis and strategy with the complete WOD and athlete context', async () => {
+    await seedAnalyzedWod();
+    expect(store.wod.rawText).toBe(RAW_WOD);
+    expect(store.wod.result.score).toBe('18:30');
+    expect(store.analysis).toMatchObject({
+      durationMinutes: 20,
+      roundBreakdown: ANALYSIS.rounds,
+      movements: ANALYSIS.movements.map((movement) => expect.objectContaining(movement)),
+    });
+    const prompt = mocks.sendMessage.mock.calls[1][0].messages[0].content[0].text;
+    const input = JSON.parse(prompt.slice(prompt.indexOf('{')));
+    expect(input).toMatchObject({
+      wodAnalysis: ANALYSIS,
+      athleteContext: CONTEXT,
+      athleteProfile: PROFILE,
+    });
+    expect((await request('GET', 'strategy')).json().strategy).toMatchObject(STRATEGY);
+  });
+
+  it('does not return the old strategy after reanalysis and failed regeneration', async () => {
+    await seedAnalyzedWod();
+    mocks.sendMessage.mockResolvedValue({
+      text: JSON.stringify({ ...ANALYSIS, durationMinutes: 18 }),
+    });
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    mocks.sendMessage.mockResolvedValue({ text: 'invalid json' });
+    expect((await request('POST', 'strategy')).statusCode).toBe(502);
+    expect((await request('GET', 'analysis')).json().analysis.durationMinutes).toBe(18);
+    expect((await request('GET', 'strategy')).statusCode).toBe(404);
+  });
+
+  it('allows generating and reading a fresh strategy after reanalysis', async () => {
+    await seedAnalyzedWod();
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    expect((await request('GET', 'strategy')).statusCode).toBe(404);
+    mocks.sendMessage.mockResolvedValue({
+      text: JSON.stringify({ ...STRATEGY, target: '15-18 min' }),
+    });
+    expect((await request('POST', 'strategy')).statusCode).toBe(200);
+    expect((await request('GET', 'strategy')).json().strategy.target).toBe('15-18 min');
+    const calls = mocks.sendMessage.mock.calls;
+    expect(calls[0][0].messages).toEqual(calls[2][0].messages);
+    expect(calls[1][0].messages).toEqual(calls[3][0].messages);
+    expect(store.wod.rawText).toBe(RAW_WOD);
+  });
+
+  it.each(['', 'invalid json', '{"format":', '{}'])(
+    'preserves the old pair when analysis is invalid: %j',
+    async (text) => {
+      await seedAnalyzedWod();
+      const previous = structuredClone(store);
+      mocks.sendMessage.mockResolvedValue({ text });
+      expect((await request('POST', 'analyze')).statusCode).toBe(502);
+      expect(store).toEqual(previous);
+    },
+  );
+
+  it('preserves the old pair when the AI transport fails', async () => {
+    await seedAnalyzedWod();
+    const previous = structuredClone(store);
+    mocks.sendMessage.mockRejectedValue(new Error('Transport timeout'));
+    expect((await request('POST', 'analyze')).statusCode).toBe(500);
+    expect(store).toEqual(previous);
+  });
+
+  it.each(['analysis', 'strategy', 'wod'] as const)(
+    'rolls back all writes when %s persistence fails',
+    async (failure) => {
+      await seedAnalyzedWod();
+      store.wod.rawText = null;
+      store.wod.imageData = 'image-base64';
+      store.wod.imageMimeType = 'image/png';
+      store.wod.sourceType = 'IMAGE';
+      const previous = structuredClone(store);
+      mocks.sendMessage.mockResolvedValue({
+        text: JSON.stringify({ ...ANALYSIS, extractedText: RAW_WOD }),
+      });
+      failWrite = failure;
+      expect((await request('POST', 'analyze')).statusCode).toBe(500);
+      expect(store).toEqual(previous);
+    },
+  );
+
+  it('persists image extraction together with analysis and strategy invalidation', async () => {
+    store.wod.rawText = null;
+    store.wod.imageData = 'image-base64';
+    store.wod.imageMimeType = 'image/png';
+    store.wod.sourceType = 'IMAGE';
+    mocks.sendMessage.mockResolvedValue({
+      text: JSON.stringify({ ...ANALYSIS, extractedText: RAW_WOD }),
+    });
+    const response = await request('POST', 'analyze');
+    expect(response.statusCode).toBe(200);
+    expect(response.json().wod).toMatchObject({ rawText: RAW_WOD, sourceType: 'TEXT_AND_IMAGE' });
+    expect(store.wod.imageData).toBe('image-base64');
+    expect(store.analysis?.roundBreakdown).toEqual(ANALYSIS.rounds);
+    expect(store.strategy).toBeNull();
+    expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+});

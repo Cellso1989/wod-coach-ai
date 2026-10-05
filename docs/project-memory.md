@@ -43,6 +43,8 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 
 ## Analise de WOD
 
+- Ao analisar/reanalisar um WOD CrossFit com sucesso, a nova analise, a remocao da estrategia anterior e o texto extraido da imagem (quando aplicavel) sao persistidos na mesma transacao.
+- Se a analise por IA ou a transacao falhar, o conjunto anterior permanece. Se apenas a geracao posterior da estrategia falhar, a nova analise fica salva sem estrategia; uma estrategia antiga nao deve reaparecer ao recarregar.
 - A analise nunca deve agrupar movimentos perdendo a estrutura original do treino.
 - Se o treino diz "5 rounds", a analise precisa preservar os 5 rounds.
 - Exemplo: `5 rounds / 16m lunge / 16 T2B / 8m HSW` nao deve virar apenas `80m / 80 reps / 40m` para a estrategia.
