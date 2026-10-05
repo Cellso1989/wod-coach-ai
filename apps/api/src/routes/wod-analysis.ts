@@ -3,6 +3,8 @@ import { Prisma, prisma } from '@wod-coach-ai/database';
 import { createOpenAiMessageSender, describeOpenAiApiError } from '@wod-coach-ai/ai';
 import { analyzeWod, WodAnalysisError } from '@wod-coach-ai/coach-engine';
 import { wodAnalysisUpdateSchema } from '@wod-coach-ai/validation';
+import { z } from 'zod';
+import { lockWodVersions, recordAnalysisVersion } from '../services/wod-version-service.js';
 
 export default async function wodAnalysisRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -44,7 +46,8 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
     }
 
     const { analysis, wod: updatedWod } = await prisma.$transaction(async (tx) => {
-      const analysis = await tx.wodAnalysis.upsert({
+      await lockWodVersions(tx, wod.id);
+      let analysis = await tx.wodAnalysis.upsert({
         where: { wodId: wod.id },
         create: {
           wodId: wod.id,
@@ -103,6 +106,8 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
         include: { movements: { orderBy: { order: 'asc' } } },
       });
 
+      analysis = await recordAnalysisVersion(tx, wod, analysis, 'AI');
+
       // A strategy based on the previous analysis must not survive its replacement.
       await tx.wodStrategy.deleteMany({ where: { wodId: wod.id } });
 
@@ -145,16 +150,53 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: 'Este WOD ainda não foi analisado' });
     }
 
-    const [analysis] = await prisma.$transaction([
-      prisma.wodAnalysis.update({
+    const analysis = await prisma.$transaction(async (tx) => {
+      await lockWodVersions(tx, id);
+      const updated = await tx.wodAnalysis.update({
         where: { wodId: id },
         data: { durationMinutes: parsed.data.durationMinutes },
         include: { movements: { orderBy: { order: 'asc' } } },
-      }),
-      prisma.wodStrategy.deleteMany({ where: { wodId: id } }),
-    ]);
+      });
+      const versioned = await recordAnalysisVersion(tx, wod, updated, 'DURATION_EDIT');
+      await tx.wodStrategy.deleteMany({ where: { wodId: id } });
+      return versioned;
+    });
 
     return reply.send({ analysis });
+  });
+
+  app.get('/wods/:id/versions', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const wod = await prisma.wod.findFirst({
+      where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
+      select: { id: true },
+    });
+    if (!wod) return reply.code(404).send({ error: 'WOD nao encontrado' });
+    const query = z
+      .object({
+        analysisBefore: z.coerce.number().int().positive().optional(),
+        strategyBefore: z.coerce.number().int().positive().optional(),
+      })
+      .safeParse(request.query);
+    if (!query.success) return reply.code(400).send({ error: 'Paginacao invalida' });
+    const [analysisVersions, strategyVersions] = await Promise.all([
+      prisma.wodAnalysisVersion.findMany({
+        where: { wodId: id, version: { lt: query.data.analysisBefore } },
+        orderBy: { version: 'desc' },
+        take: 50,
+      }),
+      prisma.wodStrategyVersion.findMany({
+        where: { wodId: id, version: { lt: query.data.strategyBefore } },
+        orderBy: { version: 'desc' },
+        take: 50,
+      }),
+    ]);
+    return reply.send({
+      analysisVersions,
+      strategyVersions,
+      nextAnalysisBefore: analysisVersions.length === 50 ? analysisVersions.at(-1)!.version : null,
+      nextStrategyBefore: strategyVersions.length === 50 ? strategyVersions.at(-1)!.version : null,
+    });
   });
 
   app.get('/wods/:id/analysis', async (request, reply) => {

@@ -166,6 +166,9 @@ model Wod {
   strategy      WodStrategy?
   hyroxStrategy HyroxStrategy?
 
+  analysisVersions WodAnalysisVersion[]
+  strategyVersions WodStrategyVersion[]
+
   @@map("wods")
 }
 
@@ -195,6 +198,9 @@ model WodAnalysis {
   id    String @id @default(uuid())
   wodId String @unique
   wod   Wod    @relation(fields: [wodId], references: [id], onDelete: Cascade)
+
+  versionId String?             @unique
+  version   WodAnalysisVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
 
   format          WodFormat?
   durationMinutes Int?
@@ -300,6 +306,9 @@ model WodStrategy {
   wodId String @unique
   wod   Wod    @relation(fields: [wodId], references: [id], onDelete: Cascade)
 
+  versionId String?             @unique
+  version   WodStrategyVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
+
   recommendedIntensity Int
   targetRpe            Int
   loadRecommendation   String?
@@ -326,6 +335,43 @@ model WodStrategy {
   updatedAt DateTime @updatedAt
 
   @@map("wod_strategies")
+}
+
+// Immutable history; active projections above keep existing API contracts.
+model WodAnalysisVersion {
+  id             String   @id @default(uuid())
+  wodId          String
+  wod            Wod      @relation(fields: [wodId], references: [id], onDelete: Cascade)
+  version        Int
+  reason         String
+  sourceSnapshot Json
+  snapshot       Json
+  createdAt      DateTime @default(now())
+
+  activeAnalysis WodAnalysis?
+  strategies     WodStrategyVersion[]
+
+  @@unique([wodId, version])
+  @@map("wod_analysis_versions")
+}
+
+model WodStrategyVersion {
+  id                String              @id @default(uuid())
+  wodId             String
+  wod               Wod                 @relation(fields: [wodId], references: [id], onDelete: Cascade)
+  version           Int
+  analysisVersionId String?
+  analysisVersion   WodAnalysisVersion? @relation(fields: [analysisVersionId], references: [id], onDelete: Cascade)
+  sourceSnapshot    Json
+  inputSnapshot     Json?
+  snapshot          Json
+  createdAt         DateTime            @default(now())
+
+  activeStrategy WodStrategy?
+
+  @@unique([wodId, version])
+  @@index([analysisVersionId])
+  @@map("wod_strategy_versions")
 }
 
 model HyroxStrategy {

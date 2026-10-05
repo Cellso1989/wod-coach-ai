@@ -5,6 +5,7 @@ import {
   wodUpdateFieldsSchema,
   WOD_IMAGE_ALLOWED_MIME_TYPES,
 } from '@wod-coach-ai/validation';
+import { lockWodVersions } from '../services/wod-version-service.js';
 
 interface ParsedSubmission {
   fields: Record<string, string>;
@@ -147,6 +148,7 @@ export default async function wodRoutes(app: FastifyInstance) {
     const rawTextChanged = rawText !== undefined && rawText !== existing.rawText;
 
     const wod = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await lockWodVersions(tx, id);
       if (rawTextChanged) {
         // O texto mudou: a análise e a estratégia anteriores não valem mais.
         await tx.wodAnalysis.deleteMany({ where: { wodId: id } });

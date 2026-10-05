@@ -43,6 +43,12 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 
 ## Analise de WOD
 
+- Analises e estrategias CrossFit mantem historico em wod_analysis_versions e wod_strategy_versions; as tabelas antigas continuam como projecoes ativas. Reanalise, regeneracao e edicao de duracao acrescentam versoes, sem sobrescrever as anteriores. Edicao do texto remove apenas as projecoes ativas; exclusao explicita do WOD remove tambem suas versoes.
+- A migracao 20261005120000_add_wod_versions conserva os registros CrossFit existentes como versao 1. Dados anteriores ja sobrescritos nao sao recuperaveis; estrategias legadas ficam sem vinculo comprovado de analise e sem snapshot de input. HYROX permanece no fluxo anterior.
+- Novas estrategias sao vinculadas a versao da analise usada e preservam o input enviado a IA (perfil, PRs, historico e estrutura do treino). Se essa analise deixar de ser ativa durante a geracao, a API responde 409 sem promover uma estrategia desatualizada. Alocacao de numeros e gravacoes sao serializadas por WOD, na mesma transacao das projecoes.
+- GET /api/wods/:id/versions consulta as versoes do proprio atleta, com 50 resultados por tipo e cursores analysisBefore/strategyBefore. A visualizacao de versoes antigas na interface fica para um passo separado. A migracao deve ser aplicada antes de executar a API atualizada.
+- Regressao com PostgreSQL real: gerar o cliente Prisma e executar `powershell -File tests/integration/run-wod-versions.ps1`. O runner cria e remove um container temporario, aplica migracoes com dados legados e verifica rollback, vinculos, paginacao, cascata e concorrencia. A suite real e opt-in; os testes usuais continuam independentes de banco.
+- NOVO PROBLEMA IDENTIFICADO (pendente): o texto do WOD pode ser editado enquanto a analise por IA esta em andamento. POST /analyze le a fonte antes da chamada e grava o resultado sem confirmar que essa fonte ainda e a atual. O historico conserva a fonte usada, mas a projecao ativa pode ficar incompativel com o texto editado. Tratar em um passo separado.
 - Ao analisar/reanalisar um WOD CrossFit com sucesso, a nova analise, a remocao da estrategia anterior e o texto extraido da imagem (quando aplicavel) sao persistidos na mesma transacao.
 - Se a analise por IA ou a transacao falhar, o conjunto anterior permanece. Se apenas a geracao posterior da estrategia falhar, a nova analise fica salva sem estrategia; uma estrategia antiga nao deve reaparecer ao recarregar.
 - A analise nunca deve agrupar movimentos perdendo a estrutura original do treino.

@@ -7,11 +7,14 @@ const mocks = vi.hoisted(() => ({
   context: vi.fn(),
   prisma: {
     wod: { findFirst: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn() },
-    wodAnalysis: { upsert: vi.fn(), findUnique: vi.fn() },
-    wodStrategy: { deleteMany: vi.fn(), findUnique: vi.fn(), upsert: vi.fn() },
+    wodAnalysis: { upsert: vi.fn(), findUnique: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
+    wodStrategy: { deleteMany: vi.fn(), findUnique: vi.fn(), upsert: vi.fn(), update: vi.fn() },
+    wodAnalysisVersion: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+    wodStrategyVersion: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
     athleteProfile: { findUnique: vi.fn() },
     $transaction: vi.fn(),
     $disconnect: vi.fn(),
+    $queryRaw: vi.fn(),
   },
 }));
 
@@ -119,15 +122,32 @@ type Store = {
   };
   analysis: Row | null;
   strategy: Row | null;
+  analysisVersions: Row[];
+  strategyVersions: Row[];
 };
 let store: Store;
-let failWrite: 'analysis' | 'strategy' | 'wod' | null;
+let failWrite: 'analysis' | 'strategy' | 'wod' | 'analysisVersion' | 'strategyVersion' | null;
 let app: ReturnType<typeof buildApp>;
 let headers: { authorization: string };
 
 // Transaction writes use a draft; failed writes never publish partial state.
 function databaseClient(current: () => Store) {
+  function versions(key: 'analysisVersions' | 'strategyVersions') {
+    return {
+      findFirst: async () => current()[key].at(-1) ?? null,
+      findMany: async () => [...current()[key]].reverse(),
+      create: async ({ data }: { data: Row }) => {
+        if (failWrite === (key === 'analysisVersions' ? 'analysisVersion' : 'strategyVersion')) {
+          throw new Error('Version write failed');
+        }
+        const row = structuredClone({ ...data, id: `${key}-${current()[key].length + 1}` });
+        current()[key].push(row);
+        return row;
+      },
+    };
+  }
   return {
+    $queryRaw: async () => [],
     wod: {
       findFirst: async () => current().wod,
       findUniqueOrThrow: async () => ({ ...current().wod, analysis: current().analysis }),
@@ -143,6 +163,7 @@ function databaseClient(current: () => Store) {
         const data = current().analysis ? update : create;
         const movements = (data.movements as { create: Row[] }).create;
         current().analysis = {
+          ...current().analysis,
           ...data,
           id: 'analysis-1',
           wodId: current().wod.id,
@@ -151,6 +172,14 @@ function databaseClient(current: () => Store) {
         return current().analysis;
       },
       findUnique: async () => current().analysis,
+      update: async ({ data }: { data: Row }) => {
+        Object.assign(current().analysis!, data);
+        return current().analysis;
+      },
+      deleteMany: async () => {
+        current().analysis = null;
+        return { count: 1 };
+      },
     },
     wodStrategy: {
       deleteMany: async ({ where }: { where: { wodId: string } }) => {
@@ -165,7 +194,13 @@ function databaseClient(current: () => Store) {
         current().strategy = { ...(current().strategy ? update : create), id: 'strategy-1' };
         return current().strategy;
       },
+      update: async ({ data }: { data: Row }) => {
+        Object.assign(current().strategy!, data);
+        return current().strategy;
+      },
     },
+    wodAnalysisVersion: versions('analysisVersions'),
+    wodStrategyVersion: versions('strategyVersions'),
   };
 }
 
@@ -184,9 +219,17 @@ beforeEach(async () => {
     },
     analysis: null,
     strategy: null,
+    analysisVersions: [],
+    strategyVersions: [],
   };
   const client = databaseClient(() => store);
-  for (const model of ['wod', 'wodAnalysis', 'wodStrategy'] as const) {
+  for (const model of [
+    'wod',
+    'wodAnalysis',
+    'wodStrategy',
+    'wodAnalysisVersion',
+    'wodStrategyVersion',
+  ] as const) {
     for (const [name, implementation] of Object.entries(client[model])) {
       const method = mocks.prisma[model][name as keyof (typeof mocks.prisma)[typeof model]];
       method.mockImplementation(implementation);
@@ -220,8 +263,8 @@ afterEach(async () => {
   await app.close();
 });
 
-async function request(method: 'POST' | 'GET', suffix: string) {
-  return app.inject({ method, url: `/api/wods/wod-1/${suffix}`, headers });
+async function request(method: 'POST' | 'GET' | 'PATCH', suffix: string, payload?: Row) {
+  return app.inject({ method, url: `/api/wods/wod-1/${suffix}`, headers, payload });
 }
 
 async function seedAnalyzedWod() {
@@ -232,6 +275,130 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  it('preserves versions when the WOD text is edited and active projections are removed', async () => {
+    await seedAnalyzedWod();
+    const versions = structuredClone({
+      analyses: store.analysisVersions,
+      strategies: store.strategyVersions,
+    });
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/wods/wod-1',
+      headers,
+      payload: { rawText: 'AMRAP 10\n5 Burpees' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(store.analysis).toBeNull();
+    expect(store.strategy).toBeNull();
+    expect(store.analysisVersions).toEqual(versions.analyses);
+    expect(store.strategyVersions).toEqual(versions.strategies);
+  });
+
+  it('records a new analysis version for a duration edit without changing earlier snapshots', async () => {
+    await seedAnalyzedWod();
+    const previous = structuredClone(store.analysisVersions[0]);
+    expect((await request('PATCH', 'analysis', { durationMinutes: 16 })).statusCode).toBe(200);
+    expect(store.analysisVersions).toHaveLength(2);
+    expect(store.analysisVersions[0]).toEqual(previous);
+    expect(store.analysisVersions[1]).toMatchObject({
+      reason: 'DURATION_EDIT',
+      snapshot: { durationMinutes: 16 },
+    });
+    expect(store.strategy).toBeNull();
+    expect(store.strategyVersions).toHaveLength(1);
+  });
+
+  it('does not activate a strategy if its analysis version changed during generation', async () => {
+    await seedAnalyzedWod();
+    let release: (value: { text: string }) => void = () => {};
+    let started: () => void = () => {};
+    const observed = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    mocks.sendMessage.mockImplementationOnce(() => {
+      started();
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    });
+    const pending = request('POST', 'strategy');
+    await observed;
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    release({ text: JSON.stringify(STRATEGY) });
+    expect((await pending).statusCode).toBe(409);
+    expect(store.strategy).toBeNull();
+    expect(store.strategyVersions).toHaveLength(1);
+  });
+
+  it('rejects invalid version pagination and hides another athlete WOD', async () => {
+    expect((await request('GET', 'versions?analysisBefore=invalid')).statusCode).toBe(400);
+    mocks.prisma.wod.findFirst.mockResolvedValueOnce(null);
+    expect((await request('GET', 'versions')).statusCode).toBe(404);
+    expect(mocks.prisma.wod.findFirst).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { id: 'wod-1', userId: 'athlete-1', discipline: 'CROSSFIT' },
+      }),
+    );
+  });
+
+  it('retains original analysis and strategy versions after reanalysis', async () => {
+    await seedAnalyzedWod();
+    const originalAnalysis = structuredClone(store.analysisVersions[0]);
+    const originalStrategy = structuredClone(store.strategyVersions[0]);
+    mocks.sendMessage.mockResolvedValue({
+      text: JSON.stringify({ ...ANALYSIS, durationMinutes: 18 }),
+    });
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    expect(store.analysisVersions).toHaveLength(2);
+    expect(store.analysisVersions[0]).toEqual(originalAnalysis);
+    expect(store.strategyVersions[0]).toEqual(originalStrategy);
+    expect(store.strategy).toBeNull();
+    expect(store.analysisVersions.map((version) => version.version)).toEqual([1, 2]);
+    expect(store.analysisVersions[0]).toMatchObject({
+      sourceSnapshot: { rawText: RAW_WOD },
+      snapshot: { durationMinutes: 20, roundBreakdown: ANALYSIS.rounds },
+    });
+    expect(store.strategyVersions[0]).toMatchObject({
+      analysisVersionId: originalAnalysis.id,
+      inputSnapshot: { athleteContext: CONTEXT, athleteProfile: PROFILE, wodAnalysis: ANALYSIS },
+    });
+    const response = await request('GET', 'versions');
+    expect(response.statusCode).toBe(200);
+    expect(response.json().analysisVersions).toHaveLength(2);
+    expect(response.json().strategyVersions).toHaveLength(1);
+  });
+
+  it('adds a strategy version on regeneration without modifying previous versions', async () => {
+    await seedAnalyzedWod();
+    const original = structuredClone(store.strategyVersions[0]);
+    mocks.sendMessage.mockResolvedValue({
+      text: JSON.stringify({ ...STRATEGY, target: '15-18 min' }),
+    });
+    expect((await request('POST', 'strategy')).statusCode).toBe(200);
+    expect(store.strategyVersions).toHaveLength(2);
+    expect(store.strategyVersions[0]).toEqual(original);
+    expect(store.strategyVersions[1]).toMatchObject({
+      version: 2,
+      analysisVersionId: store.analysisVersions[0].id,
+    });
+  });
+
+  it.each(['analysisVersion', 'strategyVersion'] as const)(
+    'rolls back the active state when %s persistence fails',
+    async (failure) => {
+      await seedAnalyzedWod();
+      const previous = structuredClone(store);
+      failWrite = failure;
+      mocks.sendMessage.mockResolvedValue({
+        text: JSON.stringify(failure === 'analysisVersion' ? ANALYSIS : STRATEGY),
+      });
+      expect(
+        (await request('POST', failure === 'analysisVersion' ? 'analyze' : 'strategy')).statusCode,
+      ).toBe(500);
+      expect(store).toEqual(previous);
+    },
+  );
+
   for (const reanalysis of [false, true]) {
     it.each([
       { breakStrategy: [] },
@@ -253,7 +420,7 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
         expect(mocks.sendMessage.mock.calls.length - calls).toBe(2);
         expect(store).toEqual(previous);
         expect((await request('GET', 'strategy')).statusCode).toBe(404);
-        expect(mocks.prisma.wodStrategy.upsert).toHaveBeenCalledTimes(reanalysis ? 1 : 0);
+        expect(store.strategyVersions).toHaveLength(reanalysis ? 1 : 0);
       },
     );
   }
@@ -265,7 +432,7 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
       .mockResolvedValueOnce({ text: JSON.stringify(STRATEGY) });
 
     expect((await request('POST', 'strategy')).statusCode).toBe(200);
-    expect(mocks.prisma.wodStrategy.upsert).toHaveBeenCalledTimes(1);
+    expect(store.strategyVersions).toHaveLength(1);
     expect((await request('GET', 'strategy')).json().strategy).toMatchObject(STRATEGY);
   });
 
@@ -365,6 +532,14 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
     expect(response.json().wod).toMatchObject({ rawText: RAW_WOD, sourceType: 'TEXT_AND_IMAGE' });
     expect(store.wod.imageData).toBe('image-base64');
     expect(store.analysis?.roundBreakdown).toEqual(ANALYSIS.rounds);
+    expect(store.analysisVersions[0]).toMatchObject({
+      sourceSnapshot: {
+        rawText: null,
+        imageData: 'image-base64',
+        imageMimeType: 'image/png',
+        sourceType: 'IMAGE',
+      },
+    });
     expect(store.strategy).toBeNull();
     expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1);
   });

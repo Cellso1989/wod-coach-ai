@@ -12,6 +12,7 @@ import {
   WodNotFoundError,
   WodNotAnalyzedError,
 } from '../services/athlete-context-service.js';
+import { lockWodVersions, recordStrategyVersion } from '../services/wod-version-service.js';
 
 export default async function wodStrategyRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -46,6 +47,10 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
       include: { analysis: { include: { movements: true } } },
     });
     const analysis = wodWithAnalysis.analysis!;
+    if (!analysis.versionId) {
+      return reply.code(409).send({ error: 'Reanalise este WOD antes de gerar uma estrategia' });
+    }
+    const analysisVersionId = analysis.versionId;
 
     const athleteProfile = await prisma.athleteProfile.findUnique({ where: { userId } });
 
@@ -120,44 +125,57 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
     output.recommendedIntensity = Math.min(10, Math.max(9, output.recommendedIntensity));
     output.targetRpe = 10;
 
-    const strategy = await prisma.wodStrategy.upsert({
-      where: { wodId: id },
-      create: {
-        wodId: id,
-        recommendedIntensity: output.recommendedIntensity,
-        targetRpe: output.targetRpe,
-        loadRecommendation: output.loadRecommendation,
-        pacing: output.pacing,
-        breakStrategy: output.breakStrategy,
-        restStrategy: output.restStrategy,
-        movementStrategy: output.movementStrategy,
-        transitionStrategy: output.transitionStrategy,
-        energyManagement: output.energyManagement,
-        goal: output.goal,
-        target: output.target,
-        criticalPoint: output.criticalPoint,
-        confidence: output.confidence,
-        warnings: output.warnings,
-        rawResponse: output,
-      },
-      update: {
-        recommendedIntensity: output.recommendedIntensity,
-        targetRpe: output.targetRpe,
-        loadRecommendation: output.loadRecommendation,
-        pacing: output.pacing,
-        breakStrategy: output.breakStrategy,
-        restStrategy: output.restStrategy,
-        movementStrategy: output.movementStrategy,
-        transitionStrategy: output.transitionStrategy,
-        energyManagement: output.energyManagement,
-        goal: output.goal,
-        target: output.target,
-        criticalPoint: output.criticalPoint,
-        confidence: output.confidence,
-        warnings: output.warnings,
-        rawResponse: output,
-      },
+    const strategy = await prisma.$transaction(async (tx) => {
+      await lockWodVersions(tx, id);
+      const current = await tx.wodAnalysis.findUnique({ where: { wodId: id } });
+      // Only promote a strategy if the analysis used by the AI is still active.
+      if (current?.versionId !== analysisVersionId) return null;
+      const saved = await tx.wodStrategy.upsert({
+        where: { wodId: id },
+        create: {
+          wodId: id,
+          recommendedIntensity: output.recommendedIntensity,
+          targetRpe: output.targetRpe,
+          loadRecommendation: output.loadRecommendation,
+          pacing: output.pacing,
+          breakStrategy: output.breakStrategy,
+          restStrategy: output.restStrategy,
+          movementStrategy: output.movementStrategy,
+          transitionStrategy: output.transitionStrategy,
+          energyManagement: output.energyManagement,
+          goal: output.goal,
+          target: output.target,
+          criticalPoint: output.criticalPoint,
+          confidence: output.confidence,
+          warnings: output.warnings,
+          rawResponse: output,
+        },
+        update: {
+          recommendedIntensity: output.recommendedIntensity,
+          targetRpe: output.targetRpe,
+          loadRecommendation: output.loadRecommendation,
+          pacing: output.pacing,
+          breakStrategy: output.breakStrategy,
+          restStrategy: output.restStrategy,
+          movementStrategy: output.movementStrategy,
+          transitionStrategy: output.transitionStrategy,
+          energyManagement: output.energyManagement,
+          goal: output.goal,
+          target: output.target,
+          criticalPoint: output.criticalPoint,
+          confidence: output.confidence,
+          warnings: output.warnings,
+          rawResponse: output,
+        },
+      });
+      return recordStrategyVersion(tx, wodWithAnalysis, saved, analysisVersionId, strategyInput);
     });
+
+    if (!strategy) {
+      return reply
+        .code(409)
+        .send({ error: 'A analise mudou durante a geracao. Gere a estrategia novamente.' });
+    }
 
     return reply.send({ strategy });
   });
