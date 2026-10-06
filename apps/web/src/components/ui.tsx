@@ -1,9 +1,12 @@
-import type {
-  ButtonHTMLAttributes,
-  InputHTMLAttributes,
-  ReactNode,
-  SelectHTMLAttributes,
-  TextareaHTMLAttributes,
+import { Eye, EyeOff } from 'lucide-react';
+import {
+  useId,
+  useState,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
 } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle.js';
@@ -152,14 +155,47 @@ export function ButtonLink({
 }
 
 export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return (
+  const [showPassword, setShowPassword] = useState(false);
+  const generatedId = useId();
+  const isPassword = props.type === 'password';
+  const inputId = props.id ?? (isPassword ? generatedId : undefined);
+  const input = (
     <input
       className={cn(
         'w-full rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-base text-neutral-100 placeholder:text-neutral-500 focus:border-orange-700 focus:outline-none',
         className,
+        isPassword && 'pr-12',
       )}
       {...props}
+      id={inputId}
+      type={isPassword && showPassword ? 'text' : props.type}
     />
+  );
+
+  if (!isPassword) return input;
+
+  const label = showPassword ? 'Ocultar senha' : 'Mostrar senha';
+  return (
+    <div className="relative">
+      {input}
+      <button
+        type="button"
+        aria-label={label}
+        aria-controls={inputId}
+        aria-pressed={showPassword}
+        title={label}
+        disabled={props.disabled}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => setShowPassword((visible) => !visible)}
+        className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-lg text-neutral-400 hover:text-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {showPassword ? (
+          <EyeOff size={20} aria-hidden="true" />
+        ) : (
+          <Eye size={20} aria-hidden="true" />
+        )}
+      </button>
+    </div>
   );
 }
 

@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './lib/auth-provider.js';
 import { ThemeProvider } from './lib/theme-provider.js';
+import { AppIntro } from './components/AppIntro.js';
 import { ProtectedRoute } from './components/ProtectedRoute.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage.js';
@@ -23,25 +24,27 @@ function App() {
     <ThemeProvider>
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route element={<ProtectedRoute />}>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/checkin" element={<CheckinPage />} />
-              <Route path="/wods/new" element={<SubmitWodPage />} />
-              <Route path="/wods/:id" element={<WodDetailPage />} />
-              <Route path="/wods" element={<WodListPage />} />
-              <Route path="/personal-records" element={<PersonalRecordsPage />} />
-              <Route path="/hyrox/new" element={<SubmitHyroxPage />} />
-              <Route path="/hyrox/:id" element={<HyroxDetailPage />} />
-              <Route path="/hyrox" element={<HyroxPage />} />
-              <Route path="/admin" element={<AdminPage />} />
-            </Route>
-          </Routes>
+          <AppIntro>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route element={<ProtectedRoute />}>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/checkin" element={<CheckinPage />} />
+                <Route path="/wods/new" element={<SubmitWodPage />} />
+                <Route path="/wods/:id" element={<WodDetailPage />} />
+                <Route path="/wods" element={<WodListPage />} />
+                <Route path="/personal-records" element={<PersonalRecordsPage />} />
+                <Route path="/hyrox/new" element={<SubmitHyroxPage />} />
+                <Route path="/hyrox/:id" element={<HyroxDetailPage />} />
+                <Route path="/hyrox" element={<HyroxPage />} />
+                <Route path="/admin" element={<AdminPage />} />
+              </Route>
+            </Routes>
+          </AppIntro>
         </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>
