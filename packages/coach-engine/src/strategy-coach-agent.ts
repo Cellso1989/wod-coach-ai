@@ -5,6 +5,8 @@ import {
 } from '@wod-coach-ai/validation';
 import { callAiForJson, AiJsonError, type SendMessage } from './ai-json-agent.js';
 import type { AthleteContext } from './athlete-performance-agent.js';
+import { z } from 'zod';
+import { loadCalculationSchema, validateLoadCalculations } from './strategy-load-evidence.js';
 
 export type { SendMessage } from './ai-json-agent.js';
 
@@ -122,11 +124,9 @@ depois — com este formato exato:
 {
   "recommendedIntensity": 9-10 (SEMPRE 9 ou 10, nunca menor — ver regra abaixo),
   "targetRpe": 10 (SEMPRE 10 — ver regra abaixo),
-  "loadRecommendation": string ou null (só sugira carga se houver PR ou histórico de carga
-    para o movimento em questão; caso contrário, oriente por RPE e null aqui. Se o treino
-    tiver múltiplos blocos com % diferentes do PR — ex: "2x 70-75%, 2x 75-80%, 4x 80-85%" —
-    calcule o peso real de cada bloco a partir do PR e liste-os de forma curta, ex:
-    "70-75kg / 75-80kg / 80-85kg (PR 100kg)"),
+  "loadRecommendation": string ou null (formato verificavel abaixo),
+  "loadCalculations": [{ "movement": string, "prValue": number, "prUnit": "kg" ou "lb",
+    "loads": [{ "value": number, "unit": "kg" ou "lb", "percentage": number ou null }] }],
   "pacing": string,
   "breakStrategy": [{ "movement": string, "strategy": string }],
   "restStrategy": string,
@@ -151,6 +151,20 @@ depois — com este formato exato:
 }
 
 Regras críticas:
+- loadCalculations e evidencia interna obrigatoria para loadRecommendation nao nula.
+  Cada movement deve existir no WOD e ter seu proprio PR de carga no contexto.
+  Copie prValue/prUnit desse PR, normalizando kgs para kg e lbs para lb; nao converta
+  o PR citado nem use PR de outro movimento. Liste cargas na ordem de execucao.
+  percentage, quando informado, exige value = PR convertido para unit * percentage/100,
+  arredondado para 0.1 da unidade de destino (1 lb = 0.45359237 kg).
+  Sem percentual, use percentage null; nao alegue percentual no texto.
+  loadRecommendation deve ser exatamente a concatenacao dessas entradas:
+  "Movement: valueunit (percentage%) / valueunit (percentage%) (PR prValueprUnit)".
+  Omita " (percentage%)" se percentage for null; se houver varios movimentos, separe
+  por "; ". Exemplo: "Back Squat: 60kg (60%) (PR 100kg)".
+  Sem PR proprio, use null e loadCalculations vazio; oriente por RPE sem inventar pesos.
+  Nao coloque cargas adicionais no texto nem arredonde para anilhas sem explicitar
+  uma recomendacao sem percentual. Campo publico continua limitado a 180 caracteres.
 - "breakStrategy" e "movementStrategy" devem conter pelo menos 1 item cada. Se nao
   houver quebra planejada, oriente executar unbroken ou indique a pausa entre series.
   Para treino de um unico movimento, descreva a execucao entre series/intervalos em
@@ -211,27 +225,6 @@ function buildUserContent(input: StrategyCoachInput): string {
   return `Dados para a recomendação de hoje:\n\n${JSON.stringify(input, null, 2)}`;
 }
 
-function hasUsableLoadRecord(input: StrategyCoachInput): boolean {
-  const key = (name: string) =>
-    name
-      .trim()
-      .toLowerCase()
-      .replace(/[\s-]+/g, ' ');
-  const movements = new Set([
-    ...input.wodAnalysis.movements.map((movement) => key(movement.name)),
-    ...(input.wodAnalysis.rounds ?? []).flatMap((round) =>
-      round.movements.map((movement) => key(movement.name)),
-    ),
-  ]);
-  return input.athleteContext.relevantPersonalRecords.some(
-    (record) =>
-      movements.has(key(record.movementName)) &&
-      Number.isFinite(record.value) &&
-      record.value > 0 &&
-      /^(?:kgs?|lbs?)$/i.test(record.unit.trim()),
-  );
-}
-
 export interface GenerateStrategyOptions {
   maxAttempts?: number;
 }
@@ -247,16 +240,10 @@ export async function generateStrategy(
 ): Promise<StrategyOutput> {
   try {
     const result = await callAiForJson({
-      schema: strategyOutputSchema.superRefine((output, ctx) => {
-        if (output.loadRecommendation != null && !hasUsableLoadRecord(input)) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['loadRecommendation'],
-            message:
-              'Use null em loadRecommendation: nao ha PR de carga positivo em kg/lb para um movimento deste WOD. Oriente por RPE sem inventar pesos.',
-          });
-        }
-      }),
+      schema: strategyOutputSchema
+        .extend({ loadCalculations: z.array(loadCalculationSchema).max(8).optional() })
+        .superRefine((output, ctx) => validateLoadCalculations(input, output, ctx))
+        .pipe(strategyOutputSchema),
       systemPrompt: SYSTEM_PROMPT,
       userContent: [{ type: 'text', text: buildUserContent(input) }],
       sendMessage,

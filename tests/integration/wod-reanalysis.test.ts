@@ -372,14 +372,70 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
       targetWod: structuredClone({ ...store.wod, analysis: store.analysis }),
     }));
     mocks.sendMessage.mockResolvedValue({
-      text: JSON.stringify({ ...STRATEGY, loadRecommendation: '60kg (PR Thruster 100kg)' }),
+      text: JSON.stringify({
+        ...STRATEGY,
+        loadRecommendation: 'Thruster: 60kg (60%) (PR 100kg)',
+        loadCalculations: [
+          {
+            movement: 'Thruster',
+            prValue: 100,
+            prUnit: 'kg',
+            loads: [{ value: 60, unit: 'kg', percentage: 60 }],
+          },
+        ],
+      }),
     });
     expect((await request('POST', 'strategy')).statusCode).toBe(200);
-    expect(store.strategy?.loadRecommendation).toBe('60kg (PR Thruster 100kg)');
+    expect(store.strategy?.loadRecommendation).toBe('Thruster: 60kg (60%) (PR 100kg)');
+    expect(store.strategyVersions.at(-1)?.snapshot).not.toHaveProperty('loadCalculations');
     expect(store.strategyVersions.at(-1)).toMatchObject({
       inputSnapshot: { athleteContext: context },
     });
   });
+
+  for (const reanalysis of [false, true]) {
+    it.each(['borrowed PR', 'invented PR', 'percentage', 'text mismatch'])(
+      `preserves saved strategy after invalid load evidence: %s (reanalysis: ${reanalysis})`,
+      async (fault) => {
+        if (reanalysis) await seedAnalyzedWod();
+        else expect((await request('POST', 'analyze')).statusCode).toBe(200);
+        const context = {
+          ...CONTEXT,
+          relevantPersonalRecords: [
+            { movementName: 'Thruster', value: 100, unit: 'kg', achievedAt: '2026-09-01' },
+          ],
+        };
+        mocks.context.mockImplementation(async () => ({
+          context,
+          targetWod: structuredClone({ ...store.wod, analysis: store.analysis }),
+        }));
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+        expect((await request('POST', 'strategy')).statusCode).toBe(200);
+        const before = structuredClone(store);
+        const movement = fault === 'borrowed PR' ? 'Toes to Bar' : 'Thruster';
+        const prValue = fault === 'invented PR' ? 200 : 100;
+        const value = fault === 'percentage' ? 80 : 60;
+        const text =
+          fault === 'text mismatch'
+            ? 'Thruster: 90kg (PR 100kg)'
+            : `${movement}: ${value}kg (60%) (PR ${prValue}kg)`;
+        mocks.sendMessage.mockResolvedValue({
+          text: JSON.stringify({
+            ...STRATEGY,
+            loadRecommendation: text,
+            loadCalculations: [
+              { movement, prValue, prUnit: 'kg', loads: [{ value, unit: 'kg', percentage: 60 }] },
+            ],
+          }),
+        });
+        const calls = mocks.sendMessage.mock.calls.length;
+        expect((await request('POST', 'strategy')).statusCode).toBe(502);
+        expect(mocks.sendMessage.mock.calls.length - calls).toBe(2);
+        expect(store).toEqual(before);
+        expect(lease).toBeNull();
+      },
+    );
+  }
 
   for (const reanalysis of [false, true]) {
     it.each(wodFormatCases)(

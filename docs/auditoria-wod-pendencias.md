@@ -159,7 +159,7 @@ nao significa sete bugs criticos comprovados: inclui melhorias e validacoes.
 | C4 | Erros de leitura e respostas tardias no frontend | Corrigido e testado; 8fe5dbb |
 | C5 | Evitar chamadas duplicadas de IA | Bloqueio concorrente comitado: 7f9955c |
 | C6 | Lint preexistente em sw.js | Comitado: a277aa3 |
-| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | C7a: 57a1be3; C7b1: a5526e8; C7b2a testada, aguarda commit; demais limites C7b2 pendentes |
+| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | C7a: 57a1be3; C7b1: a5526e8; C7b2a: 33b2004; C7b2b testada, aguarda commit; demais limites C7b2 pendentes |
 
 ### C1. Timeout e conclusao da resposta da IA
 
@@ -568,7 +568,7 @@ Typecheck, build, lint global e dos arquivos alterados passaram; aviso ui.tsx
 permanece. Os 24 E2E anteriores passaram com dois workers e trace, sem alterar
 testes/esperas; usam endpoints simulados. Container descartavel removido.
 Sem chamada paga, migration nova ou alteracao de producao nesta etapa.
-Resultado local testado; aguarda aprovacao para commit.
+Resultado local testado e comitado com aprovacao: 33b2004. Sem push/deploy desta etapa.
 
 Limites: nao valida ordem dos movimentos, formato/duracao, categorias, cargas,
 percentuais, coaching ou substituicoes da estrategia. Em imagens compara com
@@ -576,6 +576,64 @@ a transcricao do modelo, nao prova fidelidade OCR. Mesmo fontes reconhecidas
 podem conter cargas inventadas em loadDescription; guardas de carga continuam
 pendentes. Fontes fora da gramatica limitada mantem apenas as protecoes anteriores.
 Nao considerar C7b2 integral nem a auditoria encerradas.
+
+### C7b2b. Evidencia de carga por movimento e conta percentual
+
+Problema comprovado: generateStrategy conferia apenas a existencia de algum
+PR de carga do WOD, permitindo usar essa disponibilidade para justificar carga
+de outro movimento, citar PR inexistente ou apresentar percentual incorreto.
+Sete regressoes falharam antes em strategy-coach-agent.test.ts. A causa era
+ausencia de vinculo verificavel entre o texto e cada PR; nao persistencia parcial.
+
+Correcao em strategy-coach-agent.ts e strategy-load-evidence.ts: contrato
+interno da geracao recebe loadCalculations, com movement, prValue/prUnit e
+loads (value, unit, percentage). Evidencia exigida para loadRecommendation
+nao nula; null aceita evidencia ausente/vazia e rejeita calculos contraditorios.
+Cada entrada exige movimento do WOD e seu proprio PR positivo/finito no contexto,
+com valor/unidade originais. Normaliza caixa, espacos/hifens e unidades kg/kgs,
+lb/lbs; nao inventa aliases ou empresta PR de outro movimento.
+
+Percentual declarado calcula peso apos conversao kg/lb, arredondado para 0.1
+da unidade destino; tolerancia numerica 1e-8. Usa a relacao exata
+[NIST: libra avoirdupois](https://www.nist.gov/system/files/documents/calibrations/sp250-31.pdf),
+1 lb = 0.45359237 kg. Sem percentual, percentage null preserva sugestao absoluta
+fundamentada no PR, mas nao comprova que seu valor seja uma intensidade adequada.
+Varios pesos/percentuais ficam na ordem declarada, sem soma ou truncamento.
+
+Texto publico deve corresponder exatamente a evidencia estruturada, por exemplo
+"Thruster: 60kg (60%) (PR 100kg)"; entradas separadas por ponto e virgula e pesos
+por barra. Texto diferente nao e reescrito silenciosamente: falha no retry
+corretivo existente. Duas respostas invalidas retornam 502 sem gravar. Prompt
+explicita o contrato. loadCalculations e validado internamente e removido pelo
+schema publico antes de retornar/persistir; API, tabelas e UI continuam recebendo
+os mesmos campos, com loadRecommendation string/null. Historico legado nao e
+revalidado/reescrito. Modelo, limite de tokens, intensidade/RPE e HYROX inalterados.
+
+Validacao: 339 testes gerais passaram (46 PG opt-in pulados nesse comando);
+46 passaram separadamente em PostgreSQL descartavel, schema sem drift. Dezenove
+unitarios novos cobrem PR emprestado/inventado, falta de evidencia, percentual,
+conversao nas duas direcoes, PR fracionado, varios movimentos/pesos, texto
+divergente, formato invalido e retry. Oito API e dois PG novos conferem estrategia
+ativa, analise, score, fonte, historico e reserva preservados em falha, inicial e
+apos reanalise. Fixtures de sucesso existentes usam agora evidencia estruturada,
+sem remover assertions de snapshot/PR/carga; auxiliar nao chega ao snapshot publico.
+Os casos anteriores de PR inutilizavel fornecem evidencia completa para testar
+o vinculo com o PR, em vez de falhar apenas por ausencia do campo novo.
+Typecheck/build/lint global e dos arquivos alterados passaram; aviso ui.tsx permanece.
+24 E2E passaram com dois workers e trace, sem modificar esperas/assertions/UI;
+endpoints simulados. Runner PG filtrado teve exit 1 apesar de 46/46 e diff limpo;
+repeticao direta confirmou 46/46, diff limpo e exit 0, containers removidos.
+Sem chamada paga, migration, commit, push ou deploy nesta etapa.
+
+Limites: nao valida se o percentual declarado corresponde a prescricao de cada
+bloco, se a carga escolhida e coaching adequado, se um registro em kg representa
+1RM ou carga em outra modalidade, nem pesos/PRs em pacing/warnings/outros campos.
+Arredondamento para anilhas nao e verificado como percentual; sugestoes absolutas
+podem usar percentage null. Substituicoes fora do WOD nao recebem carga neste
+campo mesmo com outro PR; orientacao por RPE continua disponivel. Correspondencia
+de aliases alem de caixa/espacos/hifens, OCR e fidelidade de fontes complexas
+continuam pendentes. Contrato interno novo nao foi avaliado com provedor real.
+Auditoria ainda nao encerrada; resultado local aguarda aprovacao para commit.
 
 ### Publicacao anterior confirmada
 
@@ -587,7 +645,7 @@ connection_limit=3, pool_timeout=20, schema=public; DIRECT_URL manteve pool de
 sessao 5432. Uma sessao ociosa foi encerrada com autorizacao. Health/novos assets
 retornaram 200; endpoint protegido retornou 401 sem login. Notas de ausencia de
 deploy/migration nas etapas anteriores descrevem aquelas execucoes historicas.
-Essa publicacao nao inclui C7b2a, ainda local e sem aprovacao de commit/deploy.
+Essa publicacao nao inclui C7b2a (commit local 33b2004) nem C7b2b (ainda sem commit).
 
 ## Pontos importantes e limites da revisao
 

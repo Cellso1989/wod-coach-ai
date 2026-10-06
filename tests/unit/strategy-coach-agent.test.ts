@@ -57,6 +57,197 @@ const MINIMAL_INPUT: StrategyCoachInput = {
 };
 
 describe('generateStrategy', () => {
+  const loadInput: StrategyCoachInput = {
+    ...MINIMAL_INPUT,
+    wodAnalysis: {
+      ...MINIMAL_INPUT.wodAnalysis,
+      movements: [
+        { name: 'Back Squat', category: 'weightlifting' },
+        { name: 'Thruster', category: 'weightlifting' },
+      ],
+    },
+    athleteContext: {
+      ...MINIMAL_INPUT.athleteContext,
+      relevantPersonalRecords: [
+        { movementName: 'Back Squat', value: 100, unit: 'kg', achievedAt: new Date() },
+      ],
+    },
+  };
+  const calculation = {
+    movement: 'Back Squat',
+    prValue: 100,
+    prUnit: 'kg',
+    loads: [{ value: 60, unit: 'kg', percentage: 60 }],
+  };
+  const supported = {
+    ...VALID_STRATEGY,
+    loadRecommendation: 'Back Squat: 60kg (60%) (PR 100kg)',
+    loadCalculations: [calculation],
+  };
+  it.each([
+    ['missing evidence', { ...supported, loadCalculations: undefined }],
+    [
+      'another movement PR',
+      {
+        ...supported,
+        loadCalculations: [{ ...calculation, movement: 'Thruster' }],
+        loadRecommendation: 'Thruster: 60kg (60%) (PR 100kg)',
+      },
+    ],
+    [
+      'invented PR',
+      {
+        ...supported,
+        loadCalculations: [{ ...calculation, prValue: 200 }],
+        loadRecommendation: 'Back Squat: 60kg (60%) (PR 200kg)',
+      },
+    ],
+    [
+      'wrong percentage',
+      {
+        ...supported,
+        loadCalculations: [{ ...calculation, loads: [{ value: 80, unit: 'kg', percentage: 60 }] }],
+        loadRecommendation: 'Back Squat: 80kg (60%) (PR 100kg)',
+      },
+    ],
+    ['different public text', { ...supported, loadRecommendation: 'Thruster: 60kg (PR 100kg)' }],
+    [
+      'uncited extra recommendation',
+      { ...supported, loadRecommendation: supported.loadRecommendation + '; Thruster: 40kg' },
+    ],
+    ['contradictory null', { ...supported, loadRecommendation: null }],
+  ])('rejects load evidence with %s', async (_name, output) => {
+    const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(output)));
+    await expect(generateStrategy(loadInput, send)).rejects.toBeInstanceOf(StrategyGenerationError);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+  it('validates evidence and removes only the internal calculation field', async () => {
+    const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(supported)));
+    const result = await generateStrategy(loadInput, send);
+    expect(result.loadRecommendation).toBe(supported.loadRecommendation);
+    expect(result).not.toHaveProperty('loadCalculations');
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['kg to lb', 'kg', 100, 'lb', 132.3],
+    ['lb to kg', 'lb', 100, 'kg', 27.2],
+    ['fractional PR', 'kg', 100.5, 'kg', 60.3],
+  ])('checks percentage arithmetic: %s', async (_name, prUnit, prValue, unit, value) => {
+    const input = {
+      ...loadInput,
+      athleteContext: {
+        ...loadInput.athleteContext,
+        relevantPersonalRecords: [
+          {
+            movementName: 'Back Squat',
+            value: prValue as number,
+            unit: prUnit as string,
+            achievedAt: new Date(),
+          },
+        ],
+      },
+    };
+    const text = `Back Squat: ${value}${unit} (60%) (PR ${prValue}${prUnit})`;
+    const send = vi.fn().mockResolvedValue(
+      textMessage(
+        JSON.stringify({
+          ...supported,
+          loadRecommendation: text,
+          loadCalculations: [
+            { ...calculation, prValue, prUnit, loads: [{ value, unit, percentage: 60 }] },
+          ],
+        }),
+      ),
+    );
+    expect((await generateStrategy(input, send)).loadRecommendation).toBe(text);
+  });
+
+  it.each([
+    [
+      'wrong conversion',
+      { ...calculation, loads: [{ value: 60, unit: 'lb', percentage: 60 }] },
+      'Back Squat: 60lb (60%) (PR 100kg)',
+    ],
+    ['wrong PR unit', { ...calculation, prUnit: 'lb' }, 'Back Squat: 60kg (60%) (PR 100lb)'],
+    ['empty loads', { ...calculation, loads: [] }, 'Back Squat: (PR 100kg)'],
+    [
+      'zero load',
+      { ...calculation, loads: [{ value: 0, unit: 'kg', percentage: null }] },
+      'Back Squat: 0kg (PR 100kg)',
+    ],
+    [
+      'negative percentage',
+      { ...calculation, loads: [{ value: 60, unit: 'kg', percentage: -60 }] },
+      'Back Squat: 60kg (-60%) (PR 100kg)',
+    ],
+    [
+      'unsupported movement',
+      { ...calculation, movement: 'Bench Press' },
+      'Bench Press: 60kg (60%) (PR 100kg)',
+    ],
+  ])('rejects malformed or unsupported arithmetic: %s', async (_name, item, text) => {
+    const send = vi
+      .fn()
+      .mockResolvedValue(
+        textMessage(
+          JSON.stringify({ ...supported, loadRecommendation: text, loadCalculations: [item] }),
+        ),
+      );
+    await expect(generateStrategy(loadInput, send)).rejects.toBeInstanceOf(StrategyGenerationError);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('requires each movement to have its own PR and preserves multiple loads', async () => {
+    const input = {
+      ...loadInput,
+      athleteContext: {
+        ...loadInput.athleteContext,
+        relevantPersonalRecords: [
+          ...loadInput.athleteContext.relevantPersonalRecords,
+          { movementName: 'Thruster', value: 80, unit: 'kg', achievedAt: new Date() },
+        ],
+      },
+    };
+    const text = 'Back Squat: 60kg (60%) / 70kg (70%) (PR 100kg); Thruster: 40kg (50%) (PR 80kg)';
+    const send = vi.fn().mockResolvedValue(
+      textMessage(
+        JSON.stringify({
+          ...supported,
+          loadRecommendation: text,
+          loadCalculations: [
+            {
+              ...calculation,
+              loads: [...calculation.loads, { value: 70, unit: 'kg', percentage: 70 }],
+            },
+            {
+              movement: 'Thruster',
+              prValue: 80,
+              prUnit: 'kg',
+              loads: [{ value: 40, unit: 'kg', percentage: 50 }],
+            },
+          ],
+        }),
+      ),
+    );
+    expect((await generateStrategy(input, send)).loadRecommendation).toBe(text);
+  });
+
+  it('retries invalid evidence and returns only the corrected public strategy', async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce(
+        textMessage(
+          JSON.stringify({ ...supported, loadRecommendation: 'Thruster: 60kg (PR 100kg)' }),
+        ),
+      )
+      .mockResolvedValueOnce(textMessage(JSON.stringify(supported)));
+    const result = await generateStrategy(loadInput, send);
+    expect(result.loadRecommendation).toBe(supported.loadRecommendation);
+    expect(result).not.toHaveProperty('loadCalculations');
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
     ['no records', []],
     ['rep capacity', [{ movementName: 'Toes to Bar', value: 22, unit: 'reps' }]],
@@ -70,7 +261,15 @@ describe('generateStrategy', () => {
       textMessage(
         JSON.stringify({
           ...VALID_STRATEGY,
-          loadRecommendation: '60kg',
+          loadRecommendation: 'Toes to Bar: 60kg (PR 40kg)',
+          loadCalculations: [
+            {
+              movement: 'Toes to Bar',
+              prValue: 40,
+              prUnit: 'kg',
+              loads: [{ value: 60, unit: 'kg', percentage: null }],
+            },
+          ],
         }),
       ),
     );
@@ -169,7 +368,15 @@ describe('generateStrategy', () => {
         textMessage(
           JSON.stringify({
             ...VALID_STRATEGY,
-            loadRecommendation: `20${unit} (PR 40${unit})`,
+            loadRecommendation: `Toes to Bar: 20${unit === 'lbs' ? 'lb' : unit} (PR 40${unit === 'lbs' ? 'lb' : unit})`,
+            loadCalculations: [
+              {
+                movement: 'Toes to Bar',
+                prValue: 40,
+                prUnit: unit === 'lbs' ? 'lb' : unit,
+                loads: [{ value: 20, unit: unit === 'lbs' ? 'lb' : unit, percentage: null }],
+              },
+            ],
           }),
         ),
       );
@@ -190,7 +397,9 @@ describe('generateStrategy', () => {
         },
         sendMessage,
       );
-      expect(result.loadRecommendation).toBe(`20${unit} (PR 40${unit})`);
+      expect(result.loadRecommendation).toBe(
+        `Toes to Bar: 20${unit === 'lbs' ? 'lb' : unit} (PR 40${unit === 'lbs' ? 'lb' : unit})`,
+      );
       expect(sendMessage).toHaveBeenCalledTimes(1);
     },
   );

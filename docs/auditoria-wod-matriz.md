@@ -88,7 +88,35 @@ unidade nao sao interpretados parcialmente. Testes tambem garantem esses limites
 20 unitarios novos, quatro API, dois PostgreSQL (omissao/volume inicial/reanalise)
 e dois casos positivos API da matriz. Total: 312 gerais e 44 PG sem drift;
 typecheck/build/lint e os 24 E2E anteriores passaram (dois workers, trace,
-endpoints simulados). Esta etapa nao foi comitada nem publicada.
+endpoints simulados). C7b2a comitada: 33b2004, sem push/deploy.
+
+## Evidencia de Carga C7b2b
+
+Precondicao: WOD com dois movimentos; apenas um tem PR de carga. Repetir com
+analise/estrategia ativas, inclusive apos reanalise. Fornecer loadCalculations
+na resposta simulada e consultar projecoes, versoes e reserva apos a chamada.
+
+| Caso | Cobertura | Expectativa |
+| --- | --- | --- |
+| PR de um movimento usado para outro | Unitario, oito cenarios API e dois PG abrangem as falhas abaixo | 502 depois de retry, estado/reserva preservados |
+| PR inventado ou unidade diferente do registro | Unitario, API/PG para valor | Exige valor/unidade originais do PR do movimento |
+| Percentual ou conversao errados | Unitario, API/PG para percentual | Calcula com unidade destino e arredonda para 0.1 |
+| kg para lb, lb para kg, PR fracionado | Unitario | Aceita conta correta |
+| Texto nao corresponde aos calculos | Unitario, API, PG | Nao reescreve nem salva texto divergente |
+| Carga sem evidencia ou calculos com campo publico null | Unitario | Rejeita inconsistencia |
+| Varias cargas e varios PRs | Unitario | Confere cada movimento; preserva ordem declarada |
+| Auxiliar da IA no retorno/snapshot publico | Unitario, API, PG | loadCalculations nao altera contrato publico |
+| Primeira resposta incorreta e segunda corrigida | Unitario e sucesso PG anterior repetido | Apenas correcao e persistida |
+
+Resultado: 339 gerais, 46 PostgreSQL, 24 E2E, typecheck/build/lint passaram.
+PG direto repetido confirmou exit 0 e diff limpo apos exit anomalo em pipeline.
+19 unitarios, oito API e dois PG novos; sucesso anterior de carga/snapshot
+mantido com fixtures atualizadas ao contrato interno. Sem provedor real,
+alteracao de UI/banco ou deploy. C7b2b aguarda aprovacao para commit.
+
+O vinculo do PR e a conta de um percentual declarado nao provam aderencia ao
+percentual prescrito por bloco, qualidade do coaching ou equivalencia de 1RM.
+Pesos nos demais campos, OCR, fontes complexas e adaptacoes continuam pendentes.
 
 C7b2 restante permanece pendente: fidelidade semantica entre fonte/analise e entre
 analise/PRs/perfil/estrategia. Ter um PR de carga nao valida todos os pesos,
