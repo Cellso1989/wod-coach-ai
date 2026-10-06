@@ -6,6 +6,7 @@ import {
 } from '@wod-coach-ai/validation';
 import { WOD_FORMATS, MOVEMENT_CATEGORIES } from '@wod-coach-ai/types';
 import type { RefinementCtx } from 'zod';
+import { movementIdentity } from './movement-identity.js';
 import {
   callAiForJson,
   AiJsonError,
@@ -197,13 +198,7 @@ function parseMovementLine(line: string): ParsedMovementLine | null {
 }
 
 function movementKey(name: string): string {
-  const key = name
-    .toLowerCase()
-    .trim()
-    .replace(/[\s-]+/g, ' ');
-  if (key === 't2b') return 'toes to bar';
-  if (key === 'hsw') return 'handstand walk';
-  return key;
+  return movementIdentity(name);
 }
 
 function simpleSourceMovementKey(name: string): string | null {
@@ -257,6 +252,37 @@ function validateSimpleSourceIntegrity(
   const actual = new Map(
     output.movements.map((item) => [simpleSourceMovementKey(item.name), item]),
   );
+  const heading = lines[0]!.toLowerCase();
+  const format = heading.startsWith('amrap')
+    ? 'AMRAP'
+    : heading.startsWith('chipper')
+      ? 'CHIPPER'
+      : 'FOR_TIME';
+  const duration = heading.match(/^amrap\s+(\d+)/)?.[1];
+  if (
+    output.format !== format ||
+    output.durationMinutes !== (duration == null ? null : Number(duration))
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['format'],
+      message: 'Preserve o formato e a janela AMRAP explicitos da fonte simples.',
+    });
+  }
+  const order = [...expected.keys()];
+  const execution = output.rounds?.length
+    ? output.rounds.flatMap((round) => round.movements)
+    : output.movements;
+  if (
+    execution.length !== order.length ||
+    execution.some((item, index) => simpleSourceMovementKey(item.name) !== order[index])
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['movements'],
+      message: 'Preserve a ordem dos movimentos da fonte simples.',
+    });
+  }
   if (
     actual.size !== output.movements.length ||
     actual.size !== expected.size ||
@@ -276,6 +302,8 @@ function validateSimpleSourceIntegrity(
       line.unit === 'distance' ? 'distanceMeters' : line.unit === 'calories' ? 'calories' : 'reps';
     if (
       item[metric] !== line.value ||
+      execution.find((item) => simpleSourceMovementKey(item.name) === key)?.[metric] !==
+        line.value ||
       (['reps', 'distanceMeters', 'calories'] as const).some(
         (other) => other !== metric && item[other] != null,
       )

@@ -57,6 +57,58 @@ const MINIMAL_INPUT: StrategyCoachInput = {
 };
 
 describe('generateStrategy', () => {
+  it.each([
+    'pacing',
+    'restStrategy',
+    'transitionStrategy',
+    'energyManagement',
+    'goal',
+    'target',
+    'criticalPoint',
+  ] as const)('rejects unvalidated numeric weights in %s', async (field) => {
+    const send = vi
+      .fn()
+      .mockResolvedValue(textMessage(JSON.stringify({ ...VALID_STRATEGY, [field]: 'Use 60kg.' })));
+    await expect(generateStrategy(MINIMAL_INPUT, send)).rejects.toBeInstanceOf(
+      StrategyGenerationError,
+    );
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+  it.each([
+    { warnings: ['Seu PR e 22 reps.'] },
+    { breakStrategy: [{ movement: 'Thruster 60kg', strategy: 'Unbroken.' }] },
+    { movementStrategy: [{ movement: 'Thruster', strategy: 'Use 40/60 lbs.' }] },
+    { pacing: 'Use 50% do PR.' },
+    { pacing: 'Use 60 quilos.' },
+    { pacing: 'Use ６０ｋｇ.' },
+  ])('rejects numeric claims outside the validated load field: %j', async (change) => {
+    const send = vi
+      .fn()
+      .mockResolvedValue(textMessage(JSON.stringify({ ...VALID_STRATEGY, ...change })));
+    await expect(generateStrategy(MINIMAL_INPUT, send)).rejects.toBeInstanceOf(
+      StrategyGenerationError,
+    );
+  });
+  it('preserves explicit substitutions and RPE guidance without fabricated weights', async () => {
+    const output = {
+      ...VALID_STRATEGY,
+      movementStrategy: [
+        { movement: 'Pull-up adaptado', strategy: 'Use ring rows; 6 reps por bloco, sem dor.' },
+      ],
+      warnings: ['Confirme a substituicao com o coach.'],
+      pacing: 'RPE 8 no inicio, 20% final progressivo.',
+    };
+    const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(output)));
+    const result = await generateStrategy(
+      {
+        ...MINIMAL_INPUT,
+        athleteProfile: { ...MINIMAL_INPUT.athleteProfile!, limitedMovements: ['Pull-up'] },
+      },
+      send,
+    );
+    expect(result.movementStrategy).toEqual(output.movementStrategy);
+    expect(result.targetRpe).toBe(10);
+  });
   const loadInput: StrategyCoachInput = {
     ...MINIMAL_INPUT,
     wodAnalysis: {
@@ -84,6 +136,130 @@ describe('generateStrategy', () => {
     loadRecommendation: 'Back Squat: 60kg (60%) (PR 100kg)',
     loadCalculations: [calculation],
   };
+  const prescribedInput = {
+    ...loadInput,
+    wodAnalysis: {
+      ...loadInput.wodAnalysis,
+      movements: [{ name: 'Back Squat', category: 'weightlifting', loadDescription: '60% do PR' }],
+      rounds: [60, 70].map((percentage, index) => ({
+        roundNumber: index + 1,
+        movements: [
+          {
+            name: 'Back Squat',
+            category: 'weightlifting',
+            loadDescription: `${percentage}% do PR`,
+          },
+        ],
+      })),
+    },
+  };
+  it.each([
+    [
+      {
+        ...calculation,
+        loads: [
+          { value: 70, unit: 'kg', percentage: 70 },
+          { value: 60, unit: 'kg', percentage: 60 },
+        ],
+      },
+      'Back Squat: 70kg (70%) / 60kg (60%) (PR 100kg)',
+    ],
+    [calculation, supported.loadRecommendation],
+    [
+      { ...calculation, loads: [{ value: 60, unit: 'kg', percentage: null }] },
+      'Back Squat: 60kg (PR 100kg)',
+    ],
+  ])('rejects omitted, reordered or hidden block prescriptions', async (item, text) => {
+    const send = vi
+      .fn()
+      .mockResolvedValue(
+        textMessage(
+          JSON.stringify({ ...supported, loadCalculations: [item], loadRecommendation: text }),
+        ),
+      );
+    await expect(generateStrategy(prescribedInput, send)).rejects.toBeInstanceOf(
+      StrategyGenerationError,
+    );
+  });
+  it('accepts all prescribed percentages in execution order', async () => {
+    const text = 'Back Squat: 60kg (60%) / 70kg (70%) (PR 100kg)';
+    const send = vi
+      .fn()
+      .mockResolvedValue(
+        textMessage(
+          JSON.stringify({
+            ...supported,
+            loadRecommendation: text,
+            loadCalculations: [
+              {
+                ...calculation,
+                loads: [...calculation.loads, { value: 70, unit: 'kg', percentage: 70 }],
+              },
+            ],
+          }),
+        ),
+      );
+    expect((await generateStrategy(prescribedInput, send)).loadRecommendation).toBe(text);
+  });
+  it.each([true, false])(
+    'permits an explicit load adaptation only with a visible reason (%s)',
+    async (warn) => {
+      const reason = 'Carga adaptada; confirme a escala com o coach.';
+      const text = 'Back Squat (adaptado): 50kg (50%) (PR 100kg)';
+      const send = vi
+        .fn()
+        .mockResolvedValue(
+          textMessage(
+            JSON.stringify({
+              ...supported,
+              warnings: warn ? [reason] : [],
+              loadRecommendation: text,
+              loadCalculations: [
+                {
+                  ...calculation,
+                  prescriptionMode: 'adapted',
+                  adaptationReason: reason,
+                  loads: [{ value: 50, unit: 'kg', percentage: 50 }],
+                },
+              ],
+            }),
+          ),
+        );
+      if (warn)
+        expect((await generateStrategy(prescribedInput, send)).loadRecommendation).toBe(text);
+      else
+        await expect(generateStrategy(prescribedInput, send)).rejects.toBeInstanceOf(
+          StrategyGenerationError,
+        );
+    },
+  );
+  it.each([true, false])('does not silently treat a load PR as typed 1RM (%s)', async (warn) => {
+    const input = {
+      ...loadInput,
+      wodAnalysis: {
+        ...loadInput.wodAnalysis,
+        movements: [
+          { name: 'Back Squat', category: 'weightlifting', loadDescription: '60% do 1RM' },
+        ],
+      },
+    };
+    const send = vi
+      .fn()
+      .mockResolvedValue(
+        textMessage(
+          JSON.stringify({
+            ...supported,
+            warnings: warn ? ['Confirme com o coach se o PR informado representa 1RM.'] : [],
+          }),
+        ),
+      );
+    if (warn)
+      await expect(generateStrategy(input, send)).resolves.toMatchObject({
+        loadRecommendation: supported.loadRecommendation,
+      });
+    else
+      await expect(generateStrategy(input, send)).rejects.toBeInstanceOf(StrategyGenerationError);
+  });
   it.each([
     ['missing evidence', { ...supported, loadCalculations: undefined }],
     [
@@ -127,6 +303,27 @@ describe('generateStrategy', () => {
     expect(result.loadRecommendation).toBe(supported.loadRecommendation);
     expect(result).not.toHaveProperty('loadCalculations');
     expect(send).toHaveBeenCalledTimes(1);
+  });
+  it('uses reviewed aliases in the load evidence without equating different lifts', async () => {
+    const input = {
+      ...loadInput,
+      wodAnalysis: {
+        ...loadInput.wodAnalysis,
+        movements: [{ name: 'Back-Squats', category: 'weightlifting' }],
+      },
+    };
+    const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(supported)));
+    expect((await generateStrategy(input, send)).loadRecommendation).toBe(
+      supported.loadRecommendation,
+    );
+    const different = {
+      ...input,
+      wodAnalysis: {
+        ...input.wodAnalysis,
+        movements: [{ name: 'Front Squat', category: 'weightlifting' }],
+      },
+    };
+    await expect(generateStrategy(different, send)).rejects.toBeInstanceOf(StrategyGenerationError);
   });
 
   it.each([

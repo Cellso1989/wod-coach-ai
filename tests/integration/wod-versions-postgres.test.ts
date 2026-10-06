@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from '../../packages/database/dist/index.js';
 import { buildApp } from '../../apps/api/src/app.js';
-import { simpleSourceCase } from '../fixtures/wod-format-cases.js';
+import { simpleSourceCase, wodFormatCases } from '../fixtures/wod-format-cases.js';
 
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
@@ -872,7 +872,13 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
           ).toBe(200);
         }
         const before = await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include });
-        for (const fault of ['borrowed PR', 'invented PR', 'percentage', 'text mismatch']) {
+        for (const fault of [
+          'borrowed PR',
+          'invented PR',
+          'percentage',
+          'text mismatch',
+          'free field',
+        ]) {
           const movement = fault === 'borrowed PR' ? 'Thruster' : 'Toes to Bar';
           const prValue = fault === 'invented PR' ? 80 : 40;
           const value = fault === 'percentage' ? 30 : 20;
@@ -883,6 +889,7 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
           mocks.sendMessage.mockResolvedValue({
             text: JSON.stringify({
               ...STRATEGY,
+              ...(fault === 'free field' ? { pacing: 'Use 20kg.' } : {}),
               loadRecommendation: text,
               loadCalculations: [
                 { movement, prValue, prUnit: 'kg', loads: [{ value, unit: 'kg', percentage: 50 }] },
@@ -905,6 +912,108 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
       }
     },
   );
+
+  it('checks block percentages and explicit adaptation with a real aliased PR', async () => {
+    const fixture = wodFormatCases.find((item) => item.name === 'STRENGTH percentages')!;
+    const fresh = await prisma.wod.create({
+      data: {
+        userId: 'version-legacy-user',
+        date: new Date(),
+        sourceType: 'TEXT',
+        rawText: fixture.rawText,
+      },
+    });
+    const record = await prisma.personalRecord.create({
+      data: {
+        userId: 'version-legacy-user',
+        movementName: 'Back-Squats',
+        value: 100,
+        unit: 'kg',
+      },
+    });
+    const url = `/api/wods/${fresh.id}`;
+    const include = {
+      analysis: { include: { movements: true } },
+      strategy: true,
+      analysisVersions: true,
+      strategyVersions: true,
+      result: true,
+    } as const;
+    const warning = 'Confirme com o coach se o PR informado representa 1RM.';
+    const reason = 'Carga adaptada para reduzir a demanda neste treino.';
+    try {
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(fixture.analysis) });
+      expect(
+        (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+      ).toBe(200);
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+      expect(
+        (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+      ).toBe(200);
+      const before = await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include });
+      for (const fault of ['order', 'missing block', 'missing warning', 'unannounced adaptation']) {
+        const percentages = fault === 'order' ? [85, 80, 70] : [70];
+        const adapted = fault === 'unannounced adaptation';
+        const output = {
+          ...STRATEGY,
+          warnings: fault === 'missing warning' ? [] : [warning],
+          loadRecommendation: `Back Squat${adapted ? ' (adaptado)' : ''}: ${percentages.map((p) => `${p}kg (${p}%)`).join(' / ')} (PR 100kg)`,
+          loadCalculations: [
+            {
+              movement: 'Back Squat',
+              prValue: 100,
+              prUnit: 'kg',
+              ...(adapted ? { prescriptionMode: 'adapted', adaptationReason: reason } : {}),
+              loads: percentages.map((p) => ({ value: p, unit: 'kg', percentage: p })),
+            },
+          ],
+        };
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(output) });
+        const calls = mocks.sendMessage.mock.calls.length;
+        expect(
+          (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+        ).toBe(502);
+        expect(mocks.sendMessage.mock.calls.length - calls).toBe(2);
+        expect(await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include })).toEqual(
+          before,
+        );
+        expect(await prisma.wodGenerationLease.count({ where: { wodId: fresh.id } })).toBe(0);
+      }
+      for (const adapted of [false, true]) {
+        const percentages = adapted ? [50] : [70, 80, 85];
+        const output = {
+          ...STRATEGY,
+          warnings: adapted ? [warning, reason] : [warning],
+          loadRecommendation: `Back Squat${adapted ? ' (adaptado)' : ''}: ${percentages.map((p) => `${p}kg (${p}%)`).join(' / ')} (PR 100kg)`,
+          loadCalculations: [
+            {
+              movement: 'Back Squat',
+              prValue: 100,
+              prUnit: 'kg',
+              ...(adapted ? { prescriptionMode: 'adapted', adaptationReason: reason } : {}),
+              loads: percentages.map((p) => ({ value: p, unit: 'kg', percentage: p })),
+            },
+          ],
+        };
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(output) });
+        expect(
+          (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+        ).toBe(200);
+        const saved = await prisma.wodStrategyVersion.findFirstOrThrow({
+          where: { wodId: fresh.id },
+          orderBy: { version: 'desc' },
+        });
+        expect(saved.snapshot).toMatchObject({
+          loadRecommendation: output.loadRecommendation,
+          rawResponse: { loadRecommendation: output.loadRecommendation },
+        });
+        expect(JSON.stringify(saved.snapshot)).not.toContain('loadCalculations');
+      }
+    } finally {
+      await prisma.personalRecord.delete({ where: { id: record.id } });
+      await prisma.wod.delete({ where: { id: fresh.id } });
+    }
+  });
 
   it.each(['duration edit', 'text edit'] as const)(
     'keeps strategy context and structure on the same target snapshot during %s',

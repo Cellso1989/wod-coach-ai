@@ -159,7 +159,7 @@ nao significa sete bugs criticos comprovados: inclui melhorias e validacoes.
 | C4 | Erros de leitura e respostas tardias no frontend | Corrigido e testado; 8fe5dbb |
 | C5 | Evitar chamadas duplicadas de IA | Bloqueio concorrente comitado: 7f9955c |
 | C6 | Lint preexistente em sw.js | Comitado: a277aa3 |
-| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | C7a: 57a1be3; C7b1: a5526e8; C7b2a: 33b2004; C7b2b testada, aguarda commit; demais limites C7b2 pendentes |
+| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | C7a: 57a1be3; C7b1: a5526e8; C7b2a: 33b2004; C7b2b: 50fceaf; C7b2c local, avaliacao real pendente |
 
 ### C1. Timeout e conclusao da resposta da IA
 
@@ -633,7 +633,44 @@ podem usar percentage null. Substituicoes fora do WOD nao recebem carga neste
 campo mesmo com outro PR; orientacao por RPE continua disponivel. Correspondencia
 de aliases alem de caixa/espacos/hifens, OCR e fidelidade de fontes complexas
 continuam pendentes. Contrato interno novo nao foi avaliado com provedor real.
-Auditoria ainda nao encerrada; resultado local aguarda aprovacao para commit.
+Auditoria ainda nao encerrada. Etapa posteriormente comitada, com autorizacao,
+em 50fceaf; limites adicionais tratados na rodada C7b2c abaixo.
+
+### C7b2c. Revisao Consolidada dos Pontos Restantes
+
+| Frente | Tratamento local | Limite remanescente |
+| --- | --- | --- |
+| Aliases | Identidade compartilhada no contexto de PRs/similares, analise e evidencia de carga: T2B, HSW, DU, BMU e plurais revisados | Lista finita; nao une lifts distintos nem inventa aliases desconhecidos |
+| Pesos em outros campos | Valida todos os campos textuais livres, listas de movimento/quebras e warnings; numeros com unidades de massa, PR numerico e percentual de PR/1RM vao somente no campo com evidencia | Guarda lexical, nao NLP universal; pesos por extenso e fatos inventados de outro tipo nao garantidos |
+| Percentuais por bloco | Sequencia totalmente reconhecida deve preservar percentuais/ordem; nao aceita omitir bloco nem usar percentage null para desviar; uniformes podem agrupar | Faixas/prosa/parsing parcial nao interpretados; adaptacao explicita permite mudar prescricao |
+| Ordem/formato da fonte | Fonte simples inteiramente reconhecida confere ordem, formato, janela AMRAP, volumes de execucao e impede time cap inventado | Nao amplia a gramatica para cargas, fases, ladders ou fonte complexa |
+| Modalidade do PR | Prescricao contendo 1RM exige aviso publico de confirmacao; adaptacao exige motivo exato em warnings e marca `(adaptado)` | Valor/unidade nao provam 1RM. Dado tipado e validacao da modalidade continuam decisao de produto |
+| Fontes complexas e OCR | Corpus, gabaritos, amostra de imagens e protocolo definidos em auditoria-wod-avaliacao-semantica.md | Sem imagens reais e sem chamada paga; fidelidade real ainda nao validada |
+| Qualidade do coaching | Roteiro cobre pacing, escala legitima, quebras, alvo, intensidade, recuperacao e contexto ausente | Requer respostas reais e revisao de coach; teste mockado nao estabelece adequacao |
+
+Mudancas locais em movement-identity.ts, athlete-performance-agent.ts,
+wod-analyzer-agent.ts, strategy-load-evidence.ts, strategy-text-integrity.ts e
+strategy-coach-agent.ts. Identidade preserva nomes originais no contexto; nao
+altera registros antigos. Back/Front Squat, Power Clean/Clean e Bar/Ring Muscle-up
+continuam distintos. PRs de reps nao se tornam carga. Campo auxiliar e modo de
+adaptacao continuam internos; o texto publico explicita adaptacao e seu motivo.
+Sem mudanca de schema publico/tabela, modelo, tokens, HYROX ou UI. Rejeicao usa
+retry existente e 502, sem reescrita silenciosa. Analises complexas mantem as
+checagens estruturais anteriores, sem promessa de fidelidade integral da fonte.
+
+389 testes gerais passaram, incluindo 38 unitarios novos e 12 API novos em
+inicial/reanalise. Novos casos conferem todos os campos livres, aliases positivos
+e lifts distintos, percentuais/ordem/omissao, modo adaptado, aviso 1RM, ordem e
+formato da fonte simples. Casos de RPE, quebras e substituicao explicita sem peso
+seguem aceitos. Na suite PG, ampliada rejeicao de peso em pacing e acrescentado
+caso de PR alias real, percentuais por bloco, adaptacao e snapshot sem auxiliar.
+Primeira execucao PG: 46 passaram e um teste novo falhou por assertion que
+esperava snapshot aninhado; corrigida para formato plano real, incluindo
+rawResponse. Nao houve falha de runtime nessa assertion. Ver resultado final
+da repeticao em auditoria-wod-matriz.md.
+
+Rodada local sem commit, push, deploy, migration na aplicacao ou chamada paga.
+Nao encerra auditoria integral: protocolo semantico real ainda nao executado.
 
 ### Publicacao anterior confirmada
 
@@ -645,7 +682,8 @@ connection_limit=3, pool_timeout=20, schema=public; DIRECT_URL manteve pool de
 sessao 5432. Uma sessao ociosa foi encerrada com autorizacao. Health/novos assets
 retornaram 200; endpoint protegido retornou 401 sem login. Notas de ausencia de
 deploy/migration nas etapas anteriores descrevem aquelas execucoes historicas.
-Essa publicacao nao inclui C7b2a (commit local 33b2004) nem C7b2b (ainda sem commit).
+Essa publicacao nao inclui C7b2a (commit local 33b2004), C7b2b (commit local
+50fceaf) nem a rodada local C7b2c.
 
 ## Pontos importantes e limites da revisao
 

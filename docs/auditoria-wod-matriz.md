@@ -112,7 +112,32 @@ Resultado: 339 gerais, 46 PostgreSQL, 24 E2E, typecheck/build/lint passaram.
 PG direto repetido confirmou exit 0 e diff limpo apos exit anomalo em pipeline.
 19 unitarios, oito API e dois PG novos; sucesso anterior de carga/snapshot
 mantido com fixtures atualizadas ao contrato interno. Sem provedor real,
-alteracao de UI/banco ou deploy. C7b2b aguarda aprovacao para commit.
+alteracao de UI/banco ou deploy. C7b2b posteriormente comitada em 50fceaf,
+com autorizacao; nao publicada.
+
+## Rodada Consolidada C7b2c
+
+389 testes gerais passaram (47 PG opt-in separados). Acrescentados 38 unitarios
+e 12 API; PG ampliado para 47 casos. Testes novos foram escritos com a correcao,
+nao executados contra o commit anterior: nao representam reproducao antes/depois.
+
+| Precondicao e acao | Esperado | Cobertura |
+| --- | --- | --- |
+| WOD e PR com aliases revisados; buscar contexto e calcular carga | Mesmo movimento reconhecido, registro original preservado; lift distinto nao aceito | Unitarios de contexto/estrategia e PG com Back-Squats |
+| IA insere peso/PR numerico em pacing, outros escalares, warnings ou listas | Retry; duas falhas retornam 502 sem alterar estado/versoes/reserva | Unitarios, API inicial/reanalise, PG |
+| Fonte simples com ordem, formato ou janela alterados pelo modelo | Retry/502, estado anterior intacto | Unitarios e API inicial/reanalise |
+| Sets 70/80/85% e PR proprio; IA omite/reordena ou nega percentual | Rejeitar, conservar historico e liberar reserva | Unitarios e PG |
+| Mesmos sets; IA declara adaptacao com motivo exato em warnings e aviso 1RM | Aceitar texto marcado adaptado; snapshot publico sem loadCalculations | Unitarios e PG |
+| Substituicao explicita, quebras e RPE sem peso numerico | Aceitar, sem exigir identidade com o movimento original para toda orientacao livre | Unitario |
+| Fonte complexa/OCR/coaching com provedor real | Conferir contra gabarito/revisao humana, sem deduzir sucesso a partir de mocks | Protocolo em auditoria-wod-avaliacao-semantica.md; nao executado |
+
+Validacao final: 389 gerais, 47 PostgreSQL descartavel com diff de schema limpo
+e exit 0 direto, 24 E2E com dois workers e trace. Typecheck/build/lint passaram;
+permanece somente aviso preexistente de Fast Refresh em ui.tsx. Primeira rodada
+PG teve 46 sucessos e falha na assertion nova do formato de snapshot, corrigida;
+repeticao passou 47/47. Containers temporarios removidos. Endpoints E2E e IA
+simulados; nao houve chamada paga, mudanca de UI/banco da aplicacao, commit,
+push ou deploy. Auditoria integral depende da avaliacao semantica real descrita.
 
 O vinculo do PR e a conta de um percentual declarado nao provam aderencia ao
 percentual prescrito por bloco, qualidade do coaching ou equivalencia de 1RM.

@@ -438,6 +438,25 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
   }
 
   for (const reanalysis of [false, true]) {
+    it.each([
+      { pacing: 'Use 60kg.' },
+      { warnings: ['Seu PR e 22 reps.'] },
+      { movementStrategy: [{ movement: 'Thruster', strategy: 'Use 50% do PR.' }] },
+    ])(
+      `preserves data after unvalidated numeric guidance (reanalysis: ${reanalysis}): %j`,
+      async (change) => {
+        if (reanalysis) await seedAnalyzedWod();
+        else expect((await request('POST', 'analyze')).statusCode).toBe(200);
+        const before = structuredClone(store);
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify({ ...STRATEGY, ...change }) });
+        const calls = mocks.sendMessage.mock.calls.length;
+        expect((await request('POST', 'strategy')).statusCode).toBe(502);
+        expect(mocks.sendMessage.mock.calls.length - calls).toBe(2);
+        expect(store).toEqual(before);
+        expect(lease).toBeNull();
+      },
+    );
+
     it.each(wodFormatCases)(
       `preserves format/source/structure/context: $name (reanalysis: ${reanalysis})`,
       async ({ rawText, analysis }) => {
@@ -536,7 +555,7 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
   });
 
   for (const reanalysis of [false, true]) {
-    it.each(['omission', 'volume'])(
+    it.each(['omission', 'volume', 'order', 'format', 'duration'])(
       `preserves data after source mismatch: %s (reanalysis: ${reanalysis})`,
       async (fault) => {
         if (reanalysis) await seedAnalyzedWod();
@@ -544,7 +563,10 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
         const before = structuredClone(store);
         const analysis = structuredClone(simpleSourceCase.analysis);
         if (fault === 'omission') analysis.movements.shift();
-        else analysis.movements[0]!.reps = 100;
+        else if (fault === 'volume') analysis.movements[0]!.reps = 100;
+        else if (fault === 'order') analysis.movements.reverse();
+        else if (fault === 'format') analysis.format = 'EMOM';
+        else analysis.durationMinutes = 999;
         mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(analysis) });
         const calls = mocks.sendMessage.mock.calls.length;
         expect((await request('POST', 'analyze')).statusCode).toBe(502);

@@ -1,3 +1,5 @@
+import { movementIdentity } from './movement-identity.js';
+
 /**
  * AthletePerformanceAgent — pergunta "como este atleta costuma responder
  * a esse tipo de estímulo?" (seção 36).
@@ -101,8 +103,8 @@ export function computeWodSimilarity(
     score += 0.3;
   }
 
-  const targetMovements = new Set(target.movements.map((m) => normalize(m.name)));
-  const candidateMovements = new Set(candidate.movements.map((m) => normalize(m.name)));
+  const targetMovements = new Set(target.movements.map((m) => movementIdentity(m.name)));
+  const candidateMovements = new Set(candidate.movements.map((m) => movementIdentity(m.name)));
   if (targetMovements.size > 0 && candidateMovements.size > 0) {
     const intersection = [...targetMovements].filter((m) => candidateMovements.has(m)).length;
     const union = new Set([...targetMovements, ...candidateMovements]).size;
@@ -182,8 +184,8 @@ function findRelevantPersonalRecords(
   target: WodAnalysisSummary,
   personalRecords: PersonalRecordEntry[],
 ): PersonalRecordEntry[] {
-  const targetMovements = new Set(target.movements.map((m) => normalize(m.name)));
-  return personalRecords.filter((pr) => targetMovements.has(normalize(pr.movementName)));
+  const targetMovements = new Set(target.movements.map((m) => movementIdentity(m.name)));
+  return personalRecords.filter((pr) => targetMovements.has(movementIdentity(pr.movementName)));
 }
 
 export interface BuildAthleteContextInput {

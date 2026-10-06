@@ -7,6 +7,7 @@ import { callAiForJson, AiJsonError, type SendMessage } from './ai-json-agent.js
 import type { AthleteContext } from './athlete-performance-agent.js';
 import { z } from 'zod';
 import { loadCalculationSchema, validateLoadCalculations } from './strategy-load-evidence.js';
+import { validateStrategyTextIntegrity } from './strategy-text-integrity.js';
 
 export type { SendMessage } from './ai-json-agent.js';
 
@@ -126,6 +127,7 @@ depois — com este formato exato:
   "targetRpe": 10 (SEMPRE 10 — ver regra abaixo),
   "loadRecommendation": string ou null (formato verificavel abaixo),
   "loadCalculations": [{ "movement": string, "prValue": number, "prUnit": "kg" ou "lb",
+    "prescriptionMode": "as_written" ou "adapted", "adaptationReason": string opcional,
     "loads": [{ "value": number, "unit": "kg" ou "lb", "percentage": number ou null }] }],
   "pacing": string,
   "breakStrategy": [{ "movement": string, "strategy": string }],
@@ -151,6 +153,18 @@ depois — com este formato exato:
 }
 
 Regras críticas:
+- Concentre pesos numericos (kg/lb/quilos/libras) e referencias numericas de PR/1RM
+  exclusivamente em loadRecommendation, com evidencia. Nos demais campos use
+  carga prescrita/indicada, RPE, volumes e instrucoes, sem repetir pesos nem citar
+  PRs numericos. A decisao pode usar os PRs recebidos, sem recita-los no texto.
+- prescriptionMode as_written preserva os percentuais e ordem de todos os blocos
+  explicitamente prescritos. Nao use percentage null para esconder um percentual
+  conhecido. Se a execucao exigir escala, use prescriptionMode adapted e uma
+  adaptationReason curta tambem presente, identica, em warnings; nao mude a
+  prescricao silenciosamente. No texto a entrada sera "Movement (adaptado): ...".
+  Em percentuais de 1RM, o contexto so informa PR de carga, nao sua modalidade:
+  inclua em warnings exatamente: "Confirme com o coach se o PR informado representa 1RM."
+  Nao afirme que o PR e 1RM.
 - loadCalculations e evidencia interna obrigatoria para loadRecommendation nao nula.
   Cada movement deve existir no WOD e ter seu proprio PR de carga no contexto.
   Copie prValue/prUnit desse PR, normalizando kgs para kg e lbs para lb; nao converta
@@ -242,7 +256,10 @@ export async function generateStrategy(
     const result = await callAiForJson({
       schema: strategyOutputSchema
         .extend({ loadCalculations: z.array(loadCalculationSchema).max(8).optional() })
-        .superRefine((output, ctx) => validateLoadCalculations(input, output, ctx))
+        .superRefine((output, ctx) => {
+          validateLoadCalculations(input, output, ctx);
+          validateStrategyTextIntegrity(output, ctx);
+        })
         .pipe(strategyOutputSchema),
       systemPrompt: SYSTEM_PROMPT,
       userContent: [{ type: 'text', text: buildUserContent(input) }],

@@ -114,6 +114,7 @@ describe('analysis fidelity to a simple explicit source', () => {
   const sourceAnalysis = {
     ...valid,
     format: 'FOR_TIME',
+    durationMinutes: null,
     rounds: null,
     movements: [
       { name: 'Burpee', category: 'conditioning', reps: 10 },
@@ -121,6 +122,40 @@ describe('analysis fidelity to a simple explicit source', () => {
       { name: 'Row', category: 'monostructural', calories: 20 },
     ],
   };
+
+  it.each([
+    { format: 'AMRAP' },
+    { durationMinutes: 12 },
+    { movements: [...sourceAnalysis.movements].reverse() },
+    { rounds: [{ roundNumber: 1, movements: [...sourceAnalysis.movements].reverse() }] },
+    {
+      rounds: [1, 2].map((roundNumber) => ({
+        roundNumber,
+        movements: sourceAnalysis.movements.map((item) => ({
+          ...item,
+          reps: item.reps == null ? undefined : item.reps / 2,
+          distanceMeters: item.distanceMeters == null ? undefined : item.distanceMeters / 2,
+          calories: item.calories == null ? undefined : item.calories / 2,
+        })),
+      })),
+    },
+  ])('rejects format, invented cap, order or fabricated execution blocks: %j', async (change) => {
+    const send = vi
+      .fn()
+      .mockResolvedValue({ text: JSON.stringify({ ...sourceAnalysis, ...change }) });
+    await expect(analyzeWod({ rawText }, send)).rejects.toBeInstanceOf(WodAnalysisError);
+  });
+
+  it('rejects a changed AMRAP work window', async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValue({
+        text: JSON.stringify({ ...sourceAnalysis, format: 'AMRAP', durationMinutes: 15 }),
+      });
+    await expect(
+      analyzeWod({ rawText: rawText.replace('For Time', 'AMRAP 12 min') }, send),
+    ).rejects.toBeInstanceOf(WodAnalysisError);
+  });
 
   it.each([
     ['omitted movement', sourceAnalysis.movements.slice(1)],
@@ -166,10 +201,19 @@ describe('analysis fidelity to a simple explicit source', () => {
   it.each(['For Time', 'Chipper', 'AMRAP 12 min'])(
     'accepts plural names in %s',
     async (heading) => {
-      const send = vi.fn().mockResolvedValue({ text: JSON.stringify(sourceAnalysis) });
+      const expected = {
+        ...sourceAnalysis,
+        format: heading.startsWith('AMRAP')
+          ? 'AMRAP'
+          : heading === 'Chipper'
+            ? 'CHIPPER'
+            : 'FOR_TIME',
+        durationMinutes: heading.startsWith('AMRAP') ? 12 : null,
+      };
+      const send = vi.fn().mockResolvedValue({ text: JSON.stringify(expected) });
       await expect(
         analyzeWod({ rawText: rawText.replace('For Time', heading) }, send),
-      ).resolves.toEqual(sourceAnalysis);
+      ).resolves.toEqual(expected);
       expect(send).toHaveBeenCalledTimes(1);
     },
   );
