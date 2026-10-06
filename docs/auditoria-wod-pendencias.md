@@ -159,7 +159,7 @@ nao significa sete bugs criticos comprovados: inclui melhorias e validacoes.
 | C4 | Erros de leitura e respostas tardias no frontend | Corrigido e testado; 8fe5dbb |
 | C5 | Evitar chamadas duplicadas de IA | Bloqueio concorrente comitado: 7f9955c |
 | C6 | Lint preexistente em sw.js | Comitado: a277aa3 |
-| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | C7a: 57a1be3; C7b1: a5526e8; C7b2a: 33b2004; C7b2b: 50fceaf; C7b2c: 21eaa69; C7b3 local, avaliacao real pendente |
+| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | C7a: 57a1be3; C7b1: a5526e8; C7b2a: 33b2004; C7b2b: 50fceaf; C7b2c: 21eaa69; C7b3: ba846cc publicado, avaliacao real pendente |
 
 ### C1. Timeout e conclusao da resposta da IA
 
@@ -728,6 +728,20 @@ deploy/migration nas etapas anteriores descrevem aquelas execucoes historicas.
 Essa publicacao nao inclui C7b2a (commit local 33b2004), C7b2b (commit local
 50fceaf), C7b2c (commit local 21eaa69) nem a rodada local C7b3.
 
+### Publicacao C7b3 confirmada
+
+Em 2026-10-05, com autorizacao explicita, os quatro commits 33b2004, 50fceaf,
+21eaa69 e ba846cc foram enviados para origin/main e publicados. Render
+dep-db24j2uq1p3s73e973rg terminou Live as 22:07:51 GMT-3, no commit
+ba846cc04cd2acce456078fcda1faf91744969f2. Logs confirmaram a aplicacao de
+20261005220000_type_personal_records antes da inicializacao da API.
+Health, /personal-records e os novos assets index-DT86Guj9.js e
+index-mPKE35xG.css responderam 200; /api/personal-records retornou 401 sem login.
+Nao houve teste autenticado em producao, alteracao de configuracao do banco,
+encerramento de sessoes, chamada paga de IA, OCR real ou revisao do coach.
+Notas anteriores sem commit/deploy/migration descrevem as rodadas originais.
+A avaliacao semantica real permanece pendente; esta publicacao nao encerra C7.
+
 ## Pontos importantes e limites da revisao
 
 - O transporte agora exige resposta concluida e tem prazo por chamada (C1).
@@ -743,7 +757,8 @@ Essa publicacao nao inclui C7b2a (commit local 33b2004), C7b2b (commit local
 - Lint global sem erros apos C6; permanece aviso de Fast Refresh em ui.tsx.
 - Suites de API usam transporte mockado ou transporte real com fetch simulado;
   banco real e temporario. E2E atuais mockam endpoints. Nao houve teste com
-  provedor real nem migracao na aplicacao.
+  provedor real nessas suites. As migrations em producao foram aplicadas nas
+  publicacoes confirmadas acima; nao foram testes autenticados em producao.
 
 ## Criterio de encerramento
 
