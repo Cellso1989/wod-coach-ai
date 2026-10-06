@@ -4,6 +4,7 @@ import { api, type DailyCheckin, type Wod } from '../lib/api.js';
 import { useAuth } from '../lib/auth-context.js';
 import { NavBar } from '../components/NavBar.js';
 import { LogoutButton } from '../components/LogoutButton.js';
+import { TrainingCalendar } from '../components/TrainingCalendar.js';
 import { PageHeader } from '../components/PageHeader.js';
 import { ButtonLink, Card, LoadingState, PageShell } from '../components/ui.js';
 
@@ -51,6 +52,8 @@ export function DashboardPage() {
       </PageHeader>
 
       <NavBar />
+
+      <TrainingCalendar />
 
       <Card className="space-y-4 border-orange-900/50">
         <div className="flex items-start justify-between gap-3">
@@ -140,7 +143,6 @@ export function DashboardPage() {
           </ul>
         </div>
       )}
-
     </PageShell>
   );
 }

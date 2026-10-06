@@ -323,6 +323,14 @@ export interface TrainingFrequencyWeek {
   wodCount: number;
 }
 
+export interface TrainingCalendarEntry {
+  completedAt: string;
+  wodId: string;
+  name: string | null;
+  discipline: 'CROSSFIT' | 'HYROX';
+  score: string;
+}
+
 export interface AdminUserSummary {
   id: string;
   name: string;
@@ -552,6 +560,12 @@ export const api = {
   getTrainingFrequency: (weeks?: number) =>
     request<{ weeks: TrainingFrequencyWeek[] }>(
       `/stats/training-frequency${weeks ? `?weeks=${weeks}` : ''}`,
+    ),
+
+  getTrainingCalendar: (start: string, end: string, signal?: AbortSignal) =>
+    request<{ entries: TrainingCalendarEntry[] }>(
+      `/stats/training-calendar?${new URLSearchParams({ start, end })}`,
+      { signal },
     ),
 
   getAdminUsers: () => request<AdminUsersResponse>('/admin/users'),
