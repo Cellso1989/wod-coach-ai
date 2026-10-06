@@ -1,0 +1,96 @@
+[
+  {
+    "id": "S1",
+    "source": "For Time\n10 Burpees\n400m Run\n20 cal Row",
+    "imageRequired": true,
+    "format": "FOR_TIME",
+    "durationMinutes": null,
+    "movements": [
+      { "name": "Burpee", "reps": 10 },
+      { "name": "Run", "distanceMeters": 400 },
+      { "name": "Row", "calories": 20 }
+    ]
+  },
+  {
+    "id": "S2",
+    "source": "Buy-in: 400m Run; 2 rounds: 5 Back Squat 40/60kg; Buy-out: 5 Burpee",
+    "imageRequired": true,
+    "format": "ROUNDS_FOR_TIME",
+    "durationMinutes": null,
+    "movements": [
+      { "name": "Run", "distanceMeters": 400 },
+      { "name": "Back Squat", "reps": 10 },
+      { "name": "Burpee", "reps": 5 }
+    ],
+    "blocks": [
+      [{ "name": "Run", "distanceMeters": 400 }],
+      [{ "name": "Back Squat", "reps": 5, "loadDescription": "40kg" }],
+      [{ "name": "Back Squat", "reps": 5, "loadDescription": "60kg" }],
+      [{ "name": "Burpee", "reps": 5 }]
+    ]
+  },
+  {
+    "id": "S3",
+    "source": "Back Squat: 5 reps 70%, 3 reps 80%, 2 reps 85% do 1RM",
+    "imageRequired": true,
+    "format": "STRENGTH",
+    "durationMinutes": null,
+    "movements": [{ "name": "Back Squat", "reps": 10 }],
+    "blocks": [
+      [{ "name": "Back Squat", "reps": 5, "loadDescription": "70% do 1RM" }],
+      [{ "name": "Back Squat", "reps": 3, "loadDescription": "80% do 1RM" }],
+      [{ "name": "Back Squat", "reps": 2, "loadDescription": "85% do 1RM" }]
+    ]
+  },
+  {
+    "id": "S4",
+    "source": "E2MOM 6 min: 400m Run",
+    "format": "E2MOM",
+    "durationMinutes": 6,
+    "movements": [{ "name": "Run", "distanceMeters": 1200 }],
+    "blocks": [
+      [{ "name": "Run", "distanceMeters": 400 }],
+      [{ "name": "Run", "distanceMeters": 400 }],
+      [{ "name": "Run", "distanceMeters": 400 }]
+    ]
+  },
+  {
+    "id": "S5",
+    "source": "For Time\n10 Front Squat",
+    "format": "FOR_TIME",
+    "durationMinutes": null,
+    "movements": [{ "name": "Front Squat", "reps": 10 }]
+  },
+  {
+    "id": "S6",
+    "source": "AMRAP 12: 6 Pull-up + 12 Air Squat",
+    "format": "AMRAP",
+    "durationMinutes": 12,
+    "movements": [
+      { "name": "Pull-up", "reps": 6 },
+      { "name": "Air Squat", "reps": 12 }
+    ]
+  },
+  {
+    "id": "S7",
+    "source": "AMRAP 10: 10 T2B + 20 DU",
+    "format": "AMRAP",
+    "durationMinutes": 10,
+    "movements": [
+      { "name": "Toes to Bar", "reps": 10 },
+      { "name": "Double Under", "reps": 20 }
+    ]
+  },
+  {
+    "id": "S8",
+    "source": "Back Squat 3 sets: 5 reps 70-75% do 1RM, descanso 2 min",
+    "format": "STRENGTH",
+    "durationMinutes": null,
+    "movements": [{ "name": "Back Squat", "reps": 15 }],
+    "blocks": [
+      [{ "name": "Back Squat", "reps": 5, "loadDescription": "70-75% do 1RM" }],
+      [{ "name": "Back Squat", "reps": 5, "loadDescription": "70-75% do 1RM" }],
+      [{ "name": "Back Squat", "reps": 5, "loadDescription": "70-75% do 1RM" }]
+    ]
+  }
+]

@@ -191,6 +191,8 @@ export interface PersonalRecord {
   movementName: string;
   value: number;
   unit: string;
+  recordType?: import('@wod-coach-ai/types').PersonalRecordType;
+  repetitions?: number | null;
   achievedAt: string;
   notes: string | null;
 }
@@ -199,6 +201,8 @@ export interface PersonalRecordInput {
   movementName: string;
   value: number;
   unit: string;
+  recordType?: import('@wod-coach-ai/types').PersonalRecordType;
+  repetitions?: number | null;
   achievedAt?: string;
   notes?: string;
 }
@@ -234,6 +238,8 @@ export interface AthleteContext {
     movementName: string;
     value: number;
     unit: string;
+    recordType?: import('@wod-coach-ai/types').PersonalRecordType;
+    repetitions?: number | null;
     achievedAt: string;
   }>;
   dataSufficiency: DataSufficiency;

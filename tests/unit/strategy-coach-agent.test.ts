@@ -183,22 +183,20 @@ describe('generateStrategy', () => {
   });
   it('accepts all prescribed percentages in execution order', async () => {
     const text = 'Back Squat: 60kg (60%) / 70kg (70%) (PR 100kg)';
-    const send = vi
-      .fn()
-      .mockResolvedValue(
-        textMessage(
-          JSON.stringify({
-            ...supported,
-            loadRecommendation: text,
-            loadCalculations: [
-              {
-                ...calculation,
-                loads: [...calculation.loads, { value: 70, unit: 'kg', percentage: 70 }],
-              },
-            ],
-          }),
-        ),
-      );
+    const send = vi.fn().mockResolvedValue(
+      textMessage(
+        JSON.stringify({
+          ...supported,
+          loadRecommendation: text,
+          loadCalculations: [
+            {
+              ...calculation,
+              loads: [...calculation.loads, { value: 70, unit: 'kg', percentage: 70 }],
+            },
+          ],
+        }),
+      ),
+    );
     expect((await generateStrategy(prescribedInput, send)).loadRecommendation).toBe(text);
   });
   it.each([true, false])(
@@ -206,25 +204,23 @@ describe('generateStrategy', () => {
     async (warn) => {
       const reason = 'Carga adaptada; confirme a escala com o coach.';
       const text = 'Back Squat (adaptado): 50kg (50%) (PR 100kg)';
-      const send = vi
-        .fn()
-        .mockResolvedValue(
-          textMessage(
-            JSON.stringify({
-              ...supported,
-              warnings: warn ? [reason] : [],
-              loadRecommendation: text,
-              loadCalculations: [
-                {
-                  ...calculation,
-                  prescriptionMode: 'adapted',
-                  adaptationReason: reason,
-                  loads: [{ value: 50, unit: 'kg', percentage: 50 }],
-                },
-              ],
-            }),
-          ),
-        );
+      const send = vi.fn().mockResolvedValue(
+        textMessage(
+          JSON.stringify({
+            ...supported,
+            warnings: warn ? [reason] : [],
+            loadRecommendation: text,
+            loadCalculations: [
+              {
+                ...calculation,
+                prescriptionMode: 'adapted',
+                adaptationReason: reason,
+                loads: [{ value: 50, unit: 'kg', percentage: 50 }],
+              },
+            ],
+          }),
+        ),
+      );
       if (warn)
         expect((await generateStrategy(prescribedInput, send)).loadRecommendation).toBe(text);
       else
@@ -243,22 +239,114 @@ describe('generateStrategy', () => {
         ],
       },
     };
-    const send = vi
-      .fn()
-      .mockResolvedValue(
-        textMessage(
-          JSON.stringify({
-            ...supported,
-            warnings: warn ? ['Confirme com o coach se o PR informado representa 1RM.'] : [],
-          }),
-        ),
-      );
-    if (warn)
-      await expect(generateStrategy(input, send)).resolves.toMatchObject({
-        loadRecommendation: supported.loadRecommendation,
-      });
-    else
-      await expect(generateStrategy(input, send)).rejects.toBeInstanceOf(StrategyGenerationError);
+    const send = vi.fn().mockResolvedValue(
+      textMessage(
+        JSON.stringify({
+          ...supported,
+          warnings: warn ? ['Confirme com o coach se o PR informado representa 1RM.'] : [],
+        }),
+      ),
+    );
+    await expect(generateStrategy(input, send)).rejects.toBeInstanceOf(StrategyGenerationError);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+  it('does not bypass typed 1RM by omitting the modality from round descriptions', async () => {
+    const input: StrategyCoachInput = {
+      ...loadInput,
+      wodAnalysis: {
+        ...loadInput.wodAnalysis,
+        movements: [
+          { name: 'Back Squat', category: 'weightlifting', reps: 5, loadDescription: '60% do 1RM' },
+        ],
+        rounds: [
+          {
+            roundNumber: 1,
+            movements: [
+              { name: 'Back Squat', category: 'weightlifting', reps: 5, loadDescription: '60%' },
+            ],
+          },
+        ],
+      },
+    };
+    const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(supported)));
+    await expect(generateStrategy(input, send)).rejects.toBeInstanceOf(StrategyGenerationError);
+  });
+  it.each(['ONE_RM', 'REP_MAX', 'UNKNOWN'] as const)(
+    'requires confirmed 1RM rather than %s for 1RM prescriptions',
+    async (recordType) => {
+      const input: StrategyCoachInput = {
+        ...loadInput,
+        wodAnalysis: {
+          ...loadInput.wodAnalysis,
+          movements: [
+            { name: 'Back Squat', category: 'weightlifting', loadDescription: '60% do 1RM' },
+          ],
+        },
+        athleteContext: {
+          ...loadInput.athleteContext,
+          relevantPersonalRecords: [
+            ...loadInput.athleteContext.relevantPersonalRecords,
+            {
+              ...loadInput.athleteContext.relevantPersonalRecords[0]!,
+              recordType,
+              repetitions: recordType === 'REP_MAX' ? 5 : null,
+            },
+          ],
+        },
+      };
+      const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(supported)));
+      if (recordType === 'ONE_RM')
+        await expect(generateStrategy(input, send)).resolves.toMatchObject({
+          loadRecommendation: supported.loadRecommendation,
+        });
+      else
+        await expect(generateStrategy(input, send)).rejects.toBeInstanceOf(StrategyGenerationError);
+    },
+  );
+  it('accepts execution guidance without inventing 1RM for an unclassified PR', async () => {
+    const input: StrategyCoachInput = {
+      ...loadInput,
+      wodAnalysis: {
+        ...loadInput.wodAnalysis,
+        movements: [
+          { name: 'Back Squat', category: 'weightlifting', loadDescription: '60% do 1RM' },
+        ],
+      },
+    };
+    const send = vi.fn().mockResolvedValue(
+      textMessage(
+        JSON.stringify({
+          ...VALID_STRATEGY,
+          warnings: ['Confirme com o coach se o PR informado representa 1RM.'],
+        }),
+      ),
+    );
+    await expect(generateStrategy(input, send)).resolves.toMatchObject({
+      loadRecommendation: null,
+    });
+  });
+  it('rejects inconsistent 1RM context carrying repetitions for a multi-rep record', async () => {
+    const input: StrategyCoachInput = {
+      ...loadInput,
+      wodAnalysis: {
+        ...loadInput.wodAnalysis,
+        movements: [
+          { name: 'Back Squat', category: 'weightlifting', loadDescription: '60% do 1RM' },
+        ],
+      },
+      athleteContext: {
+        ...loadInput.athleteContext,
+        relevantPersonalRecords: [
+          {
+            ...loadInput.athleteContext.relevantPersonalRecords[0]!,
+            recordType: 'ONE_RM',
+            repetitions: 5,
+          },
+        ],
+      },
+    };
+    const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(supported)));
+    await expect(generateStrategy(input, send)).rejects.toBeInstanceOf(StrategyGenerationError);
   });
   it.each([
     ['missing evidence', { ...supported, loadCalculations: undefined }],

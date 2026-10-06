@@ -159,7 +159,7 @@ nao significa sete bugs criticos comprovados: inclui melhorias e validacoes.
 | C4 | Erros de leitura e respostas tardias no frontend | Corrigido e testado; 8fe5dbb |
 | C5 | Evitar chamadas duplicadas de IA | Bloqueio concorrente comitado: 7f9955c |
 | C6 | Lint preexistente em sw.js | Comitado: a277aa3 |
-| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | C7a: 57a1be3; C7b1: a5526e8; C7b2a: 33b2004; C7b2b: 50fceaf; C7b2c local, avaliacao real pendente |
+| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | C7a: 57a1be3; C7b1: a5526e8; C7b2a: 33b2004; C7b2b: 50fceaf; C7b2c: 21eaa69; C7b3 local, avaliacao real pendente |
 
 ### C1. Timeout e conclusao da resposta da IA
 
@@ -669,8 +669,51 @@ esperava snapshot aninhado; corrigida para formato plano real, incluindo
 rawResponse. Nao houve falha de runtime nessa assertion. Ver resultado final
 da repeticao em auditoria-wod-matriz.md.
 
-Rodada local sem commit, push, deploy, migration na aplicacao ou chamada paga.
+Na execucao original, rodada local sem commit, push, deploy, migration na
+aplicacao ou chamada paga. Posteriormente comitada com autorizacao em 21eaa69.
 Nao encerra auditoria integral: protocolo semantico real ainda nao executado.
+
+### C7b3. Modalidade de PR e Preparacao da Avaliacao Real
+
+Usuario autorizou avancar nas tres frentes restantes. Modalidade implementada
+em banco, schema, API, contexto de estrategia e formulario: UNKNOWN, ONE_RM,
+REP_MAX (repetitions inteiro >= 2), UNBROKEN_REPS (valor inteiro em reps), TIME
+(sec). Carga exige kg/kgs/lb/lbs; outras modalidades nao recebem repetitions.
+Migration 20261005220000_type_personal_records e aditiva; todos os legados
+ficam UNKNOWN, sem inferencia por nome, notas, unidade ou valor. Edicao de
+cliente antigo preserva modalidade/repetitions e valida o estado resultante.
+
+PRs tipados acompanham contexto e snapshots novos CrossFit. loadRecommendation
+com prescricao explicita sobre 1RM exige ONE_RM do movimento e conta correta;
+UNKNOWN/REP_MAX/campo ausente nao servem, mesmo com aviso ou modo adapted.
+Consulta resumo e blocos para impedir omitir 1RM apenas na descricao do round.
+Duplicata UNKNOWN nao esconde um ONE_RM valido. Sem base, orientacao sem peso
+continua aceita; prompt solicita confirmacao e nao estima 1RM. Nao certifica
+autodeclaracao do atleta nem corrige fonte que perdeu o qualificativo 1RM.
+Percentual generico de PR e prescricao desconhecida mantem os limites anteriores.
+
+Formulario exige escolha explicita para classificar; unidades incompativeis
+nao oferecem modalidades impossiveis. Tabela de percentuais somente para ONE_RM;
+historicos separados por modalidade, numero de reps e unidade, evitando misturar
+1RM/5RM. API e UI toleram registros/capturas antigas sem os campos. Sem reescrever
+historico de estrategias, sem alterar prompts/persistencia HYROX; PR e cadastro
+compartilhado, por isso migration e necessaria antes de publicar a API nova.
+
+OCR/fontes complexas: oito gabaritos estruturados e runner offline que confere
+schema/formato/janela/ordem/volumes/blocos/cargas. Coaching: ficha com oito
+dimensoes, nota/motivo/revisor/aceite. Capturas vazias/mocks/sem revisao nunca
+encerram o conjunto. Testes do runner usam apenas fixtures sinteticas e deixam
+isso explicito. Metadados declarados nao sao prova criptografica de chamada real.
+Sem fotos reais, autorizacao especifica de custo ou coach identificado; solicitados
+ao usuario. Nenhuma avaliacao humana atribuida ao assistente nem chamada paga.
+
+427 gerais e 48 PostgreSQL descartavel passaram; schema sem drift, legado
+UNKNOWN preservado, CRUD tipado e compatibilidade de cliente antigo, isolamento
+de usuario, estado/historico/reserva preservados ao rejeitar PR sem modalidade.
+Verificacao E2E e demais comandos finais em auditoria-wod-matriz.md. Prisma
+client regenerado apos liberar DLL mediante reinicio apenas da API local.
+Migration criada/testada somente em banco descartavel; NAO aplicada no banco
+da aplicacao/producao. Sem commit, push ou deploy nesta rodada.
 
 ### Publicacao anterior confirmada
 
@@ -683,7 +726,7 @@ sessao 5432. Uma sessao ociosa foi encerrada com autorizacao. Health/novos asset
 retornaram 200; endpoint protegido retornou 401 sem login. Notas de ausencia de
 deploy/migration nas etapas anteriores descrevem aquelas execucoes historicas.
 Essa publicacao nao inclui C7b2a (commit local 33b2004), C7b2b (commit local
-50fceaf) nem a rodada local C7b2c.
+50fceaf), C7b2c (commit local 21eaa69) nem a rodada local C7b3.
 
 ## Pontos importantes e limites da revisao
 

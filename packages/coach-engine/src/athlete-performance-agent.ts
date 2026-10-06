@@ -1,4 +1,5 @@
 import { movementIdentity } from './movement-identity.js';
+import type { PersonalRecordType } from '@wod-coach-ai/types';
 
 /**
  * AthletePerformanceAgent — pergunta "como este atleta costuma responder
@@ -55,6 +56,8 @@ export interface PersonalRecordEntry {
   movementName: string;
   value: number;
   unit: string;
+  recordType?: PersonalRecordType;
+  repetitions?: number | null;
   achievedAt: Date;
 }
 

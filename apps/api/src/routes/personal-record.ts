@@ -1,14 +1,14 @@
-import type { FastifyInstance } from "fastify";
-import { prisma } from "@wod-coach-ai/database";
-import { personalRecordSchema } from "@wod-coach-ai/validation";
+import type { FastifyInstance } from 'fastify';
+import { prisma } from '@wod-coach-ai/database';
+import { personalRecordSchema } from '@wod-coach-ai/validation';
 
 export default async function personalRecordRoutes(app: FastifyInstance) {
-  app.addHook("onRequest", app.authenticate);
+  app.addHook('onRequest', app.authenticate);
 
-  app.post("/personal-records", async (request, reply) => {
+  app.post('/personal-records', async (request, reply) => {
     const parsed = personalRecordSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
+      return reply.code(400).send({ error: 'Dados inválidos', details: parsed.error.flatten() });
     }
 
     const record = await prisma.personalRecord.create({
@@ -18,28 +18,34 @@ export default async function personalRecordRoutes(app: FastifyInstance) {
     return reply.code(201).send({ record });
   });
 
-  app.get("/personal-records", async (request, reply) => {
+  app.get('/personal-records', async (request, reply) => {
     const records = await prisma.personalRecord.findMany({
       where: { userId: request.user.sub },
-      orderBy: [{ movementName: "asc" }, { achievedAt: "desc" }],
+      orderBy: [{ movementName: 'asc' }, { achievedAt: 'desc' }],
     });
 
     return reply.send({ records });
   });
 
-  app.put("/personal-records/:id", async (request, reply) => {
+  app.put('/personal-records/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const existing = await prisma.personalRecord.findFirst({
       where: { id, userId: request.user.sub },
     });
     if (!existing) {
-      return reply.code(404).send({ error: "PR não encontrado" });
+      return reply.code(404).send({ error: 'PR não encontrado' });
     }
 
-    const parsed = personalRecordSchema.safeParse(request.body);
+    // Older clients omit the new classification; preserve it and validate the resulting record.
+    const body = request.body;
+    const candidate =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? { recordType: existing.recordType, repetitions: existing.repetitions, ...body }
+        : body;
+    const parsed = personalRecordSchema.safeParse(candidate);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Dados inválidos", details: parsed.error.flatten() });
+      return reply.code(400).send({ error: 'Dados inválidos', details: parsed.error.flatten() });
     }
 
     const record = await prisma.personalRecord.update({
@@ -50,14 +56,14 @@ export default async function personalRecordRoutes(app: FastifyInstance) {
     return reply.send({ record });
   });
 
-  app.delete("/personal-records/:id", async (request, reply) => {
+  app.delete('/personal-records/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const existing = await prisma.personalRecord.findFirst({
       where: { id, userId: request.user.sub },
     });
     if (!existing) {
-      return reply.code(404).send({ error: "PR não encontrado" });
+      return reply.code(404).send({ error: 'PR não encontrado' });
     }
 
     await prisma.personalRecord.delete({ where: { id } });

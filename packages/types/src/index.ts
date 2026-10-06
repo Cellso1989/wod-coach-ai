@@ -27,6 +27,15 @@ export const MOVEMENT_CATEGORIES = [
 
 export type MovementCategory = (typeof MOVEMENT_CATEGORIES)[number];
 
+export const PERSONAL_RECORD_TYPES = [
+  "UNKNOWN",
+  "ONE_RM",
+  "REP_MAX",
+  "UNBROKEN_REPS",
+  "TIME",
+] as const;
+export type PersonalRecordType = (typeof PERSONAL_RECORD_TYPES)[number];
+
 /**
  * Biblioteca sugerida de PRs (seção 24). Lista inicial, expansível —
  * PersonalRecord.movementName é texto livre no banco, isto é só a
@@ -74,4 +83,3 @@ export const COMMON_BENCHMARK_WODS = [
   "Cindy",
   "Murph",
 ] as const;
-

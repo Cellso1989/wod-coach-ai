@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { COMMON_BENCHMARK_WODS, COMMON_GYMNASTICS, COMMON_LIFTS } from '@wod-coach-ai/types';
+import {
+  COMMON_BENCHMARK_WODS,
+  COMMON_GYMNASTICS,
+  COMMON_LIFTS,
+  type PersonalRecordType,
+} from '@wod-coach-ai/types';
 import { api, ApiError, type PersonalRecord } from '../lib/api.js';
 import { NavBar } from '../components/NavBar.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
@@ -21,7 +26,19 @@ function interleave(...lists: readonly (readonly string[])[]): string[] {
 
 const SUGGESTED_MOVEMENTS = interleave(COMMON_LIFTS, COMMON_GYMNASTICS, COMMON_BENCHMARK_WODS);
 const PERCENTAGE_STEPS = [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
-const WEIGHT_UNITS = new Set(['kg', 'lb']);
+const WEIGHT_UNITS = new Set(['kg', 'kgs', 'lb', 'lbs']);
+const RECORD_LABELS: Record<PersonalRecordType, string> = {
+  UNKNOWN: 'Tipo nao informado',
+  ONE_RM: '1RM',
+  REP_MAX: 'Carga para repeticoes',
+  UNBROKEN_REPS: 'Repeticoes sem quebra',
+  TIME: 'Tempo',
+};
+function recordLabel(record: PersonalRecord) {
+  return record.recordType === 'REP_MAX'
+    ? `${record.repetitions}RM`
+    : RECORD_LABELS[record.recordType ?? 'UNKNOWN'];
+}
 
 function roundToHalf(n: number): number {
   return Math.round(n * 2) / 2;
@@ -36,6 +53,8 @@ export function PersonalRecordsPage() {
   const [value, setValue] = useState('');
   const [unit, setUnit] = useState('kg');
   const [notes, setNotes] = useState('');
+  const [recordType, setRecordType] = useState<PersonalRecordType>('UNKNOWN');
+  const [repetitions, setRepetitions] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -45,17 +64,28 @@ export function PersonalRecordsPage() {
   const historyByMovement = useMemo(() => {
     const groups = new Map<string, PersonalRecord[]>();
     for (const record of records) {
-      const group = groups.get(record.movementName) ?? [];
+      const key = JSON.stringify([
+        record.movementName,
+        record.recordType ?? 'UNKNOWN',
+        record.repetitions ?? null,
+        record.unit,
+      ]);
+      const group = groups.get(key) ?? [];
       group.push(record);
-      groups.set(record.movementName, group);
+      groups.set(key, group);
     }
     return Array.from(groups.entries())
-      .map(([name, recs]) => {
+      .map(([key, recs]) => {
         const sorted = [...recs].sort(
           (a, b) => new Date(a.achievedAt).getTime() - new Date(b.achievedAt).getTime(),
         );
         const latest = sorted[sorted.length - 1]!;
-        return { name, unit: latest.unit, history: sorted.filter((r) => r.unit === latest.unit) };
+        return {
+          key,
+          name: `${latest.movementName} - ${recordLabel(latest)}`,
+          unit: latest.unit,
+          history: sorted,
+        };
       })
       .filter((group) => group.history.length > 1);
   }, [records]);
@@ -76,6 +106,8 @@ export function PersonalRecordsPage() {
     setValue('');
     setUnit('kg');
     setNotes('');
+    setRecordType('UNKNOWN');
+    setRepetitions('');
     setFormError(null);
   }
 
@@ -88,6 +120,8 @@ export function PersonalRecordsPage() {
         movementName,
         value: Number(value),
         unit,
+        recordType,
+        repetitions: recordType === 'REP_MAX' ? Number(repetitions) : null,
         notes: notes || undefined,
       };
 
@@ -113,6 +147,8 @@ export function PersonalRecordsPage() {
     setValue(String(record.value));
     setUnit(record.unit);
     setNotes(record.notes ?? '');
+    setRecordType(record.recordType ?? 'UNKNOWN');
+    setRepetitions(record.repetitions == null ? '' : String(record.repetitions));
     setFormError(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -184,13 +220,59 @@ export function PersonalRecordsPage() {
             value={value}
             onChange={(event) => setValue(event.target.value)}
           />
-          <SelectInput value={unit} onChange={(event) => setUnit(event.target.value)}>
+          <SelectInput
+            aria-label="Unidade"
+            value={unit}
+            onChange={(event) => {
+              setUnit(event.target.value);
+              setRecordType('UNKNOWN');
+              setRepetitions('');
+            }}
+          >
             <option value="kg">kg</option>
             <option value="lb">lb</option>
             <option value="sec">segundos</option>
             <option value="reps">reps</option>
+            {!['kg', 'lb', 'sec', 'reps'].includes(unit) && <option value={unit}>{unit}</option>}
           </SelectInput>
         </div>
+
+        <label className="block space-y-1 text-sm text-neutral-300">
+          <span>Tipo de PR</span>
+          <SelectInput
+            aria-label="Tipo de PR"
+            value={recordType}
+            onChange={(event) => {
+              setRecordType(event.target.value as PersonalRecordType);
+              setRepetitions('');
+            }}
+          >
+            <option value="UNKNOWN">Tipo nao informado</option>
+            {WEIGHT_UNITS.has(unit.toLowerCase()) && (
+              <option value="ONE_RM">1RM - uma repeticao maxima</option>
+            )}
+            {WEIGHT_UNITS.has(unit.toLowerCase()) && (
+              <option value="REP_MAX">Carga para varias repeticoes</option>
+            )}
+            {unit === 'reps' && <option value="UNBROKEN_REPS">Repeticoes sem quebra</option>}
+            {unit === 'sec' && <option value="TIME">Tempo de benchmark</option>}
+          </SelectInput>
+        </label>
+        {recordType === 'REP_MAX' && (
+          <label className="block space-y-1 text-sm text-neutral-300">
+            <span>Repeticoes na carga registrada</span>
+            <TextInput
+              aria-label="Repeticoes na carga registrada"
+              type="number"
+              min="2"
+              max="10000"
+              step="1"
+              required
+              value={repetitions}
+              onChange={(event) => setRepetitions(event.target.value)}
+            />
+          </label>
+        )}
 
         <TextInput
           type="text"
@@ -218,14 +300,14 @@ export function PersonalRecordsPage() {
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-neutral-300">Evolucao dos PRs</h2>
           {historyByMovement.map((group) => {
-            const isOpen = expandedMovements.has(group.name);
+            const isOpen = expandedMovements.has(group.key);
             return (
               <div
-                key={group.name}
+                key={group.key}
                 className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
               >
                 <button
-                  onClick={() => toggleMovement(group.name)}
+                  onClick={() => toggleMovement(group.key)}
                   className="flex w-full items-center justify-between text-left"
                 >
                   <span className="font-medium">{group.name}</span>
@@ -246,7 +328,8 @@ export function PersonalRecordsPage() {
 
       <ul className="space-y-2">
         {records.map((record) => {
-          const isWeight = WEIGHT_UNITS.has(record.unit);
+          const isWeight =
+            WEIGHT_UNITS.has(record.unit.toLowerCase()) && record.recordType === 'ONE_RM';
           const isExpanded = expandedId === record.id;
           return (
             <li
@@ -257,6 +340,8 @@ export function PersonalRecordsPage() {
                 <div className="min-w-0">
                   <p className="truncate font-medium">{record.movementName}</p>
                   <p className="text-sm text-neutral-400">
+                    {recordLabel(record)}
+                    {' - '}
                     {record.value} {record.unit}
                     {record.notes ? ` - ${record.notes}` : ''}
                   </p>

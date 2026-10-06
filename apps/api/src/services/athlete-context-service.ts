@@ -121,6 +121,8 @@ export async function getAthleteContextForWod(
       movementName: pr.movementName,
       value: pr.value,
       unit: pr.unit,
+      recordType: pr.recordType,
+      repetitions: pr.repetitions,
       achievedAt: pr.achievedAt,
     })),
   });

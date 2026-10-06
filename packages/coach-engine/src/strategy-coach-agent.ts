@@ -162,9 +162,12 @@ Regras críticas:
   conhecido. Se a execucao exigir escala, use prescriptionMode adapted e uma
   adaptationReason curta tambem presente, identica, em warnings; nao mude a
   prescricao silenciosamente. No texto a entrada sera "Movement (adaptado): ...".
-  Em percentuais de 1RM, o contexto so informa PR de carga, nao sua modalidade:
-  inclua em warnings exatamente: "Confirme com o coach se o PR informado representa 1RM."
-  Nao afirme que o PR e 1RM.
+  Em percentuais de 1RM, use somente PR com recordType ONE_RM. UNKNOWN, campo
+  ausente ou REP_MAX nao provam 1RM; nao estime/converta 1RM desses registros.
+  Sem ONE_RM proprio use loadRecommendation null e aviso para confirmar a base.
+  recordType UNBROKEN_REPS identifica capacidade sem quebra; TIME e tempo de
+  benchmark e REP_MAX e carga para repetitions repeticoes. Nao trate recordes
+  antigos UNKNOWN como capacidade sem quebra comprovada nem como 1RM.
 - loadCalculations e evidencia interna obrigatoria para loadRecommendation nao nula.
   Cada movement deve existir no WOD e ter seu proprio PR de carga no contexto.
   Copie prValue/prUnit desse PR, normalizando kgs para kg e lbs para lb; nao converta

@@ -111,6 +111,14 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
   }
 
   it('backfills legacy snapshots without guessing AI input or analysis linkage, and leaves HYROX intact', async () => {
+    expect(
+      await prisma.personalRecord.findUniqueOrThrow({ where: { id: 'version-legacy-pr' } }),
+    ).toMatchObject({
+      value: 100,
+      unit: 'kg',
+      recordType: 'UNKNOWN',
+      repetitions: null,
+    });
     const versions = (await request('GET', '/versions')).json();
     expect(versions.analysisVersions[0]).toMatchObject({
       version: 1,
@@ -951,12 +959,40 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
         (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
       ).toBe(200);
       const before = await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include });
-      for (const fault of ['order', 'missing block', 'missing warning', 'unannounced adaptation']) {
+      mocks.sendMessage.mockResolvedValue({
+        text: JSON.stringify({
+          ...STRATEGY,
+          warnings: [warning],
+          loadRecommendation: 'Back Squat: 70kg (70%) / 80kg (80%) / 85kg (85%) (PR 100kg)',
+          loadCalculations: [
+            {
+              movement: 'Back Squat',
+              prValue: 100,
+              prUnit: 'kg',
+              loads: [70, 80, 85].map((p) => ({ value: p, unit: 'kg', percentage: p })),
+            },
+          ],
+        }),
+      });
+      const untypedCalls = mocks.sendMessage.mock.calls.length;
+      expect(
+        (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+      ).toBe(502);
+      expect(mocks.sendMessage.mock.calls.length - untypedCalls).toBe(2);
+      expect(await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include })).toEqual(
+        before,
+      );
+      expect(await prisma.wodGenerationLease.count({ where: { wodId: fresh.id } })).toBe(0);
+      await prisma.personalRecord.update({
+        where: { id: record.id },
+        data: { recordType: 'ONE_RM' },
+      });
+      for (const fault of ['order', 'missing block', 'unannounced adaptation']) {
         const percentages = fault === 'order' ? [85, 80, 70] : [70];
         const adapted = fault === 'unannounced adaptation';
         const output = {
           ...STRATEGY,
-          warnings: fault === 'missing warning' ? [] : [warning],
+          warnings: [warning],
           loadRecommendation: `Back Squat${adapted ? ' (adaptado)' : ''}: ${percentages.map((p) => `${p}kg (${p}%)`).join(' / ')} (PR 100kg)`,
           loadCalculations: [
             {
@@ -1008,10 +1044,105 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
           rawResponse: { loadRecommendation: output.loadRecommendation },
         });
         expect(JSON.stringify(saved.snapshot)).not.toContain('loadCalculations');
+        expect(saved.inputSnapshot).toMatchObject({
+          athleteContext: {
+            relevantPersonalRecords: [
+              expect.objectContaining({
+                movementName: 'Back-Squats',
+                recordType: 'ONE_RM',
+                repetitions: null,
+              }),
+            ],
+          },
+        });
       }
     } finally {
       await prisma.personalRecord.delete({ where: { id: record.id } });
       await prisma.wod.delete({ where: { id: fresh.id } });
+    }
+  });
+
+  it('creates and edits PR classifications while preserving typed records for older clients', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/personal-records',
+      headers,
+      payload: {
+        movementName: 'Test lift',
+        value: 100,
+        unit: 'kg',
+        recordType: 'REP_MAX',
+        repetitions: 5,
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const record = created.json().record;
+    try {
+      expect(record).toMatchObject({ recordType: 'REP_MAX', repetitions: 5 });
+      const url = `/api/personal-records/${record.id}`;
+      const input = { movementName: 'Test lift', value: 110, unit: 'kg' };
+      expect(
+        (await app.inject({ method: 'PUT', url, headers, payload: input })).json().record,
+      ).toMatchObject({
+        value: 110,
+        recordType: 'REP_MAX',
+        repetitions: 5,
+      });
+      const before = await prisma.personalRecord.findUniqueOrThrow({ where: { id: record.id } });
+      const foreignToken = [{ alg: 'HS256', typ: 'JWT' }, { sub: 'other-athlete' }]
+        .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
+        .join('.');
+      const foreignHeaders = {
+        authorization: `Bearer ${foreignToken}.${createHmac('sha256', process.env.JWT_SECRET!).update(foreignToken).digest('base64url')}`,
+      };
+      for (const method of ['PUT', 'DELETE'] as const) {
+        expect(
+          (
+            await app.inject({
+              method,
+              url,
+              headers: foreignHeaders,
+              ...(method === 'PUT' ? { payload: input } : {}),
+            })
+          ).statusCode,
+        ).toBe(404);
+        expect(await prisma.personalRecord.findUniqueOrThrow({ where: { id: record.id } })).toEqual(
+          before,
+        );
+      }
+      for (const change of [
+        { unit: 'reps' },
+        { recordType: 'ONE_RM' },
+        { recordType: 'REP_MAX', repetitions: 1 },
+      ]) {
+        expect(
+          (await app.inject({ method: 'PUT', url, headers, payload: { ...input, ...change } }))
+            .statusCode,
+        ).toBe(400);
+        expect(await prisma.personalRecord.findUniqueOrThrow({ where: { id: record.id } })).toEqual(
+          before,
+        );
+      }
+      expect(
+        (
+          await app.inject({
+            method: 'PUT',
+            url,
+            headers,
+            payload: { ...input, recordType: 'ONE_RM', repetitions: null },
+          })
+        ).json().record,
+      ).toMatchObject({ recordType: 'ONE_RM', repetitions: null });
+      expect(
+        (await app.inject({ method: 'PUT', url, headers, payload: input })).json().record,
+      ).toMatchObject({ recordType: 'ONE_RM', repetitions: null });
+      expect(
+        (await app.inject({ method: 'GET', url: '/api/personal-records', headers })).json().records,
+      ).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: record.id, recordType: 'ONE_RM' })]),
+      );
+    } finally {
+      await prisma.personalRecord.delete({ where: { id: record.id } });
     }
   });
 

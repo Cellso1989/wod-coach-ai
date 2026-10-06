@@ -137,7 +137,35 @@ permanece somente aviso preexistente de Fast Refresh em ui.tsx. Primeira rodada
 PG teve 46 sucessos e falha na assertion nova do formato de snapshot, corrigida;
 repeticao passou 47/47. Containers temporarios removidos. Endpoints E2E e IA
 simulados; nao houve chamada paga, mudanca de UI/banco da aplicacao, commit,
-push ou deploy. Auditoria integral depende da avaliacao semantica real descrita.
+push ou deploy na execucao original. Posteriormente comitada com autorizacao
+em 21eaa69. Auditoria integral depende da avaliacao semantica real descrita.
+
+## Modalidade e Avaliacao C7b3
+
+427 gerais (38 unitarios novos: 15 de cadastro, seis de estrategia e 17 do
+runner offline), 48 PostgreSQL descartavel com schema limpo. Cadastro legado
+criado antes da migration permanece UNKNOWN; CRUD real verifica tipo/reps,
+validacao de unidades, compatibilidade de cliente antigo e isolamento de usuario.
+Geracao rejeita carga sobre 1RM nao classificado sem alterar snapshots/reserva;
+ONE_RM real do movimento e levado ao contexto/snapshot novo.
+
+Novos E2E em 390/1280 cobrem legado sem %, classificacao ONE_RM, REP_MAX com
+repeticoes, edicao/recarga e troca de unidade, sem overflow horizontal. Capturas
+inspecionadas. Primeira execucao isolada passou 2/2; execucao conjunta passou
+25/26, falhando somente ao gravar screenshot no caminho output reutilizado
+(UNKNOWN: unknown error, open pr-classification-1280.png). Repeticao isolada
+passou 2/2, sem alterar assertions. Screenshot passou a testInfo.outputPath,
+para isolar artefatos por teste; repeticao completa passou 26/26 com dois workers
+e trace. Typecheck/build/lint passaram; aviso preexistente ui.tsx permanece.
+ESLint dos testes novos e runner passou, git diff --check limpo. Containers PG
+removidos. Runner com arquivo vazio exibiu pending e S1-S8 pendentes; nenhum
+resultado de provedor/coach foi inventado. PowerShell reportou exit 1 para o
+CLI com pendencias; o script atribui exitCode 2 conforme contrato do runner.
+
+Runner: corpus real vazio continua pending; testes sinteticos nao viram evidencia
+de OCR/coaching. CLI nao faz chamadas pagas ou acessa banco. Precisa de fotos,
+teto de custo e coach para rodar o protocolo real. Migration aditiva apenas em
+PostgreSQL descartavel, nao no banco da aplicacao. Nao houve commit/push/deploy.
 
 O vinculo do PR e a conta de um percentual declarado nao provam aderencia ao
 percentual prescrito por bloco, qualidade do coaching ou equivalencia de 1RM.

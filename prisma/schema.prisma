@@ -291,6 +291,14 @@ model WodResult {
 
 // PRs de CrossFit (seção 24). movementName é texto livre para permitir
 // expansão da biblioteca sem migração; o frontend sugere uma lista comum.
+enum PersonalRecordType {
+  UNKNOWN
+  ONE_RM
+  REP_MAX
+  UNBROKEN_REPS
+  TIME
+}
+
 model PersonalRecord {
   id     String @id @default(uuid())
   userId String
@@ -299,6 +307,8 @@ model PersonalRecord {
   movementName String
   value        Float
   unit         String
+  recordType   PersonalRecordType @default(UNKNOWN)
+  repetitions  Int?
   achievedAt   DateTime @default(now())
   notes        String?
 

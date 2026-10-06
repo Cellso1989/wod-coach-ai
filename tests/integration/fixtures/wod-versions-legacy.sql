@@ -1,5 +1,7 @@
 INSERT INTO "users" ("id", "email", "passwordHash", "name", "updatedAt")
 VALUES ('version-legacy-user', 'legacy@example.test', 'test-only', 'Legacy athlete', CURRENT_TIMESTAMP);
+INSERT INTO "personal_records" ("id", "userId", "movementName", "value", "unit", "updatedAt")
+VALUES ('version-legacy-pr', 'version-legacy-user', 'Legacy lift', 100, 'kg', CURRENT_TIMESTAMP);
 INSERT INTO "wods" ("id", "userId", "date", "sourceType", "discipline", "rawText", "updatedAt")
 VALUES ('version-legacy-wod', 'version-legacy-user', CURRENT_TIMESTAMP, 'TEXT', 'CROSSFIT', 'AMRAP 15: 10 T2B', CURRENT_TIMESTAMP),
        ('version-legacy-hyrox', 'version-legacy-user', CURRENT_TIMESTAMP, 'TEXT', 'HYROX', 'Run 1000m', CURRENT_TIMESTAMP);

@@ -68,29 +68,31 @@ export function validateLoadCalculations(
     } else if (calculation.adaptationReason) {
       issue('Use prescriptionMode adapted ao informar adaptationReason.');
     }
+    const items = input.wodAnalysis.rounds?.length
+      ? input.wodAnalysis.rounds.flatMap((round) => round.movements)
+      : input.wodAnalysis.movements;
+    const prescriptions = items.filter((item) => key(item.name) === key(calculation.movement));
+    const requiresOneRm = [
+      ...prescriptions,
+      ...input.wodAnalysis.movements.filter((item) => key(item.name) === key(calculation.movement)),
+    ].some((item) => /\b1RM\b/i.test(item.loadDescription ?? ''));
     const record = input.athleteContext.relevantPersonalRecords.find(
       (record) =>
         key(record.movementName) === key(calculation.movement) &&
         Number.isFinite(record.value) &&
         record.value > 0 &&
         record.value === calculation.prValue &&
-        massUnit(record.unit) === calculation.prUnit,
+        massUnit(record.unit) === calculation.prUnit &&
+        (!requiresOneRm || (record.recordType === 'ONE_RM' && record.repetitions == null)),
     );
     if (!movements.has(key(calculation.movement)) || !record) {
       issue(
         `Use o PR real do proprio movimento ${calculation.movement}, com valor e unidade originais. Um PR de outro movimento nao serve como base.`,
       );
     }
-    const items = input.wodAnalysis.rounds?.length
-      ? input.wodAnalysis.rounds.flatMap((round) => round.movements)
-      : input.wodAnalysis.movements;
-    const prescriptions = items.filter((item) => key(item.name) === key(calculation.movement));
-    if (
-      prescriptions.some((item) => /\b1RM\b/i.test(item.loadDescription ?? '')) &&
-      !output.warnings.includes('Confirme com o coach se o PR informado representa 1RM.')
-    ) {
+    if (requiresOneRm && record?.recordType !== 'ONE_RM') {
       issue(
-        'Contexto nao identifica modalidade do PR. Inclua em warnings: Confirme com o coach se o PR informado representa 1RM.',
+        'Percentual de 1RM exige PR do proprio movimento explicitamente classificado ONE_RM. Sem essa base use loadRecommendation null e solicite confirmacao, sem estimar 1RM a partir de outro recorde.',
       );
     }
     const percentages = prescriptions.map(
