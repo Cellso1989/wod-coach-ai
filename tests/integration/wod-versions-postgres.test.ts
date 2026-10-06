@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from '../../packages/database/dist/index.js';
 import { buildApp } from '../../apps/api/src/app.js';
+import { simpleSourceCase } from '../fixtures/wod-format-cases.js';
 
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
@@ -525,6 +526,55 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
           before,
         );
         expect(await prisma.wodGenerationLease.count({ where: { wodId: fresh.id } })).toBe(0);
+      } finally {
+        await prisma.wod.delete({ where: { id: fresh.id } });
+      }
+    });
+
+    it(`rejects source mismatches without changing real data (reanalysis: ${reanalysis})`, async () => {
+      const fresh = await prisma.wod.create({
+        data: {
+          userId: 'version-legacy-user',
+          date: new Date(),
+          sourceType: 'TEXT',
+          rawText: simpleSourceCase.rawText,
+        },
+      });
+      const url = `/api/wods/${fresh.id}`;
+      const include = {
+        analysis: { include: { movements: true } },
+        strategy: true,
+        analysisVersions: true,
+        strategyVersions: true,
+        result: true,
+      } as const;
+      try {
+        if (reanalysis) {
+          mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(simpleSourceCase.analysis) });
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+          ).toBe(200);
+          mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
+          ).toBe(200);
+        }
+        const before = await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include });
+        for (const fault of ['omission', 'volume']) {
+          const analysis = structuredClone(simpleSourceCase.analysis);
+          if (fault === 'omission') analysis.movements.shift();
+          else analysis.movements[0]!.reps = 100;
+          mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(analysis) });
+          const calls = mocks.sendMessage.mock.calls.length;
+          expect(
+            (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
+          ).toBe(502);
+          expect(mocks.sendMessage.mock.calls.length - calls).toBe(2);
+          expect(await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include })).toEqual(
+            before,
+          );
+          expect(await prisma.wodGenerationLease.count({ where: { wodId: fresh.id } })).toBe(0);
+        }
       } finally {
         await prisma.wod.delete({ where: { id: fresh.id } });
       }

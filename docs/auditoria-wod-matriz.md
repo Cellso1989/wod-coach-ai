@@ -33,6 +33,7 @@ tests/integration/wod-reanalysis.test.ts.
 | INTERVAL | Tres intervalos de Run com descanso | Tres blocos; volume total separado do volume por bloco |
 | Blocos mistos | Buy-in, dois rounds 40/60kg, buy-out | Quatro blocos, labels e cargas diferentes preservados |
 | Entrada longa | Texto de 10000 caracteres com AMRAP ao final | Mensagem ao analisador e fonte salva sem corte |
+| Fonte simples (C7b2a) | For Time, linhas 10 Burpees / 400m Run / 20 cal Row | Movimentos/volumes do resumo correspondem a fonte; snapshot de estrategia preservado |
 
 ## Rejeicoes e recuperacao
 
@@ -77,7 +78,19 @@ de navegacao passou 3/3 isolado, repeticao com dois workers passou 24/24.
 Ocorrencia sem causa confirmada documentada em auditoria-wod-pendencias.md;
 nenhuma assertion ou espera de UI alterada para esconder a falha.
 
-C7b2 permanece pendente: fidelidade semantica entre fonte/analise e entre
+C7b2a acrescenta comparacao deterministica somente para fontes simples
+integralmente reconhecidas: heading For Time/Chipper/AMRAP N min e uma linha
+por movimento do vocabulario fechado. Omissao, movimento inventado, reps,
+metros, calorias e unidade divergentes sao rejeitados; null nao substitui volume
+explicito. Texto original nao pode ser sobrescrito pela transcricao gerada.
+Notas/cargas/fases/escadas, nomes repetidos/desconhecidos ou Row/Run/HSW sem
+unidade nao sao interpretados parcialmente. Testes tambem garantem esses limites.
+20 unitarios novos, quatro API, dois PostgreSQL (omissao/volume inicial/reanalise)
+e dois casos positivos API da matriz. Total: 312 gerais e 44 PG sem drift;
+typecheck/build/lint e os 24 E2E anteriores passaram (dois workers, trace,
+endpoints simulados). Esta etapa nao foi comitada nem publicada.
+
+C7b2 restante permanece pendente: fidelidade semantica entre fonte/analise e entre
 analise/PRs/perfil/estrategia. Ter um PR de carga nao valida todos os pesos,
 movimentos, percentuais ou conversoes sugeridos, nem impede pesos inventados
 em outros campos de texto. Fonte e resposta precisam de exemplos representativos,

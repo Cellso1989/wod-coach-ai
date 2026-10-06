@@ -159,7 +159,7 @@ nao significa sete bugs criticos comprovados: inclui melhorias e validacoes.
 | C4 | Erros de leitura e respostas tardias no frontend | Corrigido e testado; 8fe5dbb |
 | C5 | Evitar chamadas duplicadas de IA | Bloqueio concorrente comitado: 7f9955c |
 | C6 | Lint preexistente em sw.js | Comitado: a277aa3 |
-| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | C7a comitada: 57a1be3; C7b1 testada, aguarda commit; C7b2 pendente |
+| C7 | Matriz de formatos e integridade de movimentos/volumes/cargas | C7a: 57a1be3; C7b1: a5526e8; C7b2a testada, aguarda commit; demais limites C7b2 pendentes |
 
 ### C1. Timeout e conclusao da resposta da IA
 
@@ -517,9 +517,9 @@ causada por este agente (endpoints desses E2E sao simulados).
 Runner PostgreSQL repetido diretamente apos codigo de saida anomalo da
 invocacao com pipeline: 42/42 novamente, diff limpo e exit 0; containers
 descartaveis removidos. Sem provedor pago, migracao na aplicacao, push ou deploy.
-Corrigida/testada neste escopo, aguardando aprovacao para commit.
+Corrigida/testada neste escopo e comitada: a5526e8.
 
-### C7b2. Fidelidade semantica restante - pendente
+### C7b2. Fidelidade semantica restante - parcialmente tratada
 
 Ainda nao ha garantia de que um JSON internamente coerente corresponde ao
 WOD textual/imagem original. Cargas variaveis sao descricoes livres. C7b1
@@ -534,6 +534,60 @@ Tratar em etapa separada: exemplos de fonte e atleta, aliases e substituicoes
 legitimas precisam fundamentar guardas sem rejeitar adaptacoes corretas.
 Nao ha aprovacao para usar provedor pago ou migrar o banco da aplicacao.
 Nao considerar C7 inteira nem a auditoria integral encerradas.
+
+### C7b2a. Fonte simples com movimentos e volumes explicitos
+
+Nove regressoes falharam antes da correcao: JSON internamente coerente omitia
+ou inventava movimentos, alterava reps/metros/calorias ou trocava unidade, e
+era aceito por analyzeWod. Transcricao gerada tambem podia contradizer texto
+original sem rejeicao. Evidencia: wod-analyzer-agent.ts e
+tests/unit/wod-analysis-integrity.test.ts.
+
+validateSimpleSourceIntegrity reutiliza parseMovementLine e compara apenas
+fontes integralmente reconhecidas: primeira linha For Time, Chipper ou AMRAP N
+min, seguida de uma linha por movimento com volume positivo. Vocabulario
+fechado: Burpee(s), Row/Rowing, Run/Running, Thruster(s), Air Squat(s), Pull-up(s),
+T2B/Toes-to-Bar e HSW/Handstand Walk. Metros/calorias/reps explicitos preservam
+unidade; Row/Run/HSW sem unidade nao sao interpretados. Nomes repetidos,
+linhas extras, notas, cargas, escadas, fases ou nomes fora desse vocabulario
+desativam esta verificacao por inteiro, sem interpretacao parcial.
+
+Compara conjunto de movimentos e volumes do resumo, rejeitando metricas extras
+ou null para volume explicito. Nao altera nomes/dados retornados nem substitui
+movimentos silenciosamente. Texto original e extractedText sao conferidos
+separadamente no retry corretivo existente; duas respostas invalidas retornam
+502 antes de qualquer gravacao. Prompt alinhado, sem alterar contrato ou HYROX.
+
+Cobertura: 20 unitarios novos; quatro casos API de rejeicao inicial/reanalise;
+dois casos PostgreSQL testam omissao e volume com preservacao integral de
+fonte, score, analise, estrategia e versoes, e liberacao da reserva. Novo caso
+positivo da matriz confirma passagem da estrutura ate o snapshot da estrategia.
+312 testes gerais passaram; 44 PG opt-in foram pulados no comando geral e
+passaram separadamente em banco descartavel, com migrate diff sem diferenca.
+Typecheck, build, lint global e dos arquivos alterados passaram; aviso ui.tsx
+permanece. Os 24 E2E anteriores passaram com dois workers e trace, sem alterar
+testes/esperas; usam endpoints simulados. Container descartavel removido.
+Sem chamada paga, migration nova ou alteracao de producao nesta etapa.
+Resultado local testado; aguarda aprovacao para commit.
+
+Limites: nao valida ordem dos movimentos, formato/duracao, categorias, cargas,
+percentuais, coaching ou substituicoes da estrategia. Em imagens compara com
+a transcricao do modelo, nao prova fidelidade OCR. Mesmo fontes reconhecidas
+podem conter cargas inventadas em loadDescription; guardas de carga continuam
+pendentes. Fontes fora da gramatica limitada mantem apenas as protecoes anteriores.
+Nao considerar C7b2 integral nem a auditoria encerradas.
+
+### Publicacao anterior confirmada
+
+Em 2026-10-05, apos autorizacao explicita, os commits ate a5526e8 foram enviados
+e publicados no Render (dep-db23bi4s728c73au5g5g). As migrations
+20261005120000_add_wod_versions e 20261005180000_add_wod_generation_leases foram
+aplicadas em producao. DATABASE_URL usa pool transacional 6543, pgbouncer=true,
+connection_limit=3, pool_timeout=20, schema=public; DIRECT_URL manteve pool de
+sessao 5432. Uma sessao ociosa foi encerrada com autorizacao. Health/novos assets
+retornaram 200; endpoint protegido retornou 401 sem login. Notas de ausencia de
+deploy/migration nas etapas anteriores descrevem aquelas execucoes historicas.
+Essa publicacao nao inclui C7b2a, ainda local e sem aprovacao de commit/deploy.
 
 ## Pontos importantes e limites da revisao
 

@@ -138,6 +138,9 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 
 ## Deploy
 
+- Em 2026-10-05, commit a5526e8 (C7b1 e correcoes anteriores) foi enviado e publicado: Render dep-db23bi4s728c73au5g5g, migrations de versoes/reservas aplicadas. DATABASE_URL passou ao pool transacional 6543 com pgbouncer=true, connection_limit=3, pool_timeout=20 e schema=public; DIRECT_URL manteve sessao 5432. Uma sessao ociosa encerrada com autorizacao. Health/novos assets 200 e endpoint protegido 401. Notas anteriores de ausencia de publicacao sao historicas.
+- C7b2a local, ainda sem commit/deploy: guarda de fonte simples integralmente reconhecida, com heading For Time/Chipper/AMRAP N min e uma linha por movimento conhecido. Reutiliza parser existente; confere conjunto e volumes/unidades do resumo sem interpretar parcialmente notas, cargas, escadas, fases ou nomes desconhecidos. Retry corretivo/502 preservam estado. 312 testes gerais e 44 PostgreSQL descartavel passaram, sem drift; typecheck/build/lint passaram. Cargas/percentuais, ordem, categorias, OCR real e adaptacoes do coaching continuam pendentes; auditoria nao encerrada. Detalhes em docs/auditoria-wod-pendencias.md.
+
 - Fluxo atual: commit em `main` e `git push` para GitHub.
 - O Render publica automaticamente apos o push.
 - Apos deploy, validar:

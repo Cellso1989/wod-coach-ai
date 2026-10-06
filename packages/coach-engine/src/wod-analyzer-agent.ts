@@ -91,6 +91,9 @@ Regra crítica sobre "rounds" (WODs com estrutura por round):
 Regras críticas:
 - "movements" deve conter ao menos um movimento identificado no treino. Cada round
   declarado tambem deve conter ao menos um movimento. Nao retorne listas vazias.
+- Em um bloco simples com volumes explicitos, preserve todos os movimentos e suas
+  reps, metros ou calorias da fonte. Nao substitua movimentos na analise nem use
+  null para um volume legivel; adaptacoes do atleta pertencem a estrategia.
 - Seja OBJETIVO E CONCISO. O atleta lê isso no celular, no meio do treino. "stimulus"
   deve ser uma expressão curta (2-4 palavras, ex: "engine + grip", "força pesada"), e
   cada item de "warnings" deve ser uma frase curta e direta, sem explicações longas.
@@ -201,6 +204,89 @@ function movementKey(name: string): string {
   if (key === 't2b') return 'toes to bar';
   if (key === 'hsw') return 'handstand walk';
   return key;
+}
+
+function simpleSourceMovementKey(name: string): string | null {
+  const key = movementKey(name);
+  const aliases: Record<string, string> = {
+    burpee: 'burpee',
+    burpees: 'burpee',
+    row: 'row',
+    rowing: 'row',
+    run: 'run',
+    running: 'run',
+    thruster: 'thruster',
+    thrusters: 'thruster',
+    'air squat': 'air squat',
+    'air squats': 'air squat',
+    'pull up': 'pull up',
+    'pull ups': 'pull up',
+    'toes to bar': 'toes to bar',
+    'handstand walk': 'handstand walk',
+  };
+  return Object.hasOwn(aliases, key) ? aliases[key]! : null;
+}
+
+function validateSimpleSourceIntegrity(
+  output: WodAnalysisOutput,
+  source: string,
+  ctx: RefinementCtx,
+): void {
+  const lines = source
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!/^(?:for time|chipper|amrap\s+[1-9]\d*\s*min(?:utes|utos)?)\s*:?$/i.test(lines[0] ?? ''))
+    return;
+  if (lines.length < 2) return;
+  const parsed = lines.slice(1).map(parseMovementLine);
+  // Compare only a fully recognized single block; never partially parse phases or loads.
+  if (
+    parsed.some(
+      (line) =>
+        !line ||
+        !simpleSourceMovementKey(line.name) ||
+        line.value <= 0 ||
+        (line.unit == null &&
+          ['row', 'run', 'handstand walk'].includes(simpleSourceMovementKey(line.name)!)),
+    )
+  )
+    return;
+  const expected = new Map(parsed.map((line) => [simpleSourceMovementKey(line!.name), line!]));
+  if (expected.size !== parsed.length) return;
+  const actual = new Map(
+    output.movements.map((item) => [simpleSourceMovementKey(item.name), item]),
+  );
+  if (
+    actual.size !== output.movements.length ||
+    actual.size !== expected.size ||
+    [...actual.keys()].some((key) => !expected.has(key))
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['movements'],
+      message:
+        'Preserve exatamente os movimentos do bloco simples da fonte, sem omissoes ou substituicoes.',
+    });
+  }
+  for (const [key, line] of expected) {
+    const item = actual.get(key);
+    if (!item) continue;
+    const metric =
+      line.unit === 'distance' ? 'distanceMeters' : line.unit === 'calories' ? 'calories' : 'reps';
+    if (
+      item[metric] !== line.value ||
+      (['reps', 'distanceMeters', 'calories'] as const).some(
+        (other) => other !== metric && item[other] != null,
+      )
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['movements'],
+        message: `Preserve o volume explicito e a unidade de ${line.name} na fonte (${line.value} ${metric}).`,
+      });
+    }
+  }
 }
 
 function validateRoundIntegrity(output: WodAnalysisOutput, ctx: RefinementCtx): void {
@@ -381,6 +467,9 @@ export async function analyzeWod(
         .pipe(wodAnalysisOutputSchema)
         .superRefine((output, ctx) => {
           validateRoundIntegrity(output, ctx);
+          for (const source of [input.rawText, output.extractedText]) {
+            if (source?.trim()) validateSimpleSourceIntegrity(output, source, ctx);
+          }
           // Check each source separately: extracted text may repeat the user's text.
           const expected = Math.max(
             executionBlockCount(input.rawText ?? ''),

@@ -19,15 +19,13 @@ describe('analysis internal integrity', () => {
     'rejects inconsistent %s totals',
     async (metric) => {
       const item = { name: 'Row', category: 'monostructural', [metric]: 10 };
-      const send = vi
-        .fn()
-        .mockResolvedValue({
-          text: JSON.stringify({
-            ...valid,
-            movements: [{ ...item, [metric]: 200 }],
-            rounds: [1, 2].map((roundNumber) => ({ roundNumber, movements: [item] })),
-          }),
-        });
+      const send = vi.fn().mockResolvedValue({
+        text: JSON.stringify({
+          ...valid,
+          movements: [{ ...item, [metric]: 200 }],
+          rounds: [1, 2].map((roundNumber) => ({ roundNumber, movements: [item] })),
+        }),
+      });
       await expect(analyzeWod({ rawText: 'Row intervals' }, send)).rejects.toBeInstanceOf(
         WodAnalysisError,
       );
@@ -95,11 +93,9 @@ describe('analysis internal integrity', () => {
       { name: 'Thruster', category: 'weightlifting', reps: 20 },
     ],
   ])('does not reconstruct ambiguous rounds: %s', async (_name, rawText, aggregate) => {
-    const send = vi
-      .fn()
-      .mockResolvedValue({
-        text: JSON.stringify({ ...valid, rounds: null, movements: [aggregate] }),
-      });
+    const send = vi.fn().mockResolvedValue({
+      text: JSON.stringify({ ...valid, rounds: null, movements: [aggregate] }),
+    });
     await expect(analyzeWod({ rawText }, send)).rejects.toBeInstanceOf(WodAnalysisError);
     expect(send).toHaveBeenCalledTimes(2);
   });
@@ -110,5 +106,123 @@ describe('analysis internal integrity', () => {
     expect(
       (await analyzeWod({ rawText: '2 rounds: Thrusters' }, send)).movements[0].reps,
     ).toBeNull();
+  });
+});
+
+describe('analysis fidelity to a simple explicit source', () => {
+  const rawText = 'For Time\n10 Burpees\n400m Run\n20 cal Row';
+  const sourceAnalysis = {
+    ...valid,
+    format: 'FOR_TIME',
+    rounds: null,
+    movements: [
+      { name: 'Burpee', category: 'conditioning', reps: 10 },
+      { name: 'Run', category: 'monostructural', distanceMeters: 400 },
+      { name: 'Row', category: 'monostructural', calories: 20 },
+    ],
+  };
+
+  it.each([
+    ['omitted movement', sourceAnalysis.movements.slice(1)],
+    ['invented movement', [...sourceAnalysis.movements, { ...movement, reps: 10 }]],
+    ['changed reps', sourceAnalysis.movements.map((m) => (m.reps ? { ...m, reps: 100 } : m))],
+    [
+      'unknown explicit reps',
+      sourceAnalysis.movements.map((m) => (m.reps ? { ...m, reps: null } : m)),
+    ],
+    [
+      'changed distance',
+      sourceAnalysis.movements.map((m) => (m.distanceMeters ? { ...m, distanceMeters: 40 } : m)),
+    ],
+    [
+      'changed calories',
+      sourceAnalysis.movements.map((m) => (m.calories ? { ...m, calories: 200 } : m)),
+    ],
+    [
+      'changed unit',
+      sourceAnalysis.movements.map((m) =>
+        m.calories ? { name: m.name, category: m.category, reps: 20 } : m,
+      ),
+    ],
+  ])('rejects %s even with internally coherent JSON', async (_name, movements) => {
+    const send = vi
+      .fn()
+      .mockResolvedValue({ text: JSON.stringify({ ...sourceAnalysis, movements }) });
+    await expect(analyzeWod({ rawText }, send)).rejects.toBeInstanceOf(WodAnalysisError);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a source mismatch and returns the corrected result', async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ ...sourceAnalysis, movements: sourceAnalysis.movements.slice(1) }),
+      })
+      .mockResolvedValueOnce({ text: JSON.stringify(sourceAnalysis) });
+    expect(await analyzeWod({ rawText }, send)).toEqual(sourceAnalysis);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['For Time', 'Chipper', 'AMRAP 12 min'])(
+    'accepts plural names in %s',
+    async (heading) => {
+      const send = vi.fn().mockResolvedValue({ text: JSON.stringify(sourceAnalysis) });
+      await expect(
+        analyzeWod({ rawText: rawText.replace('For Time', heading) }, send),
+      ).resolves.toEqual(sourceAnalysis);
+      expect(send).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('does not let extracted text override the original text', async () => {
+    const output = {
+      ...sourceAnalysis,
+      extractedText: 'For Time\n10 Burpees\n40m Run\n20 cal Row',
+      movements: sourceAnalysis.movements.map((m) =>
+        m.distanceMeters ? { ...m, distanceMeters: 40 } : m,
+      ),
+    };
+    const send = vi.fn().mockResolvedValue({ text: JSON.stringify(output) });
+    await expect(
+      analyzeWod({ rawText, imageBase64: 'test', imageMimeType: 'image/png' }, send),
+    ).rejects.toBeInstanceOf(WodAnalysisError);
+  });
+
+  it('checks an image transcription without claiming OCR fidelity', async () => {
+    const output = {
+      ...sourceAnalysis,
+      extractedText: rawText,
+      movements: sourceAnalysis.movements.slice(1),
+    };
+    const send = vi.fn().mockResolvedValue({ text: JSON.stringify(output) });
+    await expect(
+      analyzeWod({ imageBase64: 'test', imageMimeType: 'image/png' }, send),
+    ).rejects.toBeInstanceOf(WodAnalysisError);
+  });
+
+  it('accepts explicit aliases without changing the returned names', async () => {
+    const output = {
+      ...sourceAnalysis,
+      movements: [
+        { name: 'Toes-to-Bar', category: 'gymnastics', reps: 10 },
+        { name: 'Handstand Walk', category: 'gymnastics', distanceMeters: 20 },
+      ],
+    };
+    const send = vi.fn().mockResolvedValue({ text: JSON.stringify(output) });
+    await expect(analyzeWod({ rawText: 'For Time\n10 T2B\n20m HSW' }, send)).resolves.toEqual(
+      output,
+    );
+  });
+
+  it.each([
+    'For Time\n10 Burpee\n400m Run\n20 cal Row\nNota: ajustar conforme o coach',
+    'For Time\n10 Burpee 20kg\n400m Run\n20 cal Row',
+    'For Time\n21-15-9 Burpee',
+    'For Time\n10 Burpee\n10 Burpee',
+    'For Time\n10 Movimento desconhecido',
+    'For Time\n10 Row',
+  ])('does not partially interpret unsupported source syntax: %s', async (source) => {
+    const send = vi.fn().mockResolvedValue({ text: JSON.stringify(sourceAnalysis) });
+    await expect(analyzeWod({ rawText: source }, send)).resolves.toEqual(sourceAnalysis);
   });
 });

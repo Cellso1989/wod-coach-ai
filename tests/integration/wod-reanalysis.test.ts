@@ -2,7 +2,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
 import { Prisma } from '../../packages/database/dist/index.js';
-import { wodFormatCases } from '../fixtures/wod-format-cases.js';
+import { simpleSourceCase, wodFormatCases } from '../fixtures/wod-format-cases.js';
 
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
@@ -478,6 +478,26 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
     expect(store.analysisVersions).toHaveLength(4);
     expect(store.strategyVersions).toHaveLength(4);
   });
+
+  for (const reanalysis of [false, true]) {
+    it.each(['omission', 'volume'])(
+      `preserves data after source mismatch: %s (reanalysis: ${reanalysis})`,
+      async (fault) => {
+        if (reanalysis) await seedAnalyzedWod();
+        store.wod.rawText = simpleSourceCase.rawText;
+        const before = structuredClone(store);
+        const analysis = structuredClone(simpleSourceCase.analysis);
+        if (fault === 'omission') analysis.movements.shift();
+        else analysis.movements[0]!.reps = 100;
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(analysis) });
+        const calls = mocks.sendMessage.mock.calls.length;
+        expect((await request('POST', 'analyze')).statusCode).toBe(502);
+        expect(mocks.sendMessage.mock.calls.length - calls).toBe(2);
+        expect(store).toEqual(before);
+        expect(lease).toBeNull();
+      },
+    );
+  }
 
   for (const reanalysis of [false, true]) {
     it.each(['analyze', 'strategy'] as const)(

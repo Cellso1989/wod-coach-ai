@@ -44,7 +44,18 @@ function fixture(
   return { name, rawText, analysis };
 }
 
+export const simpleSourceCase = fixture(
+  'simple explicit source',
+  'For Time\n10 Burpees\n400m Run\n20 cal Row',
+  'FOR_TIME',
+  null,
+  [burpee, run, { ...row, calories: 20 }].map((item) =>
+    item.name === 'Burpee' ? { ...item, reps: 10 } : item,
+  ),
+);
+
 export const wodFormatCases = [
+  simpleSourceCase,
   fixture(
     'long text 10000 chars',
     'Observacoes: ' +
