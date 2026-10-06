@@ -12,7 +12,11 @@ import {
   WodNotFoundError,
   WodNotAnalyzedError,
 } from '../services/athlete-context-service.js';
-import { lockWodVersions, recordStrategyVersion } from '../services/wod-version-service.js';
+import {
+  lockWodVersions,
+  recordStrategyVersion,
+  WOD_VERSION_TRANSACTION_OPTIONS,
+} from '../services/wod-version-service.js';
 import { captureAiGeneration } from '../services/ai-generation-metadata.js';
 import { runWodGeneration } from '../services/wod-generation-lease.js';
 
@@ -192,7 +196,7 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
             strategyInput,
             generation.metadata(),
           );
-        });
+        }, WOD_VERSION_TRANSACTION_OPTIONS);
 
         if (!strategy) {
           reply.code(409);

@@ -10,6 +10,9 @@ import type { AiGenerationMetadata } from './ai-generation-metadata.js';
 
 type AnalysisWithMovements = WodAnalysis & { movements: WodMovement[] };
 
+// Versioned writes span several queries; allow bounded headroom for database latency.
+export const WOD_VERSION_TRANSACTION_OPTIONS = { timeout: 15_000 };
+
 function jsonSnapshot(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }

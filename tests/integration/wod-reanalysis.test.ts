@@ -132,6 +132,7 @@ let failWrite: 'analysis' | 'strategy' | 'wod' | 'analysisVersion' | 'strategyVe
 let app: ReturnType<typeof buildApp>;
 let headers: { authorization: string };
 let lease: { token: string; expiresAt: number } | null;
+let simulatedTransactionDurationMs: number;
 
 async function leaseQuery(strings: TemplateStringsArray, ...values: unknown[]) {
   const sql = strings.join('?');
@@ -239,6 +240,7 @@ beforeEach(async () => {
   lease = null;
   mocks.prisma.$queryRaw.mockImplementation(leaseQuery);
   failWrite = null;
+  simulatedTransactionDurationMs = 0;
   store = {
     wod: {
       id: 'wod-1',
@@ -268,9 +270,15 @@ beforeEach(async () => {
     }
   }
   mocks.prisma.$transaction.mockImplementation(
-    async (work: (tx: ReturnType<typeof databaseClient>) => Promise<unknown>) => {
+    async (
+      work: (tx: ReturnType<typeof databaseClient>) => Promise<unknown>,
+      options?: { timeout?: number },
+    ) => {
       const draft = structuredClone(store);
       const result = await work(databaseClient(() => draft));
+      if (simulatedTransactionDurationMs > (options?.timeout ?? 5_000)) {
+        throw new Error('Transaction already closed: expired transaction');
+      }
       store = draft;
       return result;
     },
@@ -312,6 +320,48 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  it.each(['analysis', 'duration', 'strategy'] as const)(
+    'allows %s persistence beyond the default five-second transaction budget',
+    async (operation) => {
+      await seedAnalyzedWod();
+      simulatedTransactionDurationMs = 5_976;
+      mocks.prisma.$transaction.mockClear();
+      if (operation === 'strategy') {
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+      }
+      const response =
+        operation === 'duration'
+          ? await request('PATCH', 'analysis', { durationMinutes: 25 })
+          : await request('POST', operation === 'analysis' ? 'analyze' : 'strategy');
+      expect(response.statusCode).toBe(200);
+      expect(mocks.prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+        timeout: 15_000,
+      });
+      if (operation === 'strategy') expect(store.strategyVersions).toHaveLength(2);
+      else expect(store.analysisVersions).toHaveLength(2);
+      expect(lease).toBeNull();
+    },
+  );
+
+  it.each(['analysis', 'duration', 'strategy'] as const)(
+    'rolls back %s writes when the extended transaction budget expires',
+    async (operation) => {
+      await seedAnalyzedWod();
+      const before = structuredClone(store);
+      simulatedTransactionDurationMs = 15_001;
+      if (operation === 'strategy') {
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+      }
+      const response =
+        operation === 'duration'
+          ? await request('PATCH', 'analysis', { durationMinutes: 25 })
+          : await request('POST', operation === 'analysis' ? 'analyze' : 'strategy');
+      expect(response.statusCode).toBe(500);
+      expect(store).toEqual(before);
+      expect(lease).toBeNull();
+    },
+  );
+
   for (const reanalysis of [false, true]) {
     it.each([false, true])(
       `preserves saved data after unsupported load guidance (reanalysis: ${reanalysis}, active strategy: %s)`,

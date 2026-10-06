@@ -4,7 +4,11 @@ import { createOpenAiMessageSender, describeOpenAiApiError } from '@wod-coach-ai
 import { analyzeWod, WodAnalysisError } from '@wod-coach-ai/coach-engine';
 import { wodAnalysisUpdateSchema } from '@wod-coach-ai/validation';
 import { z } from 'zod';
-import { lockWodVersions, recordAnalysisVersion } from '../services/wod-version-service.js';
+import {
+  lockWodVersions,
+  recordAnalysisVersion,
+  WOD_VERSION_TRANSACTION_OPTIONS,
+} from '../services/wod-version-service.js';
 import { captureAiGeneration } from '../services/ai-generation-metadata.js';
 import { runWodGeneration } from '../services/wod-generation-lease.js';
 
@@ -157,7 +161,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
               : null;
 
           return { analysis, wod: updatedWod };
-        });
+        }, WOD_VERSION_TRANSACTION_OPTIONS);
 
         if (!persisted) {
           reply.code(409);
@@ -201,7 +205,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
       const versioned = await recordAnalysisVersion(tx, wod, updated, 'DURATION_EDIT');
       await tx.wodStrategy.deleteMany({ where: { wodId: id } });
       return versioned;
-    });
+    }, WOD_VERSION_TRANSACTION_OPTIONS);
 
     return reply.send({ analysis });
   });
