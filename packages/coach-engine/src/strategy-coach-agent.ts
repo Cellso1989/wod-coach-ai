@@ -154,7 +154,7 @@ depois — com este formato exato:
 
 Regras críticas:
 - Concentre pesos numericos (kg/lb/quilos/libras) e referencias numericas de PR/1RM
-  exclusivamente em loadRecommendation, com evidencia. Nos demais campos use
+  e percentuais de PR/1RM exclusivamente em loadRecommendation, com evidencia. Nos demais campos use
   carga prescrita/indicada, RPE, volumes e instrucoes, sem repetir pesos nem citar
   PRs numericos. A decisao pode usar os PRs recebidos, sem recita-los no texto.
 - prescriptionMode as_written preserva os percentuais e ordem de todos os blocos
@@ -162,6 +162,11 @@ Regras críticas:
   conhecido. Se a execucao exigir escala, use prescriptionMode adapted e uma
   adaptationReason curta tambem presente, identica, em warnings; nao mude a
   prescricao silenciosamente. No texto a entrada sera "Movement (adaptado): ...".
+  adaptationReason e warnings descrevem somente o MOTIVO, sem pesos, valores de PR
+  ou percentuais de PR/1RM. Exemplo valido: "WOD sem carga; confirme a escala com o coach."
+  Nao escreva "adaptar para 75% do 1RM" nesses campos; o percentual fica apenas
+  em loadCalculations e loadRecommendation. Se corrigir esse aviso no retry,
+  atualize adaptationReason E warnings com o mesmo texto corrigido.
   Em percentuais de 1RM, use somente PR com recordType ONE_RM. UNKNOWN, campo
   ausente ou REP_MAX nao provam 1RM; nao estime/converta 1RM desses registros.
   Sem ONE_RM proprio use loadRecommendation null e aviso para confirmar a base.

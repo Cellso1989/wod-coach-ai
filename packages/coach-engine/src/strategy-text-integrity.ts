@@ -38,7 +38,10 @@ export function validateStrategyTextIntegrity(output: StrategyOutput, ctx: Refin
         code: 'custom',
         path: field.path,
         message:
-          'Concentre pesos numericos e PRs numericos em loadRecommendation com evidencia validada. Neste campo oriente por RPE, quebras ou carga prescrita, sem repetir/inventar pesos.',
+          'Concentre pesos numericos, PRs numericos e percentuais de PR/1RM em loadRecommendation com evidencia validada. Neste campo oriente por RPE, quebras ou carga prescrita, sem repetir/inventar pesos.' +
+          (field.path[0] === 'warnings'
+            ? ' Se este aviso tambem for adaptationReason, corrija ambos com o mesmo motivo sem numeros de carga/PR ou percentuais de PR/1RM.'
+            : ''),
       });
     }
   }

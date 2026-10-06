@@ -229,6 +229,44 @@ describe('generateStrategy', () => {
         );
     },
   );
+  it('corrects a numeric adaptation warning and its matching reason together', async () => {
+    const invalidReason = 'WOD sem carga; adaptar para 75% do 1RM';
+    const correctedReason = 'WOD sem carga; confirme a escala com o coach.';
+    const adapted = {
+      ...supported,
+      loadRecommendation: 'Back Squat (adaptado): 75kg (75%) (PR 100kg)',
+      loadCalculations: [
+        {
+          ...calculation,
+          prescriptionMode: 'adapted',
+          adaptationReason: invalidReason,
+          loads: [{ value: 75, unit: 'kg', percentage: 75 }],
+        },
+      ],
+      warnings: [invalidReason],
+    };
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce(textMessage(JSON.stringify(adapted)))
+      .mockResolvedValueOnce(
+        textMessage(
+          JSON.stringify({
+            ...adapted,
+            loadCalculations: [
+              { ...adapted.loadCalculations[0], adaptationReason: correctedReason },
+            ],
+            warnings: [correctedReason],
+          }),
+        ),
+      );
+    const result = await generateStrategy(loadInput, send);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[0][0].systemPrompt).toContain('adaptationReason E warnings');
+    expect(send.mock.calls[1][0].messages.at(-1).content[0].text).toContain('corrija ambos');
+    expect(result.warnings).toEqual([correctedReason]);
+    expect(result.loadRecommendation).toBe(adapted.loadRecommendation);
+  });
+
   it.each([true, false])('does not silently treat a load PR as typed 1RM (%s)', async (warn) => {
     const input = {
       ...loadInput,

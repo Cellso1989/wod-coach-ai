@@ -36,6 +36,7 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 - Geracao de estrategia usa `gpt-5-mini`.
 - A analise de treino tem `maxTokens: 2500`.
 - A estrategia tem `maxTokens: 3500`.
+- Correcao de falha real na estrategia em 2026-10-06: adaptationReason e seu aviso identico devem explicar somente o motivo, sem pesos, PRs numericos ou percentuais de PR/1RM. Prompt e feedback do retry explicitam a correcao dos dois campos juntos; calculos e carga validada permanecem preservados. Validacao continua rejeitando respostas invalidas, sem cortar texto ou liberar orientacoes sem evidencia.
 - Novas versoes CrossFit arquivam tokens reportados pelo provedor por tentativa e o total da geracao, incluindo retry corretivo, em snapshot.generationMetadata. Uso ausente/invalido fica null; dados legados nao sao estimados. Chamadas sem versao promovida nao formam um livro de custos.
 - Custo financeiro estimado, detalhamento de cache/raciocinio e contabilizacao de chamadas que falham continuam fora desta implementacao.
 - Evitar chamadas desnecessarias a IA.
