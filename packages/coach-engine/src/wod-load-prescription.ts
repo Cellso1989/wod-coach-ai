@@ -26,7 +26,15 @@ export function reconcileLoadWarnings(warnings: string[], movements: Movement[])
   const remaining = warnings.filter((warning) => {
     if (warning.startsWith('Carga nao informada para ')) return false;
     const text = normalized(warning);
-    if (!/\bcargas?\b/.test(text) || !/nao informad|falt|ausent|sem carga/.test(text)) return true;
+    const englishMissingLoad =
+      /^(?:(?:loads?|weights?)\s+(?:not specified|not provided|not informed|missing|unspecified)|missing\s+(?:load|weight))\b/i.test(
+        text,
+      );
+    if (
+      !englishMissingLoad &&
+      (!/\bcargas?\b/.test(text) || !/nao informad|falt|ausent|sem carga/.test(text))
+    )
+      return true;
     if (missing.some((item) => text.includes(normalized(item.name)))) return true;
     return (
       missing.length > 0 &&

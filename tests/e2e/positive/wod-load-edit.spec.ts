@@ -105,7 +105,7 @@ for (const width of [320, 390, 1280]) {
       page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }),
     ).toBeEnabled();
     await expect(page.getByText('60/40 kg', { exact: true })).toHaveCount(5);
-    await expect(page.getByText(/Carga nao informada/)).toHaveCount(0);
+    await expect(page.getByText(/Falta informar a carga/)).toHaveCount(0);
     expect(patches).toBe(1);
     expect(analysisPosts).toBe(0);
     expect(strategyPosts).toBe(0);

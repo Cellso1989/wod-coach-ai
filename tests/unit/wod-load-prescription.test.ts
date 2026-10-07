@@ -16,6 +16,17 @@ const clean = {
 };
 
 describe('manual WOD loads', () => {
+  it('clears legacy English missing-load notices once the load is filled', () => {
+    expect(
+      reconcileLoadWarnings(
+        ['load not specified for Hang power clean', 'Do not increase the load if you have pain.'],
+        [{ ...clean, loadDescription: '50 kg' }],
+      ),
+    ).toEqual(['Do not increase the load if you have pain.']);
+    expect(reconcileLoadWarnings(['load not specified for Hang power clean'], [clean])).toContain(
+      'load not specified for Hang power clean',
+    );
+  });
   it('preserves ladders and movement order while applying a load to all matching rounds', () => {
     const rounds = [21, 15, 9].map((reps, index) => ({
       roundNumber: index + 1,

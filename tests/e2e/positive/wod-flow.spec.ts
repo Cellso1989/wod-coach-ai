@@ -138,14 +138,14 @@ for (const width of [390, 1280]) {
       await expect(page.getByText('07/10/2026', { exact: true })).toBeVisible();
       await expect(page.getByText('For Time', { exact: true })).toBeVisible();
       await expect(page.getByRole('list', { name: 'Avisos da análise' })).toContainText(
-        'Carga nao informada',
+        'Falta informar a carga',
       );
       if (hasTime) {
         await expect(page.getByText('Target (meta): 10 min', { exact: true })).toBeVisible();
         await expect(page.getByRole('button', { name: /Time cap: 15 min/ })).toBeVisible();
       } else {
         await expect(page.getByRole('list', { name: 'Avisos da análise' })).toContainText(
-          'Tempo ou time cap nao informado',
+          'Falta informar o tempo',
         );
         await expect(page.getByRole('button', { name: /Definir tempo/ })).toBeVisible();
       }

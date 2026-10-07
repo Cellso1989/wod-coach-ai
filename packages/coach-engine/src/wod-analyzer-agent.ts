@@ -132,6 +132,14 @@ Regras críticas:
 - Seja OBJETIVO E CONCISO. O atleta lê isso no celular, no meio do treino. "stimulus"
   deve ser uma expressão curta (2-4 palavras, ex: "engine + grip", "força pesada"), e
   cada item de "warnings" deve ser uma frase curta e direta, sem explicações longas.
+- Escreva TODOS os avisos em portugues do Brasil, com linguagem simples para o atleta.
+  Nao copie avisos em ingles, mesmo se a fonte estiver em ingles. Preserve apenas os nomes
+  usuais dos movimentos (ex.: Hang power clean) e os valores recebidos.
+  Nao exponha enums como ROUNDS_FOR_TIME, mixed_modal ou termos de implementacao nos avisos.
+  Use "voltas", "tempo limite para terminar", "meta de tempo" e "carga do exercicio".
+  Exemplo: "Falta informar a carga de Hang power clean. Preencha em Editar cargas."
+  Exemplo de formato incerto: "Entendi o treino como 5 voltas para terminar no menor tempo
+  possivel. Confirme se esse e o formato correto." Nunca trate uma inferencia como certeza.
 - Campos de enum devem ser strings escalares, nunca arrays: use "format": "AMRAP",
   nunca "format": ["AMRAP"]; use "category": "gymnastics", nunca
   "category": ["gymnastics"].

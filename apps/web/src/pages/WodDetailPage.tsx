@@ -14,6 +14,7 @@ import { AthleteContextSection } from '../components/AthleteContextSection.js';
 import { StrategySection } from '../components/StrategySection.js';
 import { WodGenerationProgress } from '../components/WodGenerationProgress.js';
 import { WodLoadEditor } from '../components/WodLoadEditor.js';
+import { formatWodAnalysisWarnings } from '../lib/wod-analysis-warnings.js';
 import { WodVersionHistory } from '../components/WodVersionHistory.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
@@ -446,7 +447,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
               )}
               {analysis.warnings.length > 0 && (
                 <ul aria-label="Avisos da análise" className="space-y-1 text-sm text-amber-400">
-                  {analysis.warnings.map((warning, index) => (
+                  {formatWodAnalysisWarnings(analysis.warnings).map((warning, index) => (
                     <li key={`${index}-${warning}`}>{warning}</li>
                   ))}
                 </ul>

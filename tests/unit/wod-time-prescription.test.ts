@@ -5,6 +5,15 @@ import { ladderAnalysis, ladderSource } from '../fixtures/wod-ladder-case.js';
 const sendOutput = (output: unknown) => vi.fn().mockResolvedValue({ text: JSON.stringify(output) });
 
 describe('optional WOD timing and loads', () => {
+  it('requests simple Portuguese warnings without a separate translation call', async () => {
+    const send = sendOutput({ ...ladderAnalysis, durationMinutes: null });
+    await analyzeWod({ rawText: ladderSource }, send);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0].systemPrompt).toContain(
+      'Escreva TODOS os avisos em portugues do Brasil',
+    );
+    expect(send.mock.calls[0][0].systemPrompt).toContain('Nunca trate uma inferencia como certeza');
+  });
   it.each([false, true])(
     'uses saved manual duration without changing image/text rounds or Target (image: %s)',
     async (image) => {
