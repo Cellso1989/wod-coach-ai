@@ -65,6 +65,12 @@ for (const reanalysis of [false, true]) {
     expect(strategyPosts).toBe(0);
     busy = false;
     await button.click();
+    await expect(
+      page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }),
+    ).toBeEnabled();
+    expect(strategyPosts).toBe(0);
+    await expect(page.getByText(MOCK_STRATEGY.strategy.pacing, { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }).click();
     await expect(page.getByText(MOCK_STRATEGY.strategy.pacing, { exact: true })).toBeVisible();
     await expect(
       page.getByRole('button', { name: 'Reanalisar treino', exact: true }),

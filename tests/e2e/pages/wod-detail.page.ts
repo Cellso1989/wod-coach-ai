@@ -12,7 +12,9 @@ export class WodDetailPage {
   }
 
   async generateStrategy() {
-    await this.page.getByRole('button', { name: /Gerar estratégia/ }).click();
+    await this.page
+      .getByRole('button', { name: 'Gerar estrategia para hoje', exact: true })
+      .click();
   }
 
   async fillResult(score: string) {

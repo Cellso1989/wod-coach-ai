@@ -261,7 +261,10 @@ test('strategy regeneration after editing duration uses the shared one-line prep
     await expect(page.getByRole('region', { name: 'Estrategia de execucao' })).toBeVisible();
     await expect(progress).toHaveCount(0);
     await page.getByRole('button', { name: 'Reanalisar treino', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Estrategia de execucao' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }),
+    ).toBeEnabled();
+    await expect(page.getByRole('region', { name: 'Estrategia de execucao' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /20 min/ })).toBeVisible();
     await page.reload();
     await expect(page.getByRole('button', { name: /20 min/ })).toBeVisible();

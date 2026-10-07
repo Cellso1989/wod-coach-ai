@@ -4,11 +4,12 @@ import { WodDetailPage } from '../pages/wod-detail.page.js';
 import { loginAsNewUser } from '../support/auth-helper.js';
 import { mockAiRoutes, MOCK_STRATEGY, MOCK_ANALYSIS } from '../support/ai-mocks.js';
 
-test('fluxo completo: enviar WOD, analisar, gerar estrategia automaticamente e registrar resultado', async ({
+test('fluxo completo: enviar WOD, analisar, solicitar estrategia e registrar resultado', async ({
   page,
 }) => {
   await loginAsNewUser(page);
   await mockAiRoutes(page);
+  let strategyPosts = 0;
   let releaseAnalysis!: () => void;
   const analysisPending = new Promise<void>((resolve) => {
     releaseAnalysis = resolve;
@@ -24,6 +25,7 @@ test('fluxo completo: enviar WOD, analisar, gerar estrategia automaticamente e r
   });
   await page.route('**/wods/*/strategy', async (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
+    strategyPosts++;
     await strategyPending;
     await route.fulfill({ status: 200, json: MOCK_STRATEGY });
   });
@@ -45,6 +47,12 @@ test('fluxo completo: enviar WOD, analisar, gerar estrategia automaticamente e r
   }
   await expect(page.getByText('AMRAP', { exact: true })).toBeVisible();
   await expect(page.getByText(/Toes to Bar/).first()).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }),
+  ).toBeEnabled();
+  await expect(page.getByRole('status')).toHaveCount(0);
+  expect(strategyPosts).toBe(0);
+  await wodDetailPage.generateStrategy();
 
   const progress = page.getByRole('status').filter({
     hasText: 'Preparando seu sofrimento com estratégia 😂🔥',
@@ -68,6 +76,7 @@ test('fluxo completo: enviar WOD, analisar, gerar estrategia automaticamente e r
   }
 
   await expect(page.locator('section[aria-label="Estrategia de execucao"]')).toBeVisible();
+  expect(strategyPosts).toBe(1);
   await expect(page.getByText(/Intensidade/)).toBeVisible();
   await expect(page.getByText(/Grip/).first()).toBeVisible();
 

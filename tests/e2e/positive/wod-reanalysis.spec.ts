@@ -3,7 +3,7 @@ import { MOCK_ANALYSIS, MOCK_STRATEGY } from '../support/ai-mocks.js';
 
 // API persistence is covered separately; these tests exercise the actual React UI.
 for (const initialAnalysis of [false, true]) {
-  test(`${initialAnalysis ? 'reanalysis' : 'initial analysis'} keeps the WOD visible after strategy failure and reload`, async ({
+  test(`${initialAnalysis ? 'reanalysis' : 'initial analysis'} waits for an explicit strategy request, including after reload and failure`, async ({
     page,
   }) => {
     const wod = {
@@ -22,6 +22,7 @@ for (const initialAnalysis of [false, true]) {
     let strategy = initialAnalysis ? MOCK_STRATEGY.strategy : null;
     let failStrategy = true;
     let analysisCalls = 0;
+    let strategyCalls = 0;
 
     await page.route('**/api/**', async (route) => {
       const path = new URL(route.request().url()).pathname;
@@ -46,6 +47,7 @@ for (const initialAnalysis of [false, true]) {
       }
       if (path.endsWith('/strategy')) {
         if (method === 'POST') {
+          strategyCalls++;
           if (failStrategy)
             return route.fulfill({ status: 502, json: { error: 'Strategy failed' } });
           strategy = { ...MOCK_STRATEGY.strategy, target: '10-11 rounds' };
@@ -72,7 +74,8 @@ for (const initialAnalysis of [false, true]) {
       page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }),
     ).toBeVisible();
     expect(analysisCalls).toBe(1);
-    await expect(page.getByRole('alert')).toContainText('Strategy failed');
+    expect(strategyCalls).toBe(0);
+    await expect(page.getByText('Strategy failed', { exact: true })).toHaveCount(0);
     await expect(page.getByText('8-9 rounds', { exact: true })).toHaveCount(0);
 
     await page.reload();
@@ -82,10 +85,21 @@ for (const initialAnalysis of [false, true]) {
     await expect(page.getByText('8-9 rounds', { exact: true })).toHaveCount(0);
     await expect(page.locator('pre')).toHaveText(wod.rawText);
     await expect(page.getByText('8 rounds', { exact: true })).toBeVisible();
+    expect(analysisCalls).toBe(1);
+    expect(strategyCalls).toBe(0);
+
+    await page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }).click();
+    await expect(page.getByText('Strategy failed', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Reanalisar treino', exact: true }),
+    ).toBeEnabled();
+    expect(strategyCalls).toBe(1);
 
     failStrategy = false;
     await page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }).click();
     await expect(page.getByText('10-11 rounds', { exact: true })).toBeVisible();
+    expect(analysisCalls).toBe(1);
+    expect(strategyCalls).toBe(2);
     await expect(page.getByRole('alert')).toHaveCount(0);
     await page.reload();
     await expect(page.getByText('10-11 rounds', { exact: true })).toBeVisible();

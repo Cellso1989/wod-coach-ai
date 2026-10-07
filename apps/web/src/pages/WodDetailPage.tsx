@@ -13,7 +13,6 @@ import { WodResultSection } from '../components/WodResultSection.js';
 import { AthleteContextSection } from '../components/AthleteContextSection.js';
 import { StrategySection } from '../components/StrategySection.js';
 import { WodGenerationProgress } from '../components/WodGenerationProgress.js';
-import { STRATEGY_PREPARATION_MESSAGE } from '../lib/wod-messages.js';
 import { WodVersionHistory } from '../components/WodVersionHistory.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
@@ -108,7 +107,6 @@ function WodDetailContent({ id }: { id: string | undefined }) {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [analysisRevision, setAnalysisRevision] = useState(0);
   const [generatingStrategy, setGeneratingStrategy] = useState(false);
-  const [strategyGenerationError, setStrategyGenerationError] = useState<string | null>(null);
   const active = useRef(false);
   const busy = loading || analyzing || saving || savingDuration || deleting || generatingStrategy;
   const blocked = busy || readErrors.length > 0 || Boolean(error);
@@ -180,7 +178,6 @@ function WodDetailContent({ id }: { id: string | undefined }) {
       if (updated.rawText !== wod?.rawText) {
         setAnalysis(null);
         setStrategy(null);
-        setStrategyGenerationError(null);
       }
       setEditing(false);
     } catch (err) {
@@ -215,7 +212,6 @@ function WodDetailContent({ id }: { id: string | undefined }) {
       setAnalysis(updated);
       setAnalysisRevision((value) => value + 1);
       setStrategy(null);
-      setStrategyGenerationError(null);
       setEditingDuration(false);
     } catch (err) {
       if (!active.current) return;
@@ -250,7 +246,6 @@ function WodDetailContent({ id }: { id: string | undefined }) {
     if (!id || blocked) return;
     setAnalyzing(true);
     setAnalysisError(null);
-    setStrategyGenerationError(null);
     setAnalysisStatus('Analisando o Wod para nosso Atleta');
     try {
       const { analysis, wod: updatedWod } = await api.analyzeWod(id);
@@ -259,17 +254,6 @@ function WodDetailContent({ id }: { id: string | undefined }) {
       setAnalysisRevision((value) => value + 1);
       setStrategy(null);
       if (updatedWod) setWod(updatedWod);
-      try {
-        setAnalysisStatus(STRATEGY_PREPARATION_MESSAGE);
-        const { strategy } = await api.generateStrategy(id);
-        if (!active.current) return;
-        setStrategy(strategy);
-      } catch (err) {
-        if (!active.current) return;
-        setStrategyGenerationError(
-          err instanceof ApiError ? err.message : 'Nao foi possivel gerar a estrategia.',
-        );
-      }
     } catch (err) {
       if (!active.current) return;
       setAnalysisError(
@@ -576,11 +560,6 @@ function WodDetailContent({ id }: { id: string | undefined }) {
             />
           )}
 
-          {strategyGenerationError && (
-            <div role="alert">
-              <Alert>{strategyGenerationError}</Alert>
-            </div>
-          )}
           {analysis && readErrors.length === 0 && !analyzing && !saving && !savingDuration && (
             <StrategySection
               key={`strategy-${analysis.versionId ?? analysisRevision}`}
@@ -594,7 +573,6 @@ function WodDetailContent({ id }: { id: string | undefined }) {
               onStrategyGenerated={(generated) => {
                 if (!active.current) return;
                 setStrategy(generated);
-                setStrategyGenerationError(null);
               }}
             />
           )}

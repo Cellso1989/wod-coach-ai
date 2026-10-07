@@ -72,6 +72,7 @@ for (const viewport of [
           exact: true,
         })
         .click();
+      await page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }).click();
       for (const reload of [false, true]) {
         if (reload) await page.reload();
         for (const text of [
