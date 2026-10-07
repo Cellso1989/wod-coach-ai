@@ -30,7 +30,7 @@ describe('source format and time cap integrity', () => {
         { rawText: 'For Time\n10 Burpees\nTime cap: 3 min\nAMRAP 5 min\n5 Pull-ups' },
         send,
       ),
-    ).toEqual(output);
+    ).toEqual({ ...output, warnings: expect.any(Array) });
   });
   it('correctively retries a finite image ladder interpreted as AMRAP from Tempo', async () => {
     const send = vi
@@ -81,7 +81,11 @@ describe('source format and time cap integrity', () => {
         { rawText: ladderSource },
         vi.fn().mockResolvedValue({ text: JSON.stringify(output) }),
       ),
-    ).toEqual(output);
+    ).toEqual({
+      ...output,
+      durationMinutes: null,
+      warnings: expect.arrayContaining(output.warnings),
+    });
   });
   it.each([
     { format: 'AMRAP', durationMinutes: 12 },

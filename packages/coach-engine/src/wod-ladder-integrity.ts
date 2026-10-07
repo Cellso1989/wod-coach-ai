@@ -1,6 +1,7 @@
 import type { StrategyOutput, WodAnalysisOutput } from '@wod-coach-ai/validation';
 import type { RefinementCtx } from 'zod';
 import { movementIdentity } from './movement-identity.js';
+import { readTimePrescription } from './wod-time-prescription.js';
 
 interface LadderMovement {
   name: string;
@@ -20,6 +21,8 @@ export function readCompactLadders(source: string): LadderMovement[] | null {
   for (const line of lines) {
     if (/^(?:wod|for time|rounds for time|\d+ rounds?)\s*:?$/i.test(line)) continue;
     if (/^(?:time cap|tempo|cap)\s*:?\s*\d+\s*min(?:utes|utos)?$/i.test(line)) continue;
+    if (readTimePrescription(line, 'target').length || readTimePrescription(line, 'cap').length)
+      continue;
     if (/^\d+(?:\s*[-\u2013\u2192]\s*\d+){1,19}$/.test(line)) {
       if (reps && !groupSize) return null;
       reps = line.split(/\s*[-\u2013\u2192]\s*/).map(Number);

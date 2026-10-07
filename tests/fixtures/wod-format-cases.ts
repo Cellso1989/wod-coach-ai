@@ -137,7 +137,7 @@ export const wodFormatCases = [
     'mixed blocks and loads',
     'Buy-in: 400m Run; 2 rounds: 5 Back Squat 40/60kg; Buy-out: 5 Burpee',
     'ROUNDS_FOR_TIME',
-    15,
+    null,
     [run, { ...squat, reps: 10, loadDescription: '40/60kg' }, burpee],
     [
       round(1, [run], 'Buy-in'),

@@ -37,7 +37,7 @@ const CATEGORY_ICON: Record<string, string> = {
   mixed_modal: '⚙️',
 };
 
-const STRATEGY_PREPARATION_MESSAGE = 'Atleta, preparando seu sofrimento com estratégia 😂🔥';
+const STRATEGY_PREPARATION_MESSAGE = 'Preparando seu sofrimento com estratégia 😂🔥';
 
 function AnalysisProgress({ message }: { message: string }) {
   const container = useRef<HTMLParagraphElement>(null);
@@ -281,7 +281,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
     setAnalyzing(true);
     setAnalysisError(null);
     setStrategyGenerationError(null);
-    setAnalysisStatus('Lendo o WOD e identificando movimentos...');
+    setAnalysisStatus('Analisando o Wod para nosso Atleta');
     try {
       const { analysis, wod: updatedWod } = await api.analyzeWod(id);
       if (!active.current) return;
@@ -454,7 +454,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
 
           {analysis && (
             <div className="space-y-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="rounded-full bg-orange-600/20 px-3 py-1 text-sm font-semibold text-orange-400">
                   {analysis.format ? FORMAT_LABEL[analysis.format] : 'Formato não identificado'}
                 </span>
@@ -465,11 +465,24 @@ function WodDetailContent({ id }: { id: string | undefined }) {
                     className="text-sm text-neutral-400 underline decoration-dotted"
                   >
                     {analysis.durationMinutes != null
-                      ? `${analysis.durationMinutes} min ✏️`
+                      ? `${['FOR_TIME', 'ROUNDS_FOR_TIME', 'CHIPPER'].includes(analysis.format ?? '') ? 'Time cap: ' : 'Tempo: '}${analysis.durationMinutes} min ✏️`
                       : 'Definir tempo ✏️'}
                   </button>
                 )}
               </div>
+
+              {analysis.rawResponse?.targetMinutes != null && (
+                <p className="text-sm font-semibold text-orange-400">
+                  Target (meta): {analysis.rawResponse.targetMinutes} min
+                </p>
+              )}
+              {analysis.warnings.length > 0 && (
+                <ul aria-label="Avisos da análise" className="space-y-1 text-sm text-amber-400">
+                  {analysis.warnings.map((warning, index) => (
+                    <li key={`${index}-${warning}`}>{warning}</li>
+                  ))}
+                </ul>
+              )}
 
               {editingDuration && (
                 <div className="space-y-2">

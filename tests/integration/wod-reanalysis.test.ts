@@ -419,6 +419,32 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
   );
 
   for (const reanalysis of [false, true]) {
+    it(`persists Target separately and permits missing optional time/load (reanalysis: ${reanalysis})`, async () => {
+      store.wod.rawText = `${ladderSource}\nTarget 10'\nTime cap 15'`;
+      mocks.sendMessage.mockResolvedValue({
+        text: JSON.stringify({ ...ladderAnalysis, durationMinutes: 15 }),
+      });
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      expect(store.analysis!.rawResponse).toMatchObject({ targetMinutes: 10, durationMinutes: 15 });
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ladderStrategy) });
+      expect((await request('POST', 'strategy')).statusCode).toBe(200);
+      expect(store.strategyVersions.at(-1)!.inputSnapshot).toMatchObject({
+        wodAnalysis: { targetMinutes: 10, durationMinutes: 15 },
+      });
+      if (reanalysis) {
+        const previous = structuredClone(store.analysisVersions[0]);
+        store.wod.rawText = ladderSource;
+        mocks.sendMessage.mockResolvedValue({
+          text: JSON.stringify({ ...ladderAnalysis, durationMinutes: null }),
+        });
+        expect((await request('POST', 'analyze')).statusCode).toBe(200);
+        expect(store.analysis!.durationMinutes).toBeNull();
+        expect(store.analysis!.warnings.join(' ')).toContain('Carga nao informada');
+        expect(store.analysis!.warnings.join(' ')).toContain('Tempo ou time cap nao informado');
+        expect(store.analysisVersions[0]).toEqual(previous);
+        expect(store.strategy).toBeNull();
+      }
+    });
     it.each([false, true])(
       `preserves saved data after unsupported load guidance (reanalysis: ${reanalysis}, active strategy: %s)`,
       async (activeStrategy) => {
@@ -587,7 +613,7 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
           format: analysis.format,
           durationMinutes: analysis.durationMinutes,
           roundBreakdown: analysis.rounds,
-          rawResponse: analysis,
+          rawResponse: { ...analysis, warnings: expect.arrayContaining(analysis.warnings) },
           movements: analysis.movements.map((movement) =>
             expect.objectContaining({
               ...movement,
@@ -601,7 +627,7 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
         expect((await request('POST', 'strategy')).statusCode).toBe(200);
         expect(store.strategyVersions.at(-1)).toMatchObject({
           inputSnapshot: {
-            wodAnalysis: analysis,
+            wodAnalysis: { ...analysis, warnings: expect.arrayContaining(analysis.warnings) },
             athleteContext: CONTEXT,
             athleteProfile: PROFILE,
           },

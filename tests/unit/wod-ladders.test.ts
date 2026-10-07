@@ -94,7 +94,11 @@ describe('compact WOD ladders retain execution order', () => {
       .fn()
       .mockResolvedValueOnce({ text: JSON.stringify({ ...ladderAnalysis, rounds: null }) })
       .mockResolvedValueOnce({ text: JSON.stringify(ladderAnalysis) });
-    expect(await analyzeWod({ rawText: ladderSource }, send)).toEqual(ladderAnalysis);
+    expect(await analyzeWod({ rawText: ladderSource }, send)).toEqual({
+      ...ladderAnalysis,
+      durationMinutes: null,
+      warnings: expect.any(Array),
+    });
   });
   it('rejects different round reps even if aggregate totals still match', async () => {
     const rounds = structuredClone(ladderAnalysis.rounds!);
@@ -119,7 +123,7 @@ describe('compact WOD ladders retain execution order', () => {
     const send = vi.fn().mockResolvedValue({ text: JSON.stringify(output) });
     expect(
       await analyzeWod({ rawText: ladderSource.replace('12-10-8', 'Depois\n12-10-8') }, send),
-    ).toEqual(output);
+    ).toEqual({ ...output, durationMinutes: null, warnings: expect.any(Array) });
   });
   it('accepts explicit per-round labels with numbering after a buy-in', async () => {
     const analysis = {

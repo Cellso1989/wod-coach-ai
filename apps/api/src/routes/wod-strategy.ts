@@ -7,7 +7,7 @@ import {
   compactLadderAnalysisIssue,
   type StrategyCoachInput,
 } from '@wod-coach-ai/coach-engine';
-import type { WodRoundOutput } from '@wod-coach-ai/validation';
+import { wodAnalysisOutputSchema, type WodRoundOutput } from '@wod-coach-ai/validation';
 import {
   getAthleteContextForWod,
   WodNotFoundError,
@@ -101,10 +101,14 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
           return { error: 'A geração de estratégia por IA ainda não foi configurada' };
         }
 
+        const prescription = wodAnalysisOutputSchema
+          .pick({ targetMinutes: true })
+          .safeParse(analysis.rawResponse);
         const strategyInput: StrategyCoachInput = {
           wodAnalysis: {
             format: analysis.format,
             durationMinutes: analysis.durationMinutes,
+            targetMinutes: prescription.success ? prescription.data.targetMinutes : null,
             stimulus: analysis.stimulus,
             movements: analysis.movements.map((m: WodMovement) => ({
               name: m.name,

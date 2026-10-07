@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { loadCalculationSchema, validateLoadCalculations } from './strategy-load-evidence.js';
 import { validateStrategyTextIntegrity } from './strategy-text-integrity.js';
 import { validateStrategyLadderIntegrity } from './wod-ladder-integrity.js';
+import { WOD_TERMINOLOGY } from './wod-terminology.js';
 
 export type { SendMessage } from './ai-json-agent.js';
 
@@ -29,6 +30,8 @@ export interface StrategyCoachInput {
 }
 
 const SYSTEM_PROMPT = `Você é o StrategyCoachAgent do WOD Coach AI, o principal agente do sistema.
+
+${WOD_TERMINOLOGY}
 
 Sua pergunta é: "como este atleta deveria executar este treino hoje?" (não "como programar
 o treino" — o treino já foi definido pelo box/coach do atleta).
@@ -62,6 +65,11 @@ seguido de Thruster e BMU). Quando "rounds" existir:
   for null, nao assuma rounds ou escadas ausentes; use somente a prescricao conhecida.
 
 Determine a estratégia adaptando-a ao formato do treino:
+- "wodAnalysis.targetMinutes" e o Target prescrito (meta), nao o limite maximo.
+  Ex.: Target 10 min e durationMinutes 15 min: buscar 10 min, respeitando o cap de 15.
+  Nao confunda essa meta do box com a previsao personalizada do atleta no campo target.
+  Se tempo ou carga faltarem, continue com os dados conhecidos e preserve os avisos
+  de informacao ausente. Nao invente um time cap ou uma carga prescrita.
 - AMRAP: ritmo sustentável, consistência, evitar falha, controle inicial, aceleração progressiva.
   Aqui "durationMinutes" é a janela fixa do treino (não um limite a bater, é o tempo todo
   disponível) — o objetivo é maximizar rounds/reps dentro dela.

@@ -120,6 +120,14 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 - Exemplo de raciocinio desejado: se o treino tem 10 BMU por round e o atleta tem PR de 22 reps, a estrategia pode sugerir atacar mais esse movimento.
 - Nao renderizar a secao visual de tecnica/warnings na estrategia por enquanto.
 
+## Glossario e prescricao de tempo do WOD
+
+- Ajuste em develop, em 2026-10-07, com publicacao pendente: `wod-terminology.ts` fornece o mesmo glossario aos agentes de leitura e estrategia. Inclui WOD, Target, Time Cap, Rounds, Reps, Chipper, Buy-in, Buy-out/Cash-out, Unbroken, RX, Scaled, PR/PB, No Rep, 21-15-9, Tabata e RFT. A prescricao explicita prevalece sobre definicoes padrao.
+- Target e meta prescrita (`targetMinutes`, no JSON da analise), nao time cap nem previsao personalizada. `durationMinutes` continua sendo o cap de treinos finitos ou a janela de AMRAP/EMOM. Exemplo: Target 10' e Time cap 15' significam meta de 10 minutos e limite de 15 minutos.
+- Tempo e carga ausentes nao bloqueiam uma estrutura legivel: campos desconhecidos ficam null e avisos aparecem na analise. Nunca inventar cap ou carga RX. As guardas de movimentos, ordem, rounds, totais, versoes e concorrencia continuam obrigatorias.
+- RFT corresponde a ROUNDS_FOR_TIME; Tabata a INTERVAL (padrao de 8 ciclos 20s/10s, salvo variacao explicita). Cash-out recebe a mesma guarda de bloco final separado que buy-out. Escadas como 21-15-9 seguem os rounds reais, nao o volume agregado.
+- Verificacao local: 529 testes gerais, 48 casos PostgreSQL e 5 testes E2E passaram; build/typecheck/lint passaram, com aviso Fast Refresh preexistente. A primeira rodada PostgreSQL teve falhas por timeout; a repeticao passou e o schema diff nao encontrou diferencas. OCR/IA reais e iPhone fisico nao foram testados; transcricao por imagem foi simulada. O parser deterministico de Target/cap reconhece linhas com minutos inteiros e unidade min/minutos/minutes ou apostrofo; outros formatos ainda nao possuem cobertura especifica.
+
 ## HYROX
 
 - A aba de esteira foi removida do app.

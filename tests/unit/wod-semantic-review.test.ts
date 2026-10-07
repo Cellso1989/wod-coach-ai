@@ -90,7 +90,7 @@ describe('offline semantic review (all captures synthetic)', () => {
       ...capture(),
       caseId: 'S2',
       source: fixture.rawText,
-      analysis: structuredClone(fixture.analysis),
+      analysis: { ...structuredClone(fixture.analysis), durationMinutes: 15 },
     };
     expect(reviewCapture(input, corpus[1]).failures).toContain('Janela/time cap');
     input.analysis.durationMinutes = null;

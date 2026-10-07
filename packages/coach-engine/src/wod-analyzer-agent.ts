@@ -8,6 +8,8 @@ import { WOD_FORMATS, MOVEMENT_CATEGORIES } from '@wod-coach-ai/types';
 import type { RefinementCtx } from 'zod';
 import { movementIdentity } from './movement-identity.js';
 import { compactLadderAnalysisIssue, readCompactLadders } from './wod-ladder-integrity.js';
+import { preferredTimePrescription, readTimePrescription } from './wod-time-prescription.js';
+import { WOD_TERMINOLOGY } from './wod-terminology.js';
 import {
   callAiForJson,
   AiJsonError,
@@ -27,6 +29,8 @@ export class WodAnalysisError extends AiJsonError {}
 
 const SYSTEM_PROMPT = `Você é o WodAnalyzerAgent do WOD Coach AI, um especialista em CrossFit.
 
+${WOD_TERMINOLOGY}
+
 Sua única tarefa é interpretar um WOD (treino de CrossFit) recebido como texto e/ou foto,
 e devolver EXCLUSIVAMENTE um JSON válido — sem markdown, sem crases, sem texto antes ou depois —
 com este formato exato:
@@ -35,6 +39,7 @@ com este formato exato:
   "extractedText": string ou null,
   "format": uma string entre ${WOD_FORMATS.join(' | ')} ou null,
   "durationMinutes": number ou null,
+  "targetMinutes": number ou null (meta de tempo prescrita, nunca o limite),
   "stimulus": string curto (ex: "mixed_modal", "heavy strength") ou null,
   "movements": [
     {
@@ -98,6 +103,14 @@ Regra crítica sobre "rounds" (WODs com estrutura por round):
   com "sets" dentro de um único movimento — só use "rounds" para a estrutura macro do WOD.
 
 Regras críticas:
+- Target e a META de conclusao; Time cap e o LIMITE MAXIMO. "Target 10' / Time cap 15'"
+  significa targetMinutes 10 e durationMinutes 15. Apostrofo (', ’ ou ′) significa minutos.
+  Nunca use Target como duracao/time cap. Em AMRAP/EMOM, durationMinutes e a janela prescrita.
+- Tempo, meta e carga sao opcionais. Se faltarem ou estiverem ilegíveis, continue a analise
+  dos movimentos e rounds, use null nos campos desconhecidos e avise em warnings.
+  Nao exija formato/tempo/carga para analisar um treino legivel e nao invente valores.
+  Em movimentos sem peso externo, nao avise falta de carga. Nao confunda pares de reps
+  masculinas/femininas (22/16) com kg sem unidade ou contexto de carga.
 - Tempo, duracao ou "12 min" isoladamente NAO significam AMRAP. Preserve o formato
   explicitamente prescrito. Em uma escada finita, o tempo pode ser o time cap;
   nao converta os rounds fixos em repeticao continua. Se o formato nao estiver claro,
@@ -172,7 +185,7 @@ function executionBlockCount(text: string): number {
   return (
     counts.reduce((sum, count) => sum + count, 0) +
     Number(/\bbuy[\s-]?in\b/i.test(text)) +
-    Number(/\bbuy[\s-]?out\b/i.test(text))
+    Number(/\b(?:buy|cash)[\s-]?out\b/i.test(text))
   );
 }
 
@@ -244,7 +257,12 @@ function validateSimpleSourceIntegrity(
   const lines = source
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter(
+      (line) =>
+        Boolean(line) &&
+        !readTimePrescription(line, 'target').length &&
+        !readTimePrescription(line, 'cap').length,
+    );
   if (!/^(?:for time|chipper|amrap\s+[1-9]\d*\s*min(?:utes|utos)?)\s*:?$/i.test(lines[0] ?? ''))
     return;
   if (lines.length < 2) return;
@@ -272,7 +290,7 @@ function validateSimpleSourceIntegrity(
     : heading.startsWith('chipper')
       ? 'CHIPPER'
       : 'FOR_TIME';
-  const duration = heading.match(/^amrap\s+(\d+)/)?.[1];
+  const duration = heading.match(/^amrap\s+(\d+)/)?.[1] ?? readTimePrescription(source, 'cap')[0];
   if (
     output.format !== format ||
     output.durationMinutes !== (duration == null ? null : Number(duration))
@@ -401,8 +419,17 @@ function validateSourceFormatIntegrity(
     for (const line of source.split(/\r?\n/)) {
       const marker = line
         .trim()
-        .match(/^(amrap|for time|rounds for time|emom|e2mom|chipper)\b/i)?.[1];
-      if (marker) formats.add(marker.toUpperCase().replace(/ /g, '_'));
+        .match(/^(amrap|for time|rounds for time|rft|tabata|emom|e2mom|chipper)\b/i)?.[1];
+      if (marker) {
+        const normalized = marker.toUpperCase().replace(/ /g, '_');
+        formats.add(
+          normalized === 'RFT'
+            ? 'ROUNDS_FOR_TIME'
+            : normalized === 'TABATA'
+              ? 'INTERVAL'
+              : normalized,
+        );
+      }
     }
     return formats;
   };
@@ -432,12 +459,7 @@ function validateSourceFormatIntegrity(
         'A escada finita nao prescreve AMRAP. Tempo isolado nao autoriza repetir rounds; preserve o formato ou use null com aviso de ambiguidade.',
     });
   }
-  const capsIn = (source: string) =>
-    [...source.matchAll(/^(?:time cap|cap)\s*:?\s*(\d+)\s*min(?:utes|utos)?\s*$/gim)].map((match) =>
-      Number(match[1]),
-    );
-  const textCaps = capsIn(input.rawText ?? '');
-  const caps = textCaps.length ? textCaps : capsIn(output.extractedText ?? '');
+  const caps = preferredTimePrescription(input.rawText, output.extractedText, 'cap');
   if (formats.size <= 1 && new Set(caps).size === 1 && output.durationMinutes !== caps[0]) {
     ctx.addIssue({
       code: 'custom',
@@ -539,9 +561,23 @@ function normalizeAnalysisOutput(
   output: WodAnalysisOutput,
   input: WodAnalyzerInput,
 ): WodAnalysisOutput {
+  const targets = preferredTimePrescription(input.rawText, output.extractedText, 'target');
+  const source = [input.rawText, output.extractedText].filter(Boolean).join('\n');
+  const normalized = { ...output };
+  if (new Set(targets).size === 1) normalized.targetMinutes = targets[0];
+  if (!targets.length && output.targetMinutes != null) normalized.targetMinutes = null;
+  const timingSource = source
+    .split(/\r?\n/)
+    .filter((line) => !readTimePrescription(line, 'target').length)
+    .join('\n');
+  const hasTime =
+    /\b\d+(?::\d{2})?\s*(?:min(?:utes|utos)?\b|['\u2019\u2032])|\b(?:amrap|emom|e2mom)\s*:?\s*\d+\b/i.test(
+      timingSource,
+    );
+  if (!hasTime) normalized.durationMinutes = null;
   return [input.rawText, output.extractedText].reduce<WodAnalysisOutput>(
     (result, text) => (text?.trim() ? inferUniformRoundsFromText(result, text) : result),
-    output,
+    normalized,
   );
 }
 
@@ -583,7 +619,10 @@ export async function analyzeWod(
           );
           if (!expected) return;
           for (const phase of ['in', 'out']) {
-            const marker = new RegExp(`\\bbuy[\\s-]?${phase}\\b`, 'i');
+            const marker = new RegExp(
+              `\\b${phase === 'out' ? '(?:buy|cash)' : 'buy'}[\\s-]?${phase}\\b`,
+              'i',
+            );
             const explicit = [input.rawText, output.extractedText].some((text) =>
               marker.test(text ?? ''),
             );
@@ -622,7 +661,22 @@ export async function analyzeWod(
       maxTokens: 2500,
       effort: 'low',
     });
-    return output;
+    const notices: string[] = [];
+    if (output.durationMinutes == null) {
+      notices.push(
+        output.targetMinutes != null
+          ? 'Time cap nao informado; Target e uma meta, nao o limite maximo.'
+          : 'Tempo ou time cap nao informado; a analise continua sem limite de tempo definido.',
+      );
+    }
+    const unloaded = output.movements.filter(
+      (movement) => movement.category === 'weightlifting' && !movement.loadDescription?.trim(),
+    );
+    if (unloaded.length) {
+      const names = unloaded.map((movement) => movement.name).join(', ');
+      notices.push(`Carga nao informada para ${names.slice(0, 200)}; confirme antes de executar.`);
+    }
+    return { ...output, warnings: [...new Set([...notices, ...output.warnings])].slice(0, 10) };
   } catch (err) {
     if (err instanceof AiJsonError) {
       throw new WodAnalysisError(err.message, err.rawResponse);

@@ -57,6 +57,32 @@ const MINIMAL_INPUT: StrategyCoachInput = {
 };
 
 describe('generateStrategy', () => {
+  it('includes CrossFit definitions without assuming RX loads or personal records', async () => {
+    const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(VALID_STRATEGY)));
+    await generateStrategy(MINIMAL_INPUT, send);
+    const prompt = send.mock.calls[0][0].systemPrompt;
+    for (const term of [
+      'WOD (',
+      'Time Cap:',
+      'Rounds:',
+      'Reps:',
+      'Chipper:',
+      'Buy-in:',
+      'Buy-out / Cash-out:',
+      'Unbroken:',
+      'RX:',
+      'Scaled:',
+      'PR / PB:',
+      'No Rep:',
+      '21-15-9:',
+      'Tabata:',
+      'RFT (',
+    ]) {
+      expect(prompt).toContain(term);
+    }
+    expect(prompt).toContain('nao invente cargas RX');
+    expect(prompt).toContain('use somente registros fornecidos');
+  });
   it('reserves output headroom for reasoning and the complete strategy JSON', async () => {
     const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(VALID_STRATEGY)));
     await generateStrategy(MINIMAL_INPUT, send);

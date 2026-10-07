@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { wodFormatSchema, movementCategorySchema } from "./enums.js";
+import { z } from 'zod';
+import { wodFormatSchema, movementCategorySchema } from './enums.js';
 
 const demandScale = z.number().int().min(1).max(10);
 
@@ -38,7 +38,8 @@ export type WodRoundOutput = z.infer<typeof wodRoundOutputSchema>;
 export const wodAnalysisOutputSchema = z.object({
   extractedText: z.string().trim().max(10_000).nullable().optional(),
   format: wodFormatSchema.nullable(),
-  durationMinutes: z.number().int().min(0).max(180).nullable(),
+  durationMinutes: z.number().int().min(0).max(180).nullable().optional().default(null),
+  targetMinutes: z.number().int().min(0).max(180).nullable().optional(),
   stimulus: z.string().trim().max(200).nullable(),
   movements: z.array(wodMovementOutputSchema).min(1).max(30),
   rounds: z.array(wodRoundOutputSchema).max(20).nullable().optional(),

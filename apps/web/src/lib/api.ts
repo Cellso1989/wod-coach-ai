@@ -168,6 +168,7 @@ export interface WodRound {
 }
 
 export interface WodAnalysis {
+  rawResponse?: { targetMinutes?: number | null } | null;
   versionId?: string | null;
   id: string;
   wodId: string;

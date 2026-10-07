@@ -60,7 +60,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
             reply.code(502);
             return {
               error:
-                'Nao foi possivel confirmar a leitura deste WOD. Confira a foto ou o texto e informe o formato (ex.: For Time ou AMRAP) e o time cap, se houver. Tente analisar novamente; nenhuma analise anterior foi substituida.',
+                'Nao foi possivel confirmar os movimentos ou a estrutura deste WOD. Confira a nitidez da foto ou corrija o texto e tente novamente. Tempo, Target e carga sao opcionais; nenhuma analise anterior foi substituida.',
               code: 'WOD_ANALYSIS_INVALID_RESPONSE',
             };
           }

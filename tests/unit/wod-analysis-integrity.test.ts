@@ -72,7 +72,11 @@ describe('analysis internal integrity', () => {
         text: JSON.stringify({ ...valid, movements: [{ ...movement, reps: 200 }] }),
       })
       .mockResolvedValueOnce({ text: JSON.stringify(valid) });
-    expect(await analyzeWod({ rawText: '2 rounds: 10 Thruster 40kg' }, send)).toEqual(valid);
+    expect(await analyzeWod({ rawText: '2 rounds: 10 Thruster 40kg' }, send)).toEqual({
+      ...valid,
+      durationMinutes: null,
+      warnings: expect.any(Array),
+    });
     expect(send).toHaveBeenCalledTimes(2);
   });
 
@@ -125,7 +129,6 @@ describe('analysis fidelity to a simple explicit source', () => {
 
   it.each([
     { format: 'AMRAP' },
-    { durationMinutes: 12 },
     { movements: [...sourceAnalysis.movements].reverse() },
     { rounds: [{ roundNumber: 1, movements: [...sourceAnalysis.movements].reverse() }] },
     {
@@ -139,19 +142,28 @@ describe('analysis fidelity to a simple explicit source', () => {
         })),
       })),
     },
-  ])('rejects format, invented cap, order or fabricated execution blocks: %j', async (change) => {
+  ])('rejects format, order or fabricated execution blocks: %j', async (change) => {
     const send = vi
       .fn()
       .mockResolvedValue({ text: JSON.stringify({ ...sourceAnalysis, ...change }) });
     await expect(analyzeWod({ rawText }, send)).rejects.toBeInstanceOf(WodAnalysisError);
   });
 
+  it('removes an invented cap and continues with an explicit missing-time warning', async () => {
+    const output = await analyzeWod(
+      { rawText },
+      vi.fn().mockResolvedValue({
+        text: JSON.stringify({ ...sourceAnalysis, durationMinutes: 12 }),
+      }),
+    );
+    expect(output.durationMinutes).toBeNull();
+    expect(output.warnings.join(' ')).toContain('Tempo ou time cap nao informado');
+  });
+
   it('rejects a changed AMRAP work window', async () => {
-    const send = vi
-      .fn()
-      .mockResolvedValue({
-        text: JSON.stringify({ ...sourceAnalysis, format: 'AMRAP', durationMinutes: 15 }),
-      });
+    const send = vi.fn().mockResolvedValue({
+      text: JSON.stringify({ ...sourceAnalysis, format: 'AMRAP', durationMinutes: 15 }),
+    });
     await expect(
       analyzeWod({ rawText: rawText.replace('For Time', 'AMRAP 12 min') }, send),
     ).rejects.toBeInstanceOf(WodAnalysisError);
@@ -194,7 +206,10 @@ describe('analysis fidelity to a simple explicit source', () => {
         text: JSON.stringify({ ...sourceAnalysis, movements: sourceAnalysis.movements.slice(1) }),
       })
       .mockResolvedValueOnce({ text: JSON.stringify(sourceAnalysis) });
-    expect(await analyzeWod({ rawText }, send)).toEqual(sourceAnalysis);
+    expect(await analyzeWod({ rawText }, send)).toEqual({
+      ...sourceAnalysis,
+      warnings: expect.any(Array),
+    });
     expect(send).toHaveBeenCalledTimes(2);
   });
 
@@ -213,7 +228,7 @@ describe('analysis fidelity to a simple explicit source', () => {
       const send = vi.fn().mockResolvedValue({ text: JSON.stringify(expected) });
       await expect(
         analyzeWod({ rawText: rawText.replace('For Time', heading) }, send),
-      ).resolves.toEqual(expected);
+      ).resolves.toEqual({ ...expected, warnings: expect.any(Array) });
       expect(send).toHaveBeenCalledTimes(1);
     },
   );
@@ -253,9 +268,10 @@ describe('analysis fidelity to a simple explicit source', () => {
       ],
     };
     const send = vi.fn().mockResolvedValue({ text: JSON.stringify(output) });
-    await expect(analyzeWod({ rawText: 'For Time\n10 T2B\n20m HSW' }, send)).resolves.toEqual(
-      output,
-    );
+    await expect(analyzeWod({ rawText: 'For Time\n10 T2B\n20m HSW' }, send)).resolves.toEqual({
+      ...output,
+      warnings: expect.any(Array),
+    });
   });
 
   it.each([
@@ -267,6 +283,9 @@ describe('analysis fidelity to a simple explicit source', () => {
     'For Time\n10 Row',
   ])('does not partially interpret unsupported source syntax: %s', async (source) => {
     const send = vi.fn().mockResolvedValue({ text: JSON.stringify(sourceAnalysis) });
-    await expect(analyzeWod({ rawText: source }, send)).resolves.toEqual(sourceAnalysis);
+    await expect(analyzeWod({ rawText: source }, send)).resolves.toEqual({
+      ...sourceAnalysis,
+      warnings: expect.any(Array),
+    });
   });
 });
