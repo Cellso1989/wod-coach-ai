@@ -7,6 +7,7 @@ import {
 import { WOD_FORMATS, MOVEMENT_CATEGORIES } from '@wod-coach-ai/types';
 import type { RefinementCtx } from 'zod';
 import { movementIdentity } from './movement-identity.js';
+import { compactLadderAnalysisIssue } from './wod-ladder-integrity.js';
 import {
   callAiForJson,
   AiJsonError,
@@ -65,6 +66,13 @@ com este formato exato:
 }
 
 Regra crítica sobre "rounds" (WODs com estrutura por round):
+- Em uma prescricao compacta sem separadores de fases, escadas com a mesma quantidade
+  de etapas se aplicam aos mesmos rounds, respeitando a ordem dos movimentos.
+  Exemplo: "21-15-9 / Thrusters / T2B / 12-10-8 / Bar m.u" significa:
+  round 1: 21 Thrusters, 21 T2B, 12 BMU; round 2: 15, 15, 10; round 3: 9, 9, 8.
+  Nao transforme isso em 45 Thrusters, 45 T2B e 30 BMU corridos nem em seis fases.
+  Se houver "depois", blocos separados ou outra indicacao, preserve essas fases.
+  Se a relacao entre escadas for ambigua, explicite a duvida em warnings; nao invente.
 - "rounds" representa a SEQUENCIA REAL DE EXECUCAO do treino, nao apenas rounds formais.
   Sempre preserve a ordem recebida. Se houver buy-in, bloco principal e buy-out, inclua
   tudo em ordem com "label" claro. Ex: "Buy-in: 25 thrusters; 3 rounds de 55 DU + 10 BMU;
@@ -496,7 +504,11 @@ export async function analyzeWod(
         .superRefine((output, ctx) => {
           validateRoundIntegrity(output, ctx);
           for (const source of [input.rawText, output.extractedText]) {
-            if (source?.trim()) validateSimpleSourceIntegrity(output, source, ctx);
+            if (source?.trim()) {
+              validateSimpleSourceIntegrity(output, source, ctx);
+              const issue = compactLadderAnalysisIssue(output, source);
+              if (issue) ctx.addIssue({ code: 'custom', path: ['rounds'], message: issue });
+            }
           }
           // Check each source separately: extracted text may repeat the user's text.
           const expected = Math.max(

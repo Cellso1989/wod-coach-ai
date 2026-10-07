@@ -100,6 +100,12 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 
 ## Estrategia
 
+- Caso confirmado pelo usuario em 2026-10-06: `21-15-9 / Thrusters / T2B / 12-10-8 / Bar m.u` tem BMU em cada round: 21/21/12, 15/15/10, 9/9/8. Totais 45/45/30 sao apenas resumo, nunca series continuas.
+- Guarda de escadas compactas reconhece a fonte inteira com vocabulario limitado e etapas de mesmo tamanho; valida ordem/volumes reais nos rounds, tanto do texto como da transcricao. Fases explicitas, cargas, nomes desconhecidos e escadas desiguais ficam fora desse parser, sem inferencia parcial.
+- Estrategia para movimentos com reps variaveis exige escada ordenada no label ou labels por round, rejeita labels de total e series NxM maiores que qualquer round. Esta guarda estrutural nao prova toda a semantica de texto livre.
+- Analises antigas que perderam escadas reconhecidas exigem reanalise (409) antes de chamar IA. Skill local `wod-reading-integrity` orienta futuras correcoes; nao roda no produto nem substitui estas validacoes.
+- Verificacao desta correcao local em 2026-10-06: 469 testes passaram; 48 PostgreSQL opt-in nao executados sem banco descartavel. Build/typecheck/lint passaram (aviso preexistente de Fast Refresh em ui.tsx). Teste real com gpt-5-mini e fonte textual sintetica produziu rounds 21/21/12, 15/15/10, 9/9/8 e estrategia valida com quebras por round apos retry corretivo: tres chamadas no total (uma analise, duas estrategia). Nenhuma escrita no banco de producao. OCR da foto real nao foi testado; transcricao de imagem coberta com mock. Skill validada pelo quick_validate.py; commit/deploy desta correcao ainda dependem de autorizacao.
+
 - Novas estrategias CrossFit exigem ao menos um item em breakStrategy e movementStrategy, alem de transitionStrategy e energyManagement nao vazios. Respostas incompletas passam pelo retry corretivo existente; se continuarem invalidas, a API responde 502 sem persistir a estrategia.
 - Ausencia de quebra planejada deve ser expressa como execucao unbroken ou pausa entre series; treino de um unico movimento ainda deve orientar a passagem entre series/intervalos. Campos opcionais continuam podendo ser null.
 - A estrategia deve ser objetiva e facil de ler no celular.

@@ -5,6 +5,7 @@ const aliases: Record<string, string> = {
   'double unders': 'double under',
   bmu: 'bar muscle up',
   'bar m.u.': 'bar muscle up',
+  'bar m.u': 'bar muscle up',
   'bar muscle ups': 'bar muscle up',
   burpees: 'burpee',
   thrusters: 'thruster',

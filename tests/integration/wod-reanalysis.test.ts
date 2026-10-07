@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
 import { Prisma } from '../../packages/database/dist/index.js';
 import { simpleSourceCase, wodFormatCases } from '../fixtures/wod-format-cases.js';
+import { ladderAnalysis, ladderSource, ladderStrategy } from '../fixtures/wod-ladder-case.js';
+import type { WodAnalysisOutput } from '@wod-coach-ai/validation';
 
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
@@ -91,6 +93,21 @@ const STRATEGY = {
   confidence: 0.85,
   warnings: [],
 };
+
+function strategyForFormatCase(analysis: WodAnalysisOutput) {
+  const entries = analysis.movements.map((movement) => {
+    const reps =
+      analysis.rounds?.flatMap((round) =>
+        round.movements.filter((item) => item.name === movement.name).map((item) => item.reps),
+      ) ?? [];
+    return {
+      movement:
+        new Set(reps).size > 1 ? `${movement.name} (${reps.join('-')} por round)` : movement.name,
+      strategy: 'Preserve a tecnica; quebre antes de falhar em cada bloco.',
+    };
+  });
+  return { ...STRATEGY, breakStrategy: entries, movementStrategy: entries };
+}
 const PROFILE = {
   level: 'INTERMEDIATE',
   goals: ['performance'],
@@ -320,6 +337,45 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  it.each(['text', 'image'] as const)(
+    'asks for reanalysis of legacy ladder totals from %s before calling AI or changing state',
+    async (sourceType) => {
+      await seedAnalyzedWod();
+      store.wod.rawText = sourceType === 'image' ? 'Tempo 12 min' : ladderSource;
+      store.analysis!.rawResponse = {
+        ...ladderAnalysis,
+        extractedText: sourceType === 'image' ? ladderSource : null,
+      };
+      store.analysis!.roundBreakdown = null;
+      const previous = structuredClone(store);
+      mocks.sendMessage.mockClear();
+      const response = await request('POST', 'strategy');
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toContain('Reanalise');
+      expect(mocks.sendMessage).not.toHaveBeenCalled();
+      expect(store).toEqual(previous);
+      expect(lease).toBeNull();
+    },
+  );
+
+  it('persists aligned ladders and rejects aggregate strategy without publishing a version', async () => {
+    store.wod.rawText = ladderSource;
+    mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ladderAnalysis) });
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    expect(store.analysis!.roundBreakdown).toEqual(ladderAnalysis.rounds);
+    mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ladderStrategy) });
+    expect((await request('POST', 'strategy')).statusCode).toBe(200);
+    const previous = structuredClone(store);
+    mocks.sendMessage.mockResolvedValue({
+      text: JSON.stringify({
+        ...ladderStrategy,
+        breakStrategy: [{ movement: 'Thrusters (45 reps)', strategy: '3x15.' }],
+      }),
+    });
+    expect((await request('POST', 'strategy')).statusCode).toBe(502);
+    expect(store).toEqual(previous);
+    expect(lease).toBeNull();
+  });
   it.each(['analysis', 'duration', 'strategy'] as const)(
     'allows %s persistence beyond the default five-second transaction budget',
     async (operation) => {
@@ -510,11 +566,12 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
     it.each(wodFormatCases)(
       `preserves format/source/structure/context: $name (reanalysis: ${reanalysis})`,
       async ({ rawText, analysis }) => {
+        const formatStrategy = strategyForFormatCase(analysis);
         store.wod.rawText = rawText;
         mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(analysis) });
         if (reanalysis) {
           expect((await request('POST', 'analyze')).statusCode).toBe(200);
-          mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+          mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(formatStrategy) });
           expect((await request('POST', 'strategy')).statusCode).toBe(200);
         }
         const previous = structuredClone(store.analysisVersions);
@@ -540,7 +597,7 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
         expect(store.analysisVersions.slice(0, previous.length)).toEqual(previous);
         expect(store.analysisVersions).toHaveLength(reanalysis ? 2 : 1);
         expect(store.strategy).toBeNull();
-        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(formatStrategy) });
         expect((await request('POST', 'strategy')).statusCode).toBe(200);
         expect(store.strategyVersions.at(-1)).toMatchObject({
           inputSnapshot: {

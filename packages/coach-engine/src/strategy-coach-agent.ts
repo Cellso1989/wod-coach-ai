@@ -8,6 +8,7 @@ import type { AthleteContext } from './athlete-performance-agent.js';
 import { z } from 'zod';
 import { loadCalculationSchema, validateLoadCalculations } from './strategy-load-evidence.js';
 import { validateStrategyTextIntegrity } from './strategy-text-integrity.js';
+import { validateStrategyLadderIntegrity } from './wod-ladder-integrity.js';
 
 export type { SendMessage } from './ai-json-agent.js';
 
@@ -58,7 +59,7 @@ seguido de Thruster e BMU). Quando "rounds" existir:
 - Se "wodAnalysis.movements" (o total agregado) e "wodAnalysis.rounds" existirem juntos,
   use "rounds" para toda a lógica de pacing/quebras e "movements" só como contexto de
   volume total (ex: para estimar demanda geral), nunca ambos incorporados. Se "rounds"
-  for null, o WOD é uniforme — aí sim use os totais de "movements" normalmente.
+  for null, nao assuma rounds ou escadas ausentes; use somente a prescricao conhecida.
 
 Determine a estratégia adaptando-a ao formato do treino:
 - AMRAP: ritmo sustentável, consistência, evitar falha, controle inicial, aceleração progressiva.
@@ -241,6 +242,12 @@ Regras críticas:
   5 rounds de 16m lunge + 16 T2B + 8m HSW, escreva estrategias para "16m por round",
   "16 T2B por round" e "8m por round"; NUNCA escreva que o atleta deve executar 80m/80
   reps/40m como um bloco corrido.
+- Agrupar TEXTO nao permite agrupar REPETICOES. Para escadas, use uma entrada por
+  movimento com a escada ordenada no nome: "Thrusters (21-15-9 por round)",
+  "Toes-to-bar (21-15-9 por round)", "Bar Muscle-up (12-10-8 por round)".
+  Dentro de strategy, indique quebras separadas: "R1: 7/7/7; R2: 8/7; R3: 9 direto".
+  Respeite a ordem de rounds: Thrusters -> T2B -> BMU em CADA round nesse exemplo.
+  Nunca escreva "45 reps: 3x15" ou "30 reps: 5x6" para esses movimentos.
 - Responda APENAS com o JSON. Nenhum outro texto.`;
 
 function buildUserContent(input: StrategyCoachInput): string {
@@ -267,6 +274,7 @@ export async function generateStrategy(
         .superRefine((output, ctx) => {
           validateLoadCalculations(input, output, ctx);
           validateStrategyTextIntegrity(output, ctx);
+          validateStrategyLadderIntegrity(input.wodAnalysis, output, ctx);
         })
         .pipe(strategyOutputSchema),
       systemPrompt: SYSTEM_PROMPT,

@@ -4,6 +4,7 @@ import { createOpenAiMessageSender, describeOpenAiApiError } from '@wod-coach-ai
 import {
   generateStrategy,
   StrategyGenerationError,
+  compactLadderAnalysisIssue,
   type StrategyCoachInput,
 } from '@wod-coach-ai/coach-engine';
 import type { WodRoundOutput } from '@wod-coach-ai/validation';
@@ -65,6 +66,30 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
           return { error: 'Reanalise este WOD antes de gerar uma estrategia' };
         }
         const analysisVersionId = analysis.versionId;
+
+        const rawAnalysis = analysis.rawResponse;
+        const extractedText =
+          rawAnalysis &&
+          typeof rawAnalysis === 'object' &&
+          !Array.isArray(rawAnalysis) &&
+          typeof rawAnalysis.extractedText === 'string'
+            ? rawAnalysis.extractedText
+            : null;
+        if (
+          [wodWithAnalysis.rawText, extractedText].some(
+            (source) =>
+              source &&
+              compactLadderAnalysisIssue(
+                { rounds: (analysis.roundBreakdown as WodRoundOutput[] | null) ?? null },
+                source,
+              ),
+          )
+        ) {
+          reply.code(409);
+          return {
+            error: 'Reanalise este WOD: a analise salva nao preservou as repeticoes por round',
+          };
+        }
 
         const athleteProfile = await prisma.athleteProfile.findUnique({ where: { userId } });
 
