@@ -949,19 +949,34 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
     } as const;
     const warning = 'Confirme com o coach se o PR informado representa 1RM.';
     const reason = 'Carga adaptada para reduzir a demanda neste treino.';
+    const strategy = {
+      ...STRATEGY,
+      breakStrategy: [
+        {
+          movement: 'Back Squat (5-3-2 por round)',
+          strategy: 'Execute 5, depois 3, depois 2 reps, na carga de cada bloco.',
+        },
+      ],
+      movementStrategy: [
+        {
+          movement: 'Back Squat (5-3-2 por round)',
+          strategy: 'Preserve amplitude e tecnica em cada set.',
+        },
+      ],
+    };
     try {
       mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(fixture.analysis) });
       expect(
         (await app.inject({ method: 'POST', url: `${url}/analyze`, headers })).statusCode,
       ).toBe(200);
-      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(strategy) });
       expect(
         (await app.inject({ method: 'POST', url: `${url}/strategy`, headers })).statusCode,
       ).toBe(200);
       const before = await prisma.wod.findUniqueOrThrow({ where: { id: fresh.id }, include });
       mocks.sendMessage.mockResolvedValue({
         text: JSON.stringify({
-          ...STRATEGY,
+          ...strategy,
           warnings: [warning],
           loadRecommendation: 'Back Squat: 70kg (70%) / 80kg (80%) / 85kg (85%) (PR 100kg)',
           loadCalculations: [
@@ -991,7 +1006,7 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
         const percentages = fault === 'order' ? [85, 80, 70] : [70];
         const adapted = fault === 'unannounced adaptation';
         const output = {
-          ...STRATEGY,
+          ...strategy,
           warnings: [warning],
           loadRecommendation: `Back Squat${adapted ? ' (adaptado)' : ''}: ${percentages.map((p) => `${p}kg (${p}%)`).join(' / ')} (PR 100kg)`,
           loadCalculations: [
@@ -1018,7 +1033,7 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
       for (const adapted of [false, true]) {
         const percentages = adapted ? [50] : [70, 80, 85];
         const output = {
-          ...STRATEGY,
+          ...strategy,
           warnings: adapted ? [warning, reason] : [warning],
           loadRecommendation: `Back Squat${adapted ? ' (adaptado)' : ''}: ${percentages.map((p) => `${p}kg (${p}%)`).join(' / ')} (PR 100kg)`,
           loadCalculations: [

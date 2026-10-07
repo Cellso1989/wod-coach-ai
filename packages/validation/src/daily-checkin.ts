@@ -1,8 +1,8 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 export const dailyCheckinSchema = z.object({
   date: z.coerce.date().optional(),
-  timeSeconds: z.number().int().nonnegative().optional(),
+  timeSeconds: z.number().int().nonnegative().max(2_147_483_647).optional(),
   rounds: z.number().int().nonnegative().optional(),
   reps: z.number().int().nonnegative().optional(),
   weightKg: z.number().min(20).max(400).optional(),

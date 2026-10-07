@@ -7,7 +7,7 @@ import {
 import { WOD_FORMATS, MOVEMENT_CATEGORIES } from '@wod-coach-ai/types';
 import type { RefinementCtx } from 'zod';
 import { movementIdentity } from './movement-identity.js';
-import { compactLadderAnalysisIssue } from './wod-ladder-integrity.js';
+import { compactLadderAnalysisIssue, readCompactLadders } from './wod-ladder-integrity.js';
 import {
   callAiForJson,
   AiJsonError,
@@ -98,6 +98,12 @@ Regra crítica sobre "rounds" (WODs com estrutura por round):
   com "sets" dentro de um único movimento — só use "rounds" para a estrutura macro do WOD.
 
 Regras críticas:
+- Tempo, duracao ou "12 min" isoladamente NAO significam AMRAP. Preserve o formato
+  explicitamente prescrito. Em uma escada finita, o tempo pode ser o time cap;
+  nao converta os rounds fixos em repeticao continua. Se o formato nao estiver claro,
+  use format null e registre a duvida em warnings, sem inventar um titulo AMRAP.
+- Na transcricao da imagem, copie apenas o que esta visivel. Nao acrescente titulos
+  de formato inferidos a extractedText; texto adicional do atleta e contexto separado.
 - "movements" deve conter ao menos um movimento identificado no treino. Cada round
   declarado tambem deve conter ao menos um movimento. Nao retorne listas vazias.
 - Em um bloco simples com volumes explicitos, preserve todos os movimentos e suas
@@ -382,6 +388,65 @@ function validateRoundIntegrity(output: WodAnalysisOutput, ctx: RefinementCtx): 
   }
 }
 
+function validateSourceFormatIntegrity(
+  output: WodAnalysisOutput,
+  input: WodAnalyzerInput,
+  ctx: RefinementCtx,
+): void {
+  const sources = [input.rawText, output.extractedText].filter((text): text is string =>
+    Boolean(text),
+  );
+  const formatsIn = (source: string) => {
+    const formats = new Set<string>();
+    for (const line of source.split(/\r?\n/)) {
+      const marker = line
+        .trim()
+        .match(/^(amrap|for time|rounds for time|emom|e2mom|chipper)\b/i)?.[1];
+      if (marker) formats.add(marker.toUpperCase().replace(/ /g, '_'));
+    }
+    return formats;
+  };
+  const textFormats = formatsIn(input.rawText ?? '');
+  // Explicit athlete context takes precedence over headings inferred by transcription.
+  const formats = textFormats.size ? textFormats : formatsIn(output.extractedText ?? '');
+  // Mixed phases need the analyzer; only enforce an unambiguous explicit format.
+  if (formats.size === 1) {
+    const expected = [...formats][0]!;
+    if (
+      output.format !== expected &&
+      !(expected === 'FOR_TIME' && output.format === 'ROUNDS_FOR_TIME')
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['format'],
+        message: `Preserve o formato explicito ${expected} da fonte.`,
+      });
+    }
+  }
+  const compact = sources.some((source) => readCompactLadders(source) != null);
+  if (compact && !formats.has('AMRAP') && output.format === 'AMRAP') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['format'],
+      message:
+        'A escada finita nao prescreve AMRAP. Tempo isolado nao autoriza repetir rounds; preserve o formato ou use null com aviso de ambiguidade.',
+    });
+  }
+  const capsIn = (source: string) =>
+    [...source.matchAll(/^(?:time cap|cap)\s*:?\s*(\d+)\s*min(?:utes|utos)?\s*$/gim)].map((match) =>
+      Number(match[1]),
+    );
+  const textCaps = capsIn(input.rawText ?? '');
+  const caps = textCaps.length ? textCaps : capsIn(output.extractedText ?? '');
+  if (formats.size <= 1 && new Set(caps).size === 1 && output.durationMinutes !== caps[0]) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['durationMinutes'],
+      message: `Preserve o time cap explicito de ${caps[0]} minutos.`,
+    });
+  }
+}
+
 function findRoundMovementLines(text: string, roundCount: number, movementCount: number) {
   const lines = text
     .split(/\r?\n/)
@@ -503,6 +568,7 @@ export async function analyzeWod(
         .pipe(wodAnalysisOutputSchema)
         .superRefine((output, ctx) => {
           validateRoundIntegrity(output, ctx);
+          validateSourceFormatIntegrity(output, input, ctx);
           for (const source of [input.rawText, output.extractedText]) {
             if (source?.trim()) {
               validateSimpleSourceIntegrity(output, source, ctx);

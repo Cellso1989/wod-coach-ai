@@ -110,7 +110,7 @@ for (const heldResource of ['analysis', 'strategy']) {
     });
     try {
       await page.goto('/wods/a');
-      await expect(page.getByRole('status')).toContainText('Carregando', { timeout: 2000 });
+      await expect(page.getByRole('status').filter({ hasText: 'Carregando' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Analisar treino', exact: true })).toHaveCount(
         0,
       );

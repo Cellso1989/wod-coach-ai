@@ -1,18 +1,14 @@
-import type { Page } from "@playwright/test";
+import type { Page } from '@playwright/test';
 
 export class CheckinPage {
   constructor(private readonly page: Page) {}
 
   async goto() {
-    await this.page.goto("/checkin");
+    await this.page.goto('/checkin');
   }
 
-  /** Submits the check-in using the sliders' default values. */
+  /** Saves the current optional result fields. */
   async submit() {
-    await this.page.getByRole("button", { name: /Salvar check-in/ }).click();
-  }
-
-  readinessScore() {
-    return this.page.getByText(/Nível de Prontidão/).locator("..").locator("p.text-4xl");
+    await this.page.getByRole('button', { name: /Salvar check-in/ }).click();
   }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api.js';
+import { parseWorkoutTime } from '../lib/workout-time.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
 import { PageHeader } from '../components/PageHeader.js';
@@ -18,21 +19,6 @@ function secondsToMmSs(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
-function mmSsToSeconds(value: string): number | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  const parts = trimmed.split(':');
-  if (parts.length === 1) {
-    const seconds = Number(parts[0]);
-    return Number.isFinite(seconds) ? Math.round(seconds) : undefined;
-  }
-  const [minutesStr, secondsStr] = parts;
-  const minutes = Number(minutesStr);
-  const seconds = Number(secondsStr);
-  if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) return undefined;
-  return Math.round(minutes * 60 + seconds);
 }
 
 export function CheckinPage() {
@@ -66,10 +52,17 @@ export function CheckinPage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    const timeSeconds = parseWorkoutTime(timeInput);
+    if (timeSeconds === null) {
+      setError(
+        'Informe um tempo valido em mm:ss, com segundos entre 00 e 59, ou em segundos inteiros.',
+      );
+      return;
+    }
     setSaving(true);
     try {
       await api.saveCheckin({
-        timeSeconds: mmSsToSeconds(timeInput),
+        timeSeconds,
         rounds: rounds ? Number(rounds) : undefined,
         reps: reps ? Number(reps) : undefined,
         weightKg: weightKg ? Number(weightKg) : undefined,

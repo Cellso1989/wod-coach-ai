@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:3333";
+const API_URL = process.env.E2E_API_URL ?? "http://localhost:3333";
 
 export interface TestUser {
   name: string;

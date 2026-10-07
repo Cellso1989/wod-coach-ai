@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: wod-coach-ai-homolog
+    runtime: node
+    branch: develop
+    autoDeployTrigger: off
+    plan: free
+    region: oregon
+    buildCommand: >-
+      pnpm install --frozen-lockfile &&
+      pnpm db:generate &&
+      pnpm build
+    startCommand: >-
+      pnpm --filter @wod-coach-ai/database run migrate:deploy &&
+      pnpm --filter @wod-coach-ai/api run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Both connections must belong to a separate staging database.
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5
+      - key: PASSWORD_RESET_BASE_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: PASSWORD_RESET_FROM
+        sync: false

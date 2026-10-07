@@ -642,11 +642,11 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
   it('preserves every historical snapshot across three successive reanalyses', async () => {
     await seedAnalyzedWod();
     const wod = structuredClone(store.wod);
-    for (const durationMinutes of [18, 19, 20]) {
+    for (const estimatedIntensity of [7, 8, 9]) {
       const analyses = structuredClone(store.analysisVersions);
       const strategies = structuredClone(store.strategyVersions);
       mocks.sendMessage.mockResolvedValue({
-        text: JSON.stringify({ ...ANALYSIS, durationMinutes }),
+        text: JSON.stringify({ ...ANALYSIS, estimatedIntensity }),
       });
       expect((await request('POST', 'analyze')).statusCode).toBe(200);
       expect(store.analysisVersions.slice(0, analyses.length)).toEqual(analyses);
@@ -1251,10 +1251,14 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
     const originalAnalysis = structuredClone(store.analysisVersions[0]);
     const originalStrategy = structuredClone(store.strategyVersions[0]);
     mocks.sendMessage.mockResolvedValue({
-      text: JSON.stringify({ ...ANALYSIS, durationMinutes: 18 }),
+      text: JSON.stringify({ ...ANALYSIS, estimatedIntensity: 6 }),
     });
     expect((await request('POST', 'analyze')).statusCode).toBe(200);
     expect(store.analysisVersions).toHaveLength(2);
+    expect(store.analysisVersions[1].snapshot).toMatchObject({
+      estimatedIntensity: 6,
+      durationMinutes: 20,
+    });
     expect(store.analysisVersions[0]).toEqual(originalAnalysis);
     expect(store.strategyVersions[0]).toEqual(originalStrategy);
     expect(store.strategy).toBeNull();
@@ -1396,12 +1400,15 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
   it('does not return the old strategy after reanalysis and failed regeneration', async () => {
     await seedAnalyzedWod();
     mocks.sendMessage.mockResolvedValue({
-      text: JSON.stringify({ ...ANALYSIS, durationMinutes: 18 }),
+      text: JSON.stringify({ ...ANALYSIS, estimatedIntensity: 6 }),
     });
     expect((await request('POST', 'analyze')).statusCode).toBe(200);
     mocks.sendMessage.mockResolvedValue({ text: 'invalid json' });
     expect((await request('POST', 'strategy')).statusCode).toBe(502);
-    expect((await request('GET', 'analysis')).json().analysis.durationMinutes).toBe(18);
+    expect((await request('GET', 'analysis')).json().analysis).toMatchObject({
+      estimatedIntensity: 6,
+      durationMinutes: 20,
+    });
     expect((await request('GET', 'strategy')).statusCode).toBe(404);
   });
 
@@ -1426,10 +1433,29 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
       await seedAnalyzedWod();
       const previous = structuredClone(store);
       mocks.sendMessage.mockResolvedValue({ text });
-      expect((await request('POST', 'analyze')).statusCode).toBe(502);
+      const response = await request('POST', 'analyze');
+      expect(response.statusCode).toBe(502);
+      expect(response.json()).toMatchObject({ code: 'WOD_ANALYSIS_INVALID_RESPONSE' });
+      expect(response.json().error).toContain('nenhuma analise anterior foi substituida');
       expect(store).toEqual(previous);
     },
   );
+
+  it('rejects AMRAP inferred from Tempo on an image without changing the saved pair', async () => {
+    await seedAnalyzedWod();
+    mocks.sendMessage.mockClear();
+    store.wod.rawText = 'Tempo 12 min';
+    store.wod.imageData = 'image-base64';
+    const previous = structuredClone(store);
+    mocks.sendMessage.mockResolvedValue({
+      text: JSON.stringify({ ...ladderAnalysis, extractedText: ladderSource, format: 'AMRAP' }),
+    });
+    const response = await request('POST', 'analyze');
+    expect(response.statusCode).toBe(502);
+    expect(response.json().code).toBe('WOD_ANALYSIS_INVALID_RESPONSE');
+    expect(mocks.sendMessage).toHaveBeenCalledTimes(2);
+    expect(store).toEqual(previous);
+  });
 
   it('preserves the old pair when the AI transport fails', async () => {
     await seedAnalyzedWod();
