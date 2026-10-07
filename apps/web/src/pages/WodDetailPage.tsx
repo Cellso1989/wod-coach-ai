@@ -13,6 +13,7 @@ import { WodResultSection } from '../components/WodResultSection.js';
 import { AthleteContextSection } from '../components/AthleteContextSection.js';
 import { StrategySection } from '../components/StrategySection.js';
 import { WodGenerationProgress } from '../components/WodGenerationProgress.js';
+import { WodLoadEditor } from '../components/WodLoadEditor.js';
 import { WodVersionHistory } from '../components/WodVersionHistory.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
@@ -100,6 +101,8 @@ function WodDetailContent({ id }: { id: string | undefined }) {
   const [editingDuration, setEditingDuration] = useState(false);
   const [editedDuration, setEditedDuration] = useState('');
   const [savingDuration, setSavingDuration] = useState(false);
+  const [editingLoads, setEditingLoads] = useState(false);
+  const [savingLoads, setSavingLoads] = useState(false);
   const [durationError, setDurationError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -108,7 +111,14 @@ function WodDetailContent({ id }: { id: string | undefined }) {
   const [analysisRevision, setAnalysisRevision] = useState(0);
   const [generatingStrategy, setGeneratingStrategy] = useState(false);
   const active = useRef(false);
-  const busy = loading || analyzing || saving || savingDuration || deleting || generatingStrategy;
+  const busy =
+    loading ||
+    analyzing ||
+    saving ||
+    savingDuration ||
+    savingLoads ||
+    deleting ||
+    generatingStrategy;
   const blocked = busy || readErrors.length > 0 || Boolean(error);
 
   useEffect(() => {
@@ -339,12 +349,16 @@ function WodDetailContent({ id }: { id: string | undefined }) {
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   onClick={startEditing}
-                  disabled={blocked || editingDuration}
+                  disabled={blocked || editingDuration || editingLoads}
                   variant="secondary"
                 >
                   {wod.rawText ? 'Editar' : 'Adicionar texto'}
                 </Button>
-                <Button onClick={() => void handleDeleteWod()} disabled={blocked} variant="danger">
+                <Button
+                  onClick={() => void handleDeleteWod()}
+                  disabled={blocked || editingLoads}
+                  variant="danger"
+                >
                   {deleting ? 'Apagando...' : 'Apagar'}
                 </Button>
               </div>
@@ -398,7 +412,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
               {analysisStatus && <WodGenerationProgress message={analysisStatus} />}
               <Button
                 onClick={() => void handleAnalyze()}
-                disabled={blocked || editing || editingDuration}
+                disabled={blocked || editing || editingDuration || editingLoads}
                 fullWidth
               >
                 {analyzing ? 'Trabalhando no treino...' : 'Analisar treino'}
@@ -414,7 +428,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
                 </span>
                 {!editingDuration && (
                   <button
-                    disabled={blocked || editing}
+                    disabled={blocked || editing || editingLoads}
                     onClick={startEditingDuration}
                     className="text-sm text-neutral-400 underline decoration-dotted"
                   >
@@ -478,6 +492,23 @@ function WodDetailContent({ id }: { id: string | undefined }) {
                 </div>
               )}
 
+              <WodLoadEditor
+                key={`loads-${analysis.versionId ?? analysisRevision}`}
+                wodId={wod.id}
+                analysis={analysis}
+                disabled={blocked || editing || editingDuration}
+                onEditingChange={setEditingLoads}
+                onSavingChange={(value) => {
+                  if (active.current) setSavingLoads(value);
+                }}
+                onSaved={(updated) => {
+                  if (!active.current) return;
+                  setAnalysis(updated);
+                  setAnalysisRevision((value) => value + 1);
+                  setStrategy(null);
+                }}
+              />
+
               {analysis.stimulus && (
                 <p className="text-sm text-neutral-400">Estímulo: {analysis.stimulus}</p>
               )}
@@ -495,7 +526,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
                         </p>
                         <ul className="space-y-1">
                           {round.movements.map((movement, index) => (
-                            <li key={index} className="flex items-center gap-2 text-sm">
+                            <li key={index} className="flex flex-wrap items-center gap-2 text-sm">
                               <span>{CATEGORY_ICON[movement.category] ?? '•'}</span>
                               <span>{movement.name}</span>
                               {movement.reps != null && (
@@ -505,7 +536,9 @@ function WodDetailContent({ id }: { id: string | undefined }) {
                                 <span className="text-neutral-500">{movement.distanceMeters}m</span>
                               )}
                               {movement.loadDescription && (
-                                <span className="text-neutral-500">{movement.loadDescription}</span>
+                                <span className="min-w-0 max-w-full break-words text-neutral-500 [overflow-wrap:anywhere]">
+                                  {movement.loadDescription}
+                                </span>
                               )}
                             </li>
                           ))}
@@ -519,7 +552,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
                   <h2 className="text-sm font-semibold text-neutral-300">Movimentos</h2>
                   <ul className="space-y-1">
                     {analysis.movements.map((movement) => (
-                      <li key={movement.id} className="flex items-center gap-2 text-sm">
+                      <li key={movement.id} className="flex flex-wrap items-center gap-2 text-sm">
                         <span>{CATEGORY_ICON[movement.category] ?? '•'}</span>
                         <span>{movement.name}</span>
                         {movement.reps != null && (
@@ -529,7 +562,9 @@ function WodDetailContent({ id }: { id: string | undefined }) {
                           <span className="text-neutral-500">{movement.distanceMeters}m</span>
                         )}
                         {movement.loadDescription && (
-                          <span className="text-neutral-500">{movement.loadDescription}</span>
+                          <span className="min-w-0 max-w-full break-words text-neutral-500 [overflow-wrap:anywhere]">
+                            {movement.loadDescription}
+                          </span>
                         )}
                       </li>
                     ))}
@@ -544,7 +579,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
               {analysisStatus && <WodGenerationProgress message={analysisStatus} />}
               <Button
                 onClick={() => void handleAnalyze()}
-                disabled={blocked || editing || editingDuration}
+                disabled={blocked || editing || editingDuration || editingLoads}
                 variant="secondary"
                 fullWidth
               >
@@ -566,7 +601,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
               wodId={wod.id}
               initialStrategy={strategy}
               workoutName={wod.name}
-              disabled={blocked || editing || editingDuration}
+              disabled={blocked || editing || editingDuration || editingLoads}
               onGeneratingChange={(generating) => {
                 if (active.current) setGeneratingStrategy(generating);
               }}

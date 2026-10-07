@@ -471,7 +471,14 @@ export const api = {
     return request<WodVersions>(`/wods/${encodeURIComponent(id)}/versions?${query}`, { signal });
   },
 
-  updateWodAnalysis: (id: string, input: { durationMinutes: number | null }) =>
+  updateWodAnalysis: (
+    id: string,
+    input: {
+      durationMinutes?: number | null;
+      versionId?: string;
+      movementLoads?: Array<{ id: string; loadDescription: string | null }>;
+    },
+  ) =>
     request<{ analysis: WodAnalysis }>(`/wods/${id}/analysis`, {
       method: 'PATCH',
       body: JSON.stringify(input),

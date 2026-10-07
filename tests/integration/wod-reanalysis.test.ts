@@ -234,7 +234,17 @@ function databaseClient(current: () => Store) {
         return current().analysis;
       },
       update: async ({ data }: { data: Row }) => {
-        Object.assign(current().analysis!, data);
+        const { movements, ...fields } = data;
+        Object.assign(current().analysis!, fields);
+        if (fields.roundBreakdown === Prisma.JsonNull) current().analysis!.roundBreakdown = null;
+        for (const edit of (
+          movements as { update?: Array<{ where: { id: string }; data: Row }> } | undefined
+        )?.update ?? []) {
+          Object.assign(
+            (current().analysis!.movements as Row[]).find((item) => item.id === edit.where.id)!,
+            edit.data,
+          );
+        }
         return current().analysis;
       },
       deleteMany: async () => {
@@ -350,6 +360,142 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  it('saves loads without AI, preserves timing/source/round volumes and snapshots, and sends loads to strategy', async () => {
+    await seedAnalyzedWod();
+    await request('PATCH', 'analysis', { durationMinutes: 16 });
+    const previous = structuredClone(store);
+    mocks.sendMessage.mockClear();
+    const response = await request('PATCH', 'analysis', {
+      versionId: store.analysis!.versionId,
+      movementLoads: [{ id: 'movement-0', loadDescription: '60/40 kg' }],
+    });
+    expect(response.statusCode).toBe(200);
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+    expect(store.wod).toEqual(previous.wod);
+    expect(store.analysisVersions.slice(0, -1)).toEqual(previous.analysisVersions);
+    expect(store.analysisVersions.at(-1)).toMatchObject({
+      reason: 'LOAD_EDIT',
+      snapshot: { durationMinutes: 16 },
+    });
+    expect(store.analysis!.rawResponse).toMatchObject({
+      durationOverrideMinutes: 16,
+      loadOverrides: [{ name: 'Thruster', loadDescription: '60/40 kg' }],
+    });
+    expect(store.analysis!.movements).toMatchObject([{ loadDescription: '60/40 kg' }, {}, {}]);
+    expect(store.analysis!.roundBreakdown).toEqual(
+      ANALYSIS.rounds.map((round) => ({
+        ...round,
+        movements: round.movements.map((item) =>
+          item.category === 'weightlifting' ? { ...item, loadDescription: '60/40 kg' } : item,
+        ),
+      })),
+    );
+    expect(store.strategy).toBeNull();
+    mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+    expect((await request('POST', 'strategy')).statusCode).toBe(200);
+    expect(store.strategyVersions.at(-1)).toMatchObject({
+      inputSnapshot: {
+        wodAnalysis: {
+          durationMinutes: 16,
+          movements: [{ loadDescription: '60/40 kg' }, {}, {}],
+          rounds: store.analysis!.roundBreakdown,
+        },
+      },
+    });
+  });
+
+  it.each([false, true])(
+    'preserves edited load on reanalysis (image: %s) and permits clearing it',
+    async (image) => {
+      await seedAnalyzedWod();
+      await request('PATCH', 'analysis', {
+        movementLoads: [{ id: 'movement-0', loadDescription: '50 kg' }],
+      });
+      if (image) {
+        store.wod.imageData = 'fixture-image';
+        store.wod.imageMimeType = 'image/png';
+      }
+      for (let attempt = 0; attempt < 2; attempt++) {
+        expect((await request('POST', 'analyze')).statusCode).toBe(200);
+        expect((store.analysis!.movements as Row[])[0]).toMatchObject({ loadDescription: '50 kg' });
+      }
+      expect(
+        (
+          await request('PATCH', 'analysis', {
+            movementLoads: [{ id: 'movement-0', loadDescription: null }],
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      expect((store.analysis!.movements as Row[])[0]).toMatchObject({ loadDescription: null });
+      expect(store.analysis!.warnings).toEqual(
+        expect.arrayContaining([expect.stringContaining('Carga nao informada para Thruster')]),
+      );
+    },
+  );
+
+  it.each([
+    [{ id: 'foreign-movement', loadDescription: '40 kg' }],
+    [
+      { id: 'movement-0', loadDescription: '40 kg' },
+      { id: 'movement-0', loadDescription: '50 kg' },
+    ],
+    [{ id: 'movement-0', loadDescription: 'x'.repeat(121) }],
+    [{ id: 'movement-0', loadDescription: '   ' }],
+  ])('rejects invalid load edits without changing state', async (movementLoads) => {
+    await seedAnalyzedWod();
+    const previous = structuredClone(store);
+    expect([400, 409]).toContain(
+      (await request('PATCH', 'analysis', { movementLoads })).statusCode,
+    );
+    expect(store).toEqual(previous);
+  });
+
+  it('rejects load edits based on an outdated analysis version', async () => {
+    await seedAnalyzedWod();
+    const previous = structuredClone(store);
+    expect(
+      (
+        await request('PATCH', 'analysis', {
+          versionId: 'outdated-version',
+          movementLoads: [{ id: 'movement-0', loadDescription: '40 kg' }],
+        })
+      ).statusCode,
+    ).toBe(409);
+    expect(store).toEqual(previous);
+  });
+
+  it('retains legacy manual timing when loads are edited before reanalysis', async () => {
+    await seedAnalyzedWod();
+    await request('PATCH', 'analysis', { durationMinutes: 16 });
+    store.analysis!.rawResponse = ANALYSIS;
+    expect(
+      (
+        await request('PATCH', 'analysis', {
+          movementLoads: [{ id: 'movement-0', loadDescription: '50 kg' }],
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    expect(store.analysis).toMatchObject({
+      durationMinutes: 16,
+      rawResponse: { durationOverrideMinutes: 16 },
+    });
+  });
+
+  it('rolls back load edits if version creation fails', async () => {
+    await seedAnalyzedWod();
+    const previous = structuredClone(store);
+    failWrite = 'analysisVersion';
+    expect(
+      (
+        await request('PATCH', 'analysis', {
+          movementLoads: [{ id: 'movement-0', loadDescription: '50 kg' }],
+        })
+      ).statusCode,
+    ).toBe(500);
+    expect(store).toEqual(previous);
+  });
   it.each(['text', 'image'] as const)(
     'asks for reanalysis of legacy ladder totals from %s before calling AI or changing state',
     async (sourceType) => {

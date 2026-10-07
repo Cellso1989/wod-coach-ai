@@ -57,12 +57,38 @@ export const wodAnalysisOutputSchema = z.object({
 
 export type WodAnalysisOutput = z.infer<typeof wodAnalysisOutputSchema>;
 
-/**
- * Permite ao atleta sobrescrever manualmente o tempo/time cap do WOD quando
- * a IA não conseguiu inferi-lo do texto (ou inferiu errado).
- */
-export const wodAnalysisUpdateSchema = z.object({
-  durationMinutes: z.number().int().min(0).max(180).nullable(),
+export const wodLoadOverrideSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  category: movementCategorySchema,
+  loadDescription: z.string().trim().min(1).max(120).nullable(),
 });
+
+// Partial manual edits complement the analysis without another AI call.
+export const wodAnalysisUpdateSchema = z
+  .object({
+    durationMinutes: z.number().int().min(0).max(180).nullable().optional(),
+    versionId: z.string().min(1).optional(),
+    movementLoads: z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          loadDescription: z.string().trim().min(1).max(120).nullable(),
+        }),
+      )
+      .min(1)
+      .max(30)
+      .optional(),
+  })
+  .refine((input) => input.durationMinutes !== undefined || input.movementLoads !== undefined, {
+    message: 'Informe tempo ou cargas para atualizar.',
+  })
+  .refine(
+    (input) =>
+      !input.movementLoads ||
+      new Set(input.movementLoads.map((item) => item.id)).size === input.movementLoads.length,
+    {
+      message: 'Movimentos duplicados.',
+    },
+  );
 
 export type WodAnalysisUpdateInput = z.infer<typeof wodAnalysisUpdateSchema>;

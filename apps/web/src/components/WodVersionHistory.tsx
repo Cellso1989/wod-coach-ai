@@ -313,7 +313,7 @@ export function WodVersionHistory({
                       ? ' - Ativa'
                       : ''}
                     {item.reason
-                      ? ` - ${item.reason === 'DURATION_EDIT' ? 'Duracao editada' : item.reason === 'LEGACY' ? 'Legado' : item.reason}`
+                      ? ` - ${item.reason === 'DURATION_EDIT' ? 'Duracao editada' : item.reason === 'LOAD_EDIT' ? 'Carga editada' : item.reason === 'LEGACY' ? 'Legado' : item.reason}`
                       : ''}
                   </option>
                 ))}

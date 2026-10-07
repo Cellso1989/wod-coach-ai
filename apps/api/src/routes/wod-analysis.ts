@@ -1,8 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import { Prisma, prisma } from '@wod-coach-ai/database';
 import { createOpenAiMessageSender, describeOpenAiApiError } from '@wod-coach-ai/ai';
-import { analyzeWod, reconcileTimeWarnings, WodAnalysisError } from '@wod-coach-ai/coach-engine';
-import { wodAnalysisUpdateSchema } from '@wod-coach-ai/validation';
+import {
+  analyzeWod,
+  applyLoadOverrides,
+  sameLoadMovement,
+  reconcileTimeWarnings,
+  WodAnalysisError,
+} from '@wod-coach-ai/coach-engine';
+import {
+  wodAnalysisUpdateSchema,
+  wodLoadOverrideSchema,
+  wodRoundOutputSchema,
+} from '@wod-coach-ai/validation';
 import { z } from 'zod';
 import {
   lockWodVersions,
@@ -36,7 +46,9 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
         const previousAnalysis = await prisma.wodAnalysis.findUnique({ where: { wodId: wod.id } });
         const previousVersionId = previousAnalysis?.versionId ?? null;
         const override = z
-          .object({ durationOverrideMinutes: wodAnalysisUpdateSchema.shape.durationMinutes })
+          .object({
+            durationOverrideMinutes: z.number().int().min(0).max(180).nullable().optional(),
+          })
           .safeParse(previousAnalysis?.rawResponse);
         let durationOverrideMinutes = override.success
           ? override.data.durationOverrideMinutes
@@ -49,6 +61,10 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
           if (version?.reason === 'DURATION_EDIT')
             durationOverrideMinutes = previousAnalysis!.durationMinutes;
         }
+        const savedLoads = z
+          .object({ loadOverrides: z.array(wodLoadOverrideSchema).max(30) })
+          .safeParse(previousAnalysis?.rawResponse);
+        const loadOverrides = savedLoads.success ? savedLoads.data.loadOverrides : [];
         let sendMessage;
         try {
           sendMessage = createOpenAiMessageSender();
@@ -72,6 +88,18 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
             },
             generation.sendMessage,
           );
+          const loaded = applyLoadOverrides(
+            output.movements,
+            output.rounds,
+            loadOverrides,
+            output.warnings,
+          );
+          output = {
+            ...output,
+            movements: loaded.movements,
+            rounds: loaded.rounds,
+            warnings: loaded.warnings,
+          };
         } catch (err) {
           if (err instanceof WodAnalysisError) {
             request.log.warn(
@@ -132,6 +160,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
               rawResponse: {
                 ...output,
                 ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
+                ...(loadOverrides.length ? { loadOverrides } : {}),
               },
               movements: {
                 create: output.movements.map((movement, index) => ({
@@ -161,6 +190,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
               rawResponse: {
                 ...output,
                 ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
+                ...(loadOverrides.length ? { loadOverrides } : {}),
               },
               movements: {
                 deleteMany: {},
@@ -234,33 +264,144 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
 
     const analysis = await prisma.$transaction(async (tx) => {
       await lockWodVersions(tx, id);
-      const current = await tx.wodAnalysis.findUniqueOrThrow({ where: { wodId: id } });
+      const current = await tx.wodAnalysis.findUnique({
+        where: { wodId: id },
+        include: { movements: { orderBy: { order: 'asc' } } },
+      });
+      if (!current || (parsed.data.versionId && current.versionId !== parsed.data.versionId)) {
+        return { error: 'A analise mudou. Atualize o treino antes de editar.', status: 409 };
+      }
       const rawResponse =
         current.rawResponse &&
         typeof current.rawResponse === 'object' &&
         !Array.isArray(current.rawResponse)
           ? current.rawResponse
           : {};
-      const warnings = reconcileTimeWarnings(current.warnings, parsed.data.durationMinutes);
+      const savedLoads = z
+        .object({ loadOverrides: z.array(wodLoadOverrideSchema).max(30) })
+        .safeParse(rawResponse);
+      let loadOverrides = savedLoads.success ? savedLoads.data.loadOverrides : [];
+      const edits = parsed.data.movementLoads ?? [];
+      const overrides = [];
+      for (const edit of edits) {
+        const movement = current.movements.find((item) => item.id === edit.id);
+        if (!movement)
+          return {
+            error: 'Movimento nao pertence a esta analise. Atualize o treino.',
+            status: 409,
+          };
+        overrides.push({
+          name: movement.name,
+          category: movement.category,
+          loadDescription: edit.loadDescription,
+        });
+      }
+      const rounds = z.array(wodRoundOutputSchema).safeParse(current.roundBreakdown);
+      if (edits.length && current.roundBreakdown != null && !rounds.success) {
+        return {
+          error: 'Confira a estrutura dos rounds antes de editar cargas. Reanalise o treino.',
+          status: 409,
+        };
+      }
+      const loaded = applyLoadOverrides(
+        current.movements,
+        rounds.success ? rounds.data : null,
+        overrides,
+        current.warnings,
+      );
+      if (loaded.accepted.length !== overrides.length) {
+        return {
+          error:
+            'Este movimento tem cargas diferentes ou repetidas em blocos distintos. Edite as cargas no texto do treino.',
+          status: 409,
+        };
+      }
+      for (const override of overrides) {
+        loadOverrides = [
+          ...loadOverrides.filter((item) => !sameLoadMovement(item, override)),
+          override,
+        ];
+      }
+      if (loadOverrides.length > 30) {
+        return {
+          error:
+            'Ha cargas manuais de movimentos antigos. Confira o texto do treino antes de continuar.',
+          status: 409,
+        };
+      }
+      let durationOverrideMinutes = parsed.data.durationMinutes;
+      if (
+        durationOverrideMinutes === undefined &&
+        edits.length &&
+        current.versionId &&
+        !Object.hasOwn(rawResponse, 'durationOverrideMinutes')
+      ) {
+        const version = await tx.wodAnalysisVersion.findFirst({
+          where: { id: current.versionId, wodId: id },
+          select: { reason: true },
+        });
+        if (version?.reason === 'DURATION_EDIT') durationOverrideMinutes = current.durationMinutes;
+      }
+      const durationMinutes =
+        parsed.data.durationMinutes !== undefined
+          ? parsed.data.durationMinutes
+          : current.durationMinutes;
+      const warnings = reconcileTimeWarnings(
+        edits.length ? loaded.warnings : current.warnings,
+        durationMinutes,
+      );
       const updated = await tx.wodAnalysis.update({
         where: { wodId: id },
         data: {
-          durationMinutes: parsed.data.durationMinutes,
+          durationMinutes,
           warnings,
+          ...(edits.length
+            ? {
+                movements: {
+                  update: edits.map((edit) => ({
+                    where: { id: edit.id },
+                    data: { loadDescription: edit.loadDescription },
+                  })),
+                },
+                roundBreakdown: loaded.rounds ?? Prisma.JsonNull,
+              }
+            : {}),
           rawResponse: {
             ...rawResponse,
-            durationMinutes: parsed.data.durationMinutes,
-            durationOverrideMinutes: parsed.data.durationMinutes,
+            durationMinutes,
+            ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
+            ...(edits.length
+              ? {
+                  movements: loaded.movements.map(
+                    ({ name, category, reps, distanceMeters, calories, loadDescription }) => ({
+                      name,
+                      category,
+                      reps,
+                      distanceMeters,
+                      calories,
+                      loadDescription,
+                    }),
+                  ),
+                  rounds: loaded.rounds,
+                  loadOverrides,
+                }
+              : {}),
             warnings,
           },
         },
         include: { movements: { orderBy: { order: 'asc' } } },
       });
-      const versioned = await recordAnalysisVersion(tx, wod, updated, 'DURATION_EDIT');
+      const versioned = await recordAnalysisVersion(
+        tx,
+        wod,
+        updated,
+        edits.length ? 'LOAD_EDIT' : 'DURATION_EDIT',
+      );
       await tx.wodStrategy.deleteMany({ where: { wodId: id } });
       return versioned;
     }, WOD_VERSION_TRANSACTION_OPTIONS);
 
+    if ('error' in analysis) return reply.code(analysis.status).send({ error: analysis.error });
     return reply.send({ analysis });
   });
 

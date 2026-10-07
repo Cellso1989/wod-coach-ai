@@ -39,7 +39,7 @@ export async function recordAnalysisVersion(
   tx: Prisma.TransactionClient,
   wod: Wod,
   analysis: AnalysisWithMovements,
-  reason: 'AI' | 'DURATION_EDIT',
+  reason: 'AI' | 'DURATION_EDIT' | 'LOAD_EDIT',
   generationMetadata?: AiGenerationMetadata,
 ) {
   const latest = await tx.wodAnalysisVersion.findFirst({
