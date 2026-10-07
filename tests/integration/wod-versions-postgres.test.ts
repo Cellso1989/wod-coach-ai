@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from '../../packages/database/dist/index.js';
 import { buildApp } from '../../apps/api/src/app.js';
 import { simpleSourceCase, wodFormatCases } from '../fixtures/wod-format-cases.js';
+import { ladderAnalysis, ladderSource, ladderStrategy } from '../fixtures/wod-ladder-case.js';
 
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
@@ -109,6 +110,67 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
   ) {
     return app.inject({ method, url: `/api/wods/${wodId}${suffix}`, headers, payload });
   }
+
+  it.each([false, true])(
+    'retains manually defined time in real PostgreSQL across reanalysis (image: %s)',
+    async (image) => {
+      const fresh = await prisma.wod.create({
+        data: {
+          userId: 'version-legacy-user',
+          date: new Date(),
+          sourceType: image ? 'IMAGE' : 'TEXT',
+          rawText: image ? null : ladderSource,
+          imageData: image ? 'fixture-image' : null,
+          imageMimeType: image ? 'image/png' : null,
+        },
+      });
+      const url = `/api/wods/${fresh.id}`;
+      const invoke = (method: 'POST' | 'PATCH', suffix: string, payload?: object) =>
+        app.inject({ method, url: `${url}/${suffix}`, headers, payload });
+      try {
+        const originalOutput = {
+          ...ladderAnalysis,
+          durationMinutes: null,
+          extractedText: image ? ladderSource : null,
+        };
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(originalOutput) });
+        expect((await invoke('POST', 'analyze')).statusCode).toBe(200);
+        const original = await prisma.wodAnalysisVersion.findFirstOrThrow({
+          where: { wodId: fresh.id },
+        });
+        expect((await invoke('PATCH', 'analysis', { durationMinutes: 16 })).statusCode).toBe(200);
+        for (let attempt = 0; attempt < 2; attempt++) {
+          expect((await invoke('POST', 'analyze')).statusCode).toBe(200);
+          expect(
+            await prisma.wodAnalysis.findUniqueOrThrow({ where: { wodId: fresh.id } }),
+          ).toMatchObject({
+            durationMinutes: 16,
+            roundBreakdown: ladderAnalysis.rounds,
+            rawResponse: { durationOverrideMinutes: 16 },
+          });
+        }
+        expect(
+          await prisma.wodAnalysisVersion.findUniqueOrThrow({ where: { id: original.id } }),
+        ).toEqual(original);
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ladderStrategy) });
+        expect((await invoke('POST', 'strategy')).statusCode).toBe(200);
+        expect(
+          await prisma.wodStrategyVersion.findFirstOrThrow({ where: { wodId: fresh.id } }),
+        ).toMatchObject({
+          inputSnapshot: { wodAnalysis: { durationMinutes: 16, rounds: ladderAnalysis.rounds } },
+        });
+        expect((await invoke('PATCH', 'analysis', { durationMinutes: null })).statusCode).toBe(200);
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(originalOutput) });
+        expect((await invoke('POST', 'analyze')).statusCode).toBe(200);
+        expect(
+          await prisma.wodAnalysis.findUniqueOrThrow({ where: { wodId: fresh.id } }),
+        ).toMatchObject({ durationMinutes: null, rawResponse: { durationOverrideMinutes: null } });
+      } finally {
+        await prisma.wod.delete({ where: { id: fresh.id } });
+      }
+    },
+    30_000,
+  );
 
   it('backfills legacy snapshots without guessing AI input or analysis linkage, and leaves HYROX intact', async () => {
     expect(

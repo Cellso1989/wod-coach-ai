@@ -3,6 +3,7 @@ import { api, ApiError, type WodStrategy } from '../lib/api.js';
 import { Alert, Button, Card } from './ui.js';
 import { WhatsAppShareButton } from './WhatsAppShareButton.js';
 import { formatWodStrategy } from '../lib/strategy-share.js';
+import { WodGenerationProgress } from './WodGenerationProgress.js';
 
 interface StrategySectionProps {
   wodId: string;
@@ -74,18 +75,14 @@ export function StrategySection({
     return (
       <div className="space-y-2">
         {error && <Alert>{error}</Alert>}
-        {generating && (
-          <Alert variant="info">
-            Cruzando o WOD com seus PRs e historico. Isso pode levar alguns segundos.
-          </Alert>
-        )}
+        {generating && <WodGenerationProgress />}
         <Button
           onClick={() => void handleGenerate()}
           disabled={disabled || generating}
           fullWidth
           className="py-4 font-bold"
         >
-          {generating ? 'Montando estrategia...' : 'Gerar estrategia para hoje'}
+          {generating ? 'Gerando...' : 'Gerar estrategia para hoje'}
         </Button>
       </div>
     );

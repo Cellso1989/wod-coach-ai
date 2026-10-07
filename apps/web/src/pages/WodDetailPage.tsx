@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
@@ -12,6 +12,8 @@ import {
 import { WodResultSection } from '../components/WodResultSection.js';
 import { AthleteContextSection } from '../components/AthleteContextSection.js';
 import { StrategySection } from '../components/StrategySection.js';
+import { WodGenerationProgress } from '../components/WodGenerationProgress.js';
+import { STRATEGY_PREPARATION_MESSAGE } from '../lib/wod-messages.js';
 import { WodVersionHistory } from '../components/WodVersionHistory.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
@@ -36,38 +38,6 @@ const CATEGORY_ICON: Record<string, string> = {
   monostructural: '🏃',
   mixed_modal: '⚙️',
 };
-
-const STRATEGY_PREPARATION_MESSAGE = 'Preparando seu sofrimento com estratégia 😂🔥';
-
-function AnalysisProgress({ message }: { message: string }) {
-  const container = useRef<HTMLParagraphElement>(null);
-  const text = useRef<HTMLSpanElement>(null);
-
-  useLayoutEffect(() => {
-    if (!container.current || !text.current) return;
-    const line = container.current;
-    const label = text.current;
-    const fit = () => {
-      label.style.fontSize = '16px';
-      const width = label.getBoundingClientRect().width;
-      if (width > 0) label.style.fontSize = `${Math.min(16, (16 * line.clientWidth) / width)}px`;
-    };
-    fit();
-    const observer = new ResizeObserver(fit);
-    observer.observe(line);
-    return () => observer.disconnect();
-  }, [message]);
-
-  return (
-    <div role="status" aria-atomic="true" className="bg-orange-950/30 px-2 py-3 text-orange-400">
-      <p ref={container} className="min-w-0 leading-6">
-        <span ref={text} className="inline-block whitespace-nowrap text-base font-semibold">
-          {message}
-        </span>
-      </p>
-    </div>
-  );
-}
 
 function WodFlowCard({
   hasText,
@@ -441,7 +411,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
           {!analysis && (
             <div className="space-y-2">
               {analysisError && <Alert>{analysisError}</Alert>}
-              {analysisStatus && <AnalysisProgress message={analysisStatus} />}
+              {analysisStatus && <WodGenerationProgress message={analysisStatus} />}
               <Button
                 onClick={() => void handleAnalyze()}
                 disabled={blocked || editing || editingDuration}
@@ -587,7 +557,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
                 Confiança da análise: {Math.round(analysis.confidence * 100)}%
               </p>
               {analysisError && <Alert>{analysisError}</Alert>}
-              {analysisStatus && <AnalysisProgress message={analysisStatus} />}
+              {analysisStatus && <WodGenerationProgress message={analysisStatus} />}
               <Button
                 onClick={() => void handleAnalyze()}
                 disabled={blocked || editing || editingDuration}

@@ -1,3 +1,15 @@
+export function reconcileTimeWarnings(
+  warnings: string[],
+  durationMinutes: number | null,
+): string[] {
+  if (durationMinutes == null) return warnings;
+  const missingTime = new Set([
+    'Time cap nao informado; Target e uma meta, nao o limite maximo.',
+    'Tempo ou time cap nao informado; a analise continua sem limite de tempo definido.',
+  ]);
+  return warnings.filter((warning) => !missingTime.has(warning));
+}
+
 export function readTimePrescription(source: string, kind: 'target' | 'cap'): number[] {
   const marker = kind === 'target' ? '(?:target|meta|objetivo)' : '(?:time[ -]?cap|cap)';
   const pattern = new RegExp(

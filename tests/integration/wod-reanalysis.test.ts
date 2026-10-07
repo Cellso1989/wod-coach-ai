@@ -11,7 +11,13 @@ const mocks = vi.hoisted(() => ({
   context: vi.fn(),
   prisma: {
     wod: { findFirst: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn() },
-    wodAnalysis: { upsert: vi.fn(), findUnique: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
+    wodAnalysis: {
+      upsert: vi.fn(),
+      findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      update: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     wodStrategy: { deleteMany: vi.fn(), findUnique: vi.fn(), upsert: vi.fn(), update: vi.fn() },
     wodAnalysisVersion: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
     wodStrategyVersion: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
@@ -171,7 +177,10 @@ async function leaseQuery(strings: TemplateStringsArray, ...values: unknown[]) {
 function databaseClient(current: () => Store) {
   function versions(key: 'analysisVersions' | 'strategyVersions') {
     return {
-      findFirst: async () => current()[key].at(-1) ?? null,
+      findFirst: async ({ where }: { where: { id?: string } }) =>
+        (where.id
+          ? current()[key].find((version) => version.id === where.id)
+          : current()[key].at(-1)) ?? null,
       findMany: async () => [...current()[key]].reverse(),
       create: async ({ data }: { data: Row }) => {
         if (failWrite === (key === 'analysisVersions' ? 'analysisVersion' : 'strategyVersion')) {
@@ -220,6 +229,10 @@ function databaseClient(current: () => Store) {
         return current().analysis;
       },
       findUnique: async () => current().analysis,
+      findUniqueOrThrow: async () => {
+        if (!current().analysis) throw new Error('Analysis not found');
+        return current().analysis;
+      },
       update: async ({ data }: { data: Row }) => {
         Object.assign(current().analysis!, data);
         return current().analysis;
@@ -1237,6 +1250,88 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
     });
     expect(store.strategy).toBeNull();
     expect(store.strategyVersions).toHaveLength(1);
+  });
+
+  it.each([false, true])(
+    'keeps manual timing across repeated reanalysis and strategy snapshots (image: %s)',
+    async (image) => {
+      store.wod.rawText = image ? null : ladderSource;
+      store.wod.imageData = image ? 'fixture-image' : null;
+      store.wod.imageMimeType = image ? 'image/png' : null;
+      mocks.sendMessage.mockResolvedValue({
+        text: JSON.stringify({
+          ...ladderAnalysis,
+          durationMinutes: null,
+          extractedText: image ? ladderSource : null,
+        }),
+      });
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      const original = structuredClone(store.analysisVersions[0]);
+      expect((await request('PATCH', 'analysis', { durationMinutes: 16 })).statusCode).toBe(200);
+      expect(store.analysis!.warnings).not.toEqual(
+        expect.arrayContaining([expect.stringMatching(/Tempo ou time cap nao informado/)]),
+      );
+      for (let attempt = 0; attempt < 2; attempt++) {
+        expect((await request('POST', 'analyze')).statusCode).toBe(200);
+        expect(store.analysis).toMatchObject({
+          durationMinutes: 16,
+          rawResponse: { durationOverrideMinutes: 16 },
+          roundBreakdown: ladderAnalysis.rounds,
+        });
+      }
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ladderStrategy) });
+      expect((await request('POST', 'strategy')).statusCode).toBe(200);
+      expect(store.strategyVersions.at(-1)).toMatchObject({
+        inputSnapshot: { wodAnalysis: { durationMinutes: 16, rounds: ladderAnalysis.rounds } },
+      });
+      expect(store.analysisVersions[0]).toEqual(original);
+      expect(store.wod.result.score).toBe('18:30');
+    },
+  );
+
+  it.each([0, null])(
+    'keeps an explicit manual value of %s instead of restoring the source cap',
+    async (durationMinutes) => {
+      await seedAnalyzedWod();
+      expect((await request('PATCH', 'analysis', { durationMinutes })).statusCode).toBe(200);
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      expect(store.analysis!.durationMinutes).toBe(durationMinutes);
+      expect(store.analysis!.rawResponse).toMatchObject({
+        durationOverrideMinutes: durationMinutes,
+      });
+    },
+  );
+
+  it('recovers manual time saved before the override metadata existed', async () => {
+    await seedAnalyzedWod();
+    await request('PATCH', 'analysis', { durationMinutes: 16 });
+    store.analysis!.rawResponse = ANALYSIS;
+    mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ANALYSIS) });
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    expect(store.analysis!.durationMinutes).toBe(16);
+  });
+
+  it('does not overwrite a manual time changed while reanalysis is in flight', async () => {
+    await seedAnalyzedWod();
+    let release!: (value: { text: string }) => void;
+    let started!: () => void;
+    const observed = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    mocks.sendMessage.mockImplementationOnce(() => {
+      started();
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    });
+    const pending = request('POST', 'analyze');
+    await observed;
+    await request('PATCH', 'analysis', { durationMinutes: 16 });
+    const edited = structuredClone(store);
+    release({ text: JSON.stringify(ANALYSIS) });
+    expect((await pending).statusCode).toBe(409);
+    expect(store).toEqual(edited);
   });
 
   it('does not activate a strategy if its analysis version changed during generation', async () => {

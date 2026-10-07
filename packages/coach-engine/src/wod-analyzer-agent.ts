@@ -8,7 +8,11 @@ import { WOD_FORMATS, MOVEMENT_CATEGORIES } from '@wod-coach-ai/types';
 import type { RefinementCtx } from 'zod';
 import { movementIdentity } from './movement-identity.js';
 import { compactLadderAnalysisIssue, readCompactLadders } from './wod-ladder-integrity.js';
-import { preferredTimePrescription, readTimePrescription } from './wod-time-prescription.js';
+import {
+  preferredTimePrescription,
+  readTimePrescription,
+  reconcileTimeWarnings,
+} from './wod-time-prescription.js';
 import { WOD_TERMINOLOGY } from './wod-terminology.js';
 import {
   callAiForJson,
@@ -23,6 +27,7 @@ export interface WodAnalyzerInput {
   rawText?: string | null;
   imageBase64?: string | null;
   imageMimeType?: string | null;
+  durationOverrideMinutes?: number | null;
 }
 
 export class WodAnalysisError extends AiJsonError {}
@@ -106,6 +111,8 @@ Regras críticas:
 - Target e a META de conclusao; Time cap e o LIMITE MAXIMO. "Target 10' / Time cap 15'"
   significa targetMinutes 10 e durationMinutes 15. Apostrofo (', ’ ou ′) significa minutos.
   Nunca use Target como duracao/time cap. Em AMRAP/EMOM, durationMinutes e a janela prescrita.
+- Se uma duracao manual for fornecida como contexto separado, ela prevalece sobre o tempo
+  da foto/texto somente em durationMinutes. Nao altere Target, movimentos ou rounds.
 - Tempo, meta e carga sao opcionais. Se faltarem ou estiverem ilegíveis, continue a analise
   dos movimentos e rounds, use null nos campos desconhecidos e avise em warnings.
   Nao exija formato/tempo/carga para analisar um treino legivel e nao invente valores.
@@ -164,6 +171,12 @@ function buildUserContent(input: WodAnalyzerInput): AiMessageContent {
       : 'Treino recebido apenas como imagem (ver acima).',
   });
 
+  if (input.durationOverrideMinutes !== undefined) {
+    content.push({
+      type: 'text',
+      text: `Duracao editada e salva pelo atleta: durationMinutes = ${JSON.stringify(input.durationOverrideMinutes)}. Este valor prevalece sobre o tempo da fonte, inclusive null (tempo removido). Preserve Target, formato, movimentos e rounds da fonte.`,
+    });
+  }
   return content;
 }
 
@@ -253,6 +266,7 @@ function validateSimpleSourceIntegrity(
   output: WodAnalysisOutput,
   source: string,
   ctx: RefinementCtx,
+  hasDurationOverride = false,
 ): void {
   const lines = source
     .split(/\r?\n/)
@@ -293,7 +307,8 @@ function validateSimpleSourceIntegrity(
   const duration = heading.match(/^amrap\s+(\d+)/)?.[1] ?? readTimePrescription(source, 'cap')[0];
   if (
     output.format !== format ||
-    output.durationMinutes !== (duration == null ? null : Number(duration))
+    (!hasDurationOverride &&
+      output.durationMinutes !== (duration == null ? null : Number(duration)))
   ) {
     ctx.addIssue({
       code: 'custom',
@@ -460,7 +475,12 @@ function validateSourceFormatIntegrity(
     });
   }
   const caps = preferredTimePrescription(input.rawText, output.extractedText, 'cap');
-  if (formats.size <= 1 && new Set(caps).size === 1 && output.durationMinutes !== caps[0]) {
+  if (
+    input.durationOverrideMinutes === undefined &&
+    formats.size <= 1 &&
+    new Set(caps).size === 1 &&
+    output.durationMinutes !== caps[0]
+  ) {
     ctx.addIssue({
       code: 'custom',
       path: ['durationMinutes'],
@@ -575,6 +595,8 @@ function normalizeAnalysisOutput(
       timingSource,
     );
   if (!hasTime) normalized.durationMinutes = null;
+  if (input.durationOverrideMinutes !== undefined)
+    normalized.durationMinutes = input.durationOverrideMinutes;
   return [input.rawText, output.extractedText].reduce<WodAnalysisOutput>(
     (result, text) => (text?.trim() ? inferUniformRoundsFromText(result, text) : result),
     normalized,
@@ -607,7 +629,12 @@ export async function analyzeWod(
           validateSourceFormatIntegrity(output, input, ctx);
           for (const source of [input.rawText, output.extractedText]) {
             if (source?.trim()) {
-              validateSimpleSourceIntegrity(output, source, ctx);
+              validateSimpleSourceIntegrity(
+                output,
+                source,
+                ctx,
+                input.durationOverrideMinutes !== undefined,
+              );
               const issue = compactLadderAnalysisIssue(output, source);
               if (issue) ctx.addIssue({ code: 'custom', path: ['rounds'], message: issue });
             }
@@ -676,7 +703,12 @@ export async function analyzeWod(
       const names = unloaded.map((movement) => movement.name).join(', ');
       notices.push(`Carga nao informada para ${names.slice(0, 200)}; confirme antes de executar.`);
     }
-    return { ...output, warnings: [...new Set([...notices, ...output.warnings])].slice(0, 10) };
+    return {
+      ...output,
+      warnings: [
+        ...new Set([...notices, ...reconcileTimeWarnings(output.warnings, output.durationMinutes)]),
+      ].slice(0, 10),
+    };
   } catch (err) {
     if (err instanceof AiJsonError) {
       throw new WodAnalysisError(err.message, err.rawResponse);

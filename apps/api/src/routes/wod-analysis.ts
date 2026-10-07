@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { Prisma, prisma } from '@wod-coach-ai/database';
 import { createOpenAiMessageSender, describeOpenAiApiError } from '@wod-coach-ai/ai';
-import { analyzeWod, WodAnalysisError } from '@wod-coach-ai/coach-engine';
+import { analyzeWod, reconcileTimeWarnings, WodAnalysisError } from '@wod-coach-ai/coach-engine';
 import { wodAnalysisUpdateSchema } from '@wod-coach-ai/validation';
 import { z } from 'zod';
 import {
@@ -33,6 +33,22 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
         onCleanupError: (err) => request.log.error({ err }, 'WOD generation lease cleanup failed'),
       },
       async (lease) => {
+        const previousAnalysis = await prisma.wodAnalysis.findUnique({ where: { wodId: wod.id } });
+        const previousVersionId = previousAnalysis?.versionId ?? null;
+        const override = z
+          .object({ durationOverrideMinutes: wodAnalysisUpdateSchema.shape.durationMinutes })
+          .safeParse(previousAnalysis?.rawResponse);
+        let durationOverrideMinutes = override.success
+          ? override.data.durationOverrideMinutes
+          : undefined;
+        if (durationOverrideMinutes === undefined && previousVersionId) {
+          const version = await prisma.wodAnalysisVersion.findFirst({
+            where: { id: previousVersionId, wodId: wod.id },
+            select: { reason: true },
+          });
+          if (version?.reason === 'DURATION_EDIT')
+            durationOverrideMinutes = previousAnalysis!.durationMinutes;
+        }
         let sendMessage;
         try {
           sendMessage = createOpenAiMessageSender();
@@ -48,7 +64,12 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
         let output;
         try {
           output = await analyzeWod(
-            { rawText: wod.rawText, imageBase64: wod.imageData, imageMimeType: wod.imageMimeType },
+            {
+              rawText: wod.rawText,
+              imageBase64: wod.imageData,
+              imageMimeType: wod.imageMimeType,
+              durationOverrideMinutes,
+            },
             generation.sendMessage,
           );
         } catch (err) {
@@ -79,11 +100,16 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
           const currentWod = await tx.wod.findFirst({
             where: { id: wod.id, userId: request.user.sub, discipline: 'CROSSFIT' },
           });
+          const currentAnalysis = await tx.wodAnalysis.findUnique({
+            where: { wodId: wod.id },
+            select: { versionId: true },
+          });
           if (
             !currentWod ||
             currentWod.rawText !== wod.rawText ||
             currentWod.imageData !== wod.imageData ||
-            currentWod.imageMimeType !== wod.imageMimeType
+            currentWod.imageMimeType !== wod.imageMimeType ||
+            (currentAnalysis?.versionId ?? null) !== previousVersionId
           ) {
             return null;
           }
@@ -103,7 +129,10 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
               confidence: output.confidence,
               warnings: output.warnings,
               roundBreakdown: output.rounds ?? Prisma.JsonNull,
-              rawResponse: output,
+              rawResponse: {
+                ...output,
+                ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
+              },
               movements: {
                 create: output.movements.map((movement, index) => ({
                   order: index,
@@ -129,7 +158,10 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
               confidence: output.confidence,
               warnings: output.warnings,
               roundBreakdown: output.rounds ?? Prisma.JsonNull,
-              rawResponse: output,
+              rawResponse: {
+                ...output,
+                ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
+              },
               movements: {
                 deleteMany: {},
                 create: output.movements.map((movement, index) => ({
@@ -170,7 +202,8 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
         if (!persisted) {
           reply.code(409);
           return {
-            error: 'O WOD mudou durante a analise. Atualize o treino e analise novamente.',
+            error:
+              'O WOD ou a analise mudou durante a analise. Atualize o treino e analise novamente.',
           };
         }
         const { analysis, wod: updatedWod } = persisted;
@@ -201,9 +234,26 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
 
     const analysis = await prisma.$transaction(async (tx) => {
       await lockWodVersions(tx, id);
+      const current = await tx.wodAnalysis.findUniqueOrThrow({ where: { wodId: id } });
+      const rawResponse =
+        current.rawResponse &&
+        typeof current.rawResponse === 'object' &&
+        !Array.isArray(current.rawResponse)
+          ? current.rawResponse
+          : {};
+      const warnings = reconcileTimeWarnings(current.warnings, parsed.data.durationMinutes);
       const updated = await tx.wodAnalysis.update({
         where: { wodId: id },
-        data: { durationMinutes: parsed.data.durationMinutes },
+        data: {
+          durationMinutes: parsed.data.durationMinutes,
+          warnings,
+          rawResponse: {
+            ...rawResponse,
+            durationMinutes: parsed.data.durationMinutes,
+            durationOverrideMinutes: parsed.data.durationMinutes,
+            warnings,
+          },
+        },
         include: { movements: { orderBy: { order: 'asc' } } },
       });
       const versioned = await recordAnalysisVersion(tx, wod, updated, 'DURATION_EDIT');

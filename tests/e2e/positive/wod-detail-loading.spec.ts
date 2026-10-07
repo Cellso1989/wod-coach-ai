@@ -202,6 +202,74 @@ test('leaving during analysis does not start strategy generation for the old rou
   }
 });
 
+test('strategy regeneration after editing duration uses the shared one-line preparation message', async ({
+  page,
+}) => {
+  const pending = gate();
+  let duration = 15;
+  await mock(page, async (route, _id, resource) => {
+    if (resource === 'analysis') {
+      if (route.request().method() === 'PATCH') {
+        expect(route.request().postDataJSON()).toEqual({ durationMinutes: 20 });
+        duration = 20;
+      }
+      await route.fulfill({
+        json: { analysis: { ...MOCK_ANALYSIS.analysis, durationMinutes: duration } },
+      });
+      return true;
+    }
+    if (resource === 'strategy' && route.request().method() === 'POST') {
+      await pending.promise;
+      await route.fulfill({ json: MOCK_STRATEGY });
+      return true;
+    }
+    if (resource === 'analyze' && route.request().method() === 'POST') {
+      await route.fulfill({
+        json: { analysis: { ...MOCK_ANALYSIS.analysis, durationMinutes: duration } },
+      });
+      return true;
+    }
+    return false;
+  });
+  try {
+    await page.goto('/wods/a');
+    await expect(page.getByRole('region', { name: 'Estrategia de execucao' })).toBeVisible();
+    await page.getByRole('button', { name: /15 min/ }).click();
+    await page.getByRole('spinbutton').fill('20');
+    await page.getByRole('button', { name: 'Salvar', exact: true }).click();
+    await expect(page.getByRole('button', { name: /20 min/ })).toBeVisible();
+    await page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }).click();
+    const progress = page.getByRole('status');
+    await expect(progress).toHaveText('Preparando seu sofrimento com estratégia 😂🔥');
+    await expect(page.getByText(/Cruzando o WOD com seus PRs/)).toHaveCount(0);
+    for (const width of [320, 390, 768, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(async () => {
+        expect(
+          await progress.locator('span').evaluate((label) => {
+            const bounds = label.getBoundingClientRect();
+            const parent = label.parentElement!.getBoundingClientRect();
+            return bounds.width <= parent.width + 1 && bounds.height <= 25;
+          }),
+        ).toBe(true);
+      }).toPass();
+      await progress.screenshot({
+        path: test.info().outputPath(`regeneration-progress-${width}.png`),
+      });
+    }
+    pending.release();
+    await expect(page.getByRole('region', { name: 'Estrategia de execucao' })).toBeVisible();
+    await expect(progress).toHaveCount(0);
+    await page.getByRole('button', { name: 'Reanalisar treino', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Estrategia de execucao' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /20 min/ })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('button', { name: /20 min/ })).toBeVisible();
+  } finally {
+    pending.release();
+  }
+});
+
 for (const operation of ['text', 'duration', 'delete']) {
   test(`leaving during ${operation} mutation preserves the destination state`, async ({ page }) => {
     const pending = gate();

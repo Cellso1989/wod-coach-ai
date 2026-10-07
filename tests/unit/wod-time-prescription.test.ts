@@ -5,6 +5,52 @@ import { ladderAnalysis, ladderSource } from '../fixtures/wod-ladder-case.js';
 const sendOutput = (output: unknown) => vi.fn().mockResolvedValue({ text: JSON.stringify(output) });
 
 describe('optional WOD timing and loads', () => {
+  it.each([false, true])(
+    'uses saved manual duration without changing image/text rounds or Target (image: %s)',
+    async (image) => {
+      const source = `${ladderSource}\nTarget 10'\nTime cap 15'`;
+      const send = sendOutput({
+        ...ladderAnalysis,
+        durationMinutes: 15,
+        extractedText: image ? source : null,
+      });
+      const result = await analyzeWod(
+        {
+          ...(image ? { imageBase64: 'fixture', imageMimeType: 'image/png' } : { rawText: source }),
+          durationOverrideMinutes: 16,
+        },
+        send,
+      );
+      expect(result.durationMinutes).toBe(16);
+      expect(result.targetMinutes).toBe(10);
+      expect(result.rounds).toEqual(ladderAnalysis.rounds);
+      expect(send.mock.calls[0][0].messages[0].content).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'text',
+            text: expect.stringContaining('durationMinutes = 16'),
+          }),
+        ]),
+      );
+    },
+  );
+  it('keeps simple-source movement guards when manual duration overrides an explicit cap', async () => {
+    const output = {
+      ...ladderAnalysis,
+      format: 'FOR_TIME',
+      durationMinutes: 15,
+      rounds: null,
+      movements: [{ name: 'Burpees', category: 'conditioning', reps: 10 }],
+    };
+    const input = { rawText: "For Time\n10 Burpees\nTime cap 15'", durationOverrideMinutes: 16 };
+    expect((await analyzeWod(input, sendOutput(output))).durationMinutes).toBe(16);
+    await expect(
+      analyzeWod(
+        input,
+        sendOutput({ ...output, movements: [{ ...output.movements[0], reps: 99 }] }),
+      ),
+    ).rejects.toBeInstanceOf(WodAnalysisError);
+  });
   it.each(["'", '’', '′', ' min', ' minutos'])(
     'separates Target 10 and cap 15 in text and image transcription (%s)',
     async (unit) => {
