@@ -1,4 +1,5 @@
 import type { HyroxStrategy, WodStrategy } from './api.js';
+import { formatStrategyRoundLabels } from './strategy-round-labels.js';
 
 function section(title: string, text: string | null | undefined): string {
   return text?.trim() ? `*${title}*\n${text.trim()}` : '';
@@ -20,12 +21,12 @@ export function formatWodStrategy(strategy: WodStrategy, workoutName?: string | 
     section('Objetivo', strategy.goal),
     section('Intensidade', `${strategy.recommendedIntensity}/10 | RPE ${strategy.targetRpe}`),
     section('Carga', strategy.loadRecommendation),
-    section('Ritmo', strategy.pacing),
-    section('Quebras', notes(strategy.breakStrategy)),
-    section('Execucao por movimento', notes(strategy.movementStrategy)),
-    section('Descanso', strategy.restStrategy),
-    section('Transicoes', strategy.transitionStrategy),
-    section('Energia', strategy.energyManagement),
+    section('Ritmo', formatStrategyRoundLabels(strategy.pacing)),
+    section('Quebras', formatStrategyRoundLabels(notes(strategy.breakStrategy))),
+    section('Execucao por movimento', formatStrategyRoundLabels(notes(strategy.movementStrategy))),
+    section('Descanso', formatStrategyRoundLabels(strategy.restStrategy)),
+    section('Transicoes', formatStrategyRoundLabels(strategy.transitionStrategy)),
+    section('Energia', formatStrategyRoundLabels(strategy.energyManagement)),
     section('Ponto critico', strategy.criticalPoint),
     section('Pontos de atencao', strategy.warnings.map((warning) => `- ${warning}`).join('\n')),
   ]);

@@ -57,6 +57,14 @@ const MINIMAL_INPUT: StrategyCoachInput = {
 };
 
 describe('generateStrategy', () => {
+  it('requests readable round labels without altering repetition notation', async () => {
+    const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(VALID_STRATEGY)));
+    await generateStrategy(MINIMAL_INPUT, send);
+    expect(send.mock.calls[0][0].systemPrompt).toContain('Rounds 1 e 2');
+    expect(send.mock.calls[0][0].systemPrompt).toContain('Rounds 1, 2 e 3');
+    expect(send.mock.calls[0][0].systemPrompt).toContain('Preserve a notacao das repeticoes (21-15-9)');
+    expect(send).toHaveBeenCalledTimes(1);
+  });
   it('includes CrossFit definitions without assuming RX loads or personal records', async () => {
     const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(VALID_STRATEGY)));
     await generateStrategy(MINIMAL_INPUT, send);

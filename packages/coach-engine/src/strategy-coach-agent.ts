@@ -203,6 +203,10 @@ Regras críticas:
 - Modo celular: escreva como instrucoes de treino, nao como explicacao. Use frases curtas,
   comandos diretos e numeros. Evite "porque", justificativas longas e repeticoes. Se uma
   ideia ja apareceu em outro campo, nao repita.
+  Para identificar rounds, escreva "Round 1", "Rounds 1 e 2" ou "Rounds 1, 2 e 3".
+  Nao use abreviacoes como "R1-2" ou "R3-4" nem hifen entre numeros de rounds.
+  Liste todos os rounds do intervalo; "Rounds 1 e 3" nao significa rounds 1, 2 e 3.
+  Preserve a notacao das repeticoes (21-15-9), quebras (6/6) e tempos (8-12s).
 - Limites de texto: pacing/restStrategy/energyManagement ate ~120 caracteres; cada item de
   breakStrategy/movementStrategy ate ~90 caracteres; warnings ate ~120 caracteres.
 - Seja OBJETIVO E CONCISO. O atleta lê isso no celular, no meio do treino — não é um
@@ -253,7 +257,7 @@ Regras críticas:
 - Agrupar TEXTO nao permite agrupar REPETICOES. Para escadas, use uma entrada por
   movimento com a escada ordenada no nome: "Thrusters (21-15-9 por round)",
   "Toes-to-bar (21-15-9 por round)", "Bar Muscle-up (12-10-8 por round)".
-  Dentro de strategy, indique quebras separadas: "R1: 7/7/7; R2: 8/7; R3: 9 direto".
+  Dentro de strategy, indique quebras separadas: "Round 1: 7/7/7; Round 2: 8/7; Round 3: 9 direto".
   Respeite a ordem de rounds: Thrusters -> T2B -> BMU em CADA round nesse exemplo.
   Nunca escreva "45 reps: 3x15" ou "30 reps: 5x6" para esses movimentos.
 - Responda APENAS com o JSON. Nenhum outro texto.`;

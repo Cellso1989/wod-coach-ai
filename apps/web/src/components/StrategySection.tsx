@@ -4,6 +4,7 @@ import { Alert, Button, Card } from './ui.js';
 import { WhatsAppShareButton } from './WhatsAppShareButton.js';
 import { formatWodStrategy } from '../lib/strategy-share.js';
 import { WodGenerationProgress } from './WodGenerationProgress.js';
+import { formatStrategyRoundLabels } from '../lib/strategy-round-labels.js';
 
 interface StrategySectionProps {
   wodId: string;
@@ -29,8 +30,12 @@ function StrategyNoteList({
       <div className="space-y-2">
         {notes.map((note) => (
           <div key={`${title}-${note.movement}`} className="rounded-lg bg-neutral-950 p-3">
-            <p className="text-sm font-semibold text-neutral-200">{note.movement}</p>
-            <p className="mt-1 text-sm text-neutral-400">{note.strategy}</p>
+            <p className="text-sm font-semibold text-neutral-200">
+              {formatStrategyRoundLabels(note.movement)}
+            </p>
+            <p className="mt-1 text-sm text-neutral-400">
+              {formatStrategyRoundLabels(note.strategy)}
+            </p>
           </div>
         ))}
       </div>
@@ -141,7 +146,7 @@ export function StrategySection({
                   <dt className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
                     {label}
                   </dt>
-                  <dd className="text-sm text-neutral-300">{text}</dd>
+                  <dd className="text-sm text-neutral-300">{formatStrategyRoundLabels(text)}</dd>
                 </div>
               ),
           )}

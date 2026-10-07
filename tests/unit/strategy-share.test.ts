@@ -43,6 +43,18 @@ const hyrox: HyroxStrategy = {
 };
 
 describe('WhatsApp strategy sharing', () => {
+  it('shares readable round groups without changing repetitions', () => {
+    const text = formatWodStrategy({
+      ...wod,
+      breakStrategy: [
+        {
+          movement: 'Hang power clean (12 por round)',
+          strategy: 'R1-2: 6/6; R3-4: 5/5/2; R5: 4/4/4 se fadiga.',
+        },
+      ],
+    });
+    expect(text).toContain('Rounds 1 e 2: 6/6; Rounds 3 e 4: 5/5/2; Round 5: 4/4/4 se fadiga.');
+  });
   it('keeps WOD execution instructions and warnings, omitting absent sections', () => {
     const text = formatWodStrategy(wod, 'Fran');
     expect(text).toContain('*Treino*\nFran');
