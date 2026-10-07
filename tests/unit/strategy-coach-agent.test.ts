@@ -57,6 +57,17 @@ const MINIMAL_INPUT: StrategyCoachInput = {
 };
 
 describe('generateStrategy', () => {
+  it('reserves output headroom for reasoning and the complete strategy JSON', async () => {
+    const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(VALID_STRATEGY)));
+    await generateStrategy(MINIMAL_INPUT, send);
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'gpt-5-mini',
+        maxTokens: 8000,
+        effort: 'medium',
+      }),
+    );
+  });
   it.each([
     'pacing',
     'restStrategy',

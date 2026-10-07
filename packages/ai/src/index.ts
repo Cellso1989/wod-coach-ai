@@ -64,6 +64,12 @@ class OpenAiApiError extends Error {
     public readonly status: number,
     message: string,
     public readonly code?: string,
+    public readonly diagnostics?: {
+      responseStatus: string | null;
+      incompleteReason: string | null;
+      maxOutputTokens: number;
+      metadata: AiResponseMetadata;
+    },
   ) {
     super(message);
   }
@@ -183,6 +189,19 @@ export function createOpenAiMessageSender(
           502,
           'OpenAI response was not completed',
           'response_not_completed',
+          {
+            responseStatus:
+              typeof (body as { status?: unknown } | null)?.status === 'string'
+                ? (body as { status: string }).status
+                : null,
+            incompleteReason:
+              typeof (body as { incomplete_details?: { reason?: unknown } } | null)
+                ?.incomplete_details?.reason === 'string'
+                ? (body as { incomplete_details: { reason: string } }).incomplete_details.reason
+                : null,
+            maxOutputTokens: params.maxTokens,
+            metadata: responseMetadata((body ?? {}) as Record<string, unknown>),
+          },
         );
       }
 

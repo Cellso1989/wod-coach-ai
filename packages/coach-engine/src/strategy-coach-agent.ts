@@ -274,7 +274,8 @@ export async function generateStrategy(
       sendMessage,
       maxAttempts: options.maxAttempts,
       model: 'gpt-5-mini',
-      maxTokens: 3500,
+      // Responses budgets include reasoning as well as the final strategy JSON.
+      maxTokens: 8000,
       effort: 'medium',
     });
     // Clamp defensivo: recommendedIntensity deve SEMPRE ser 9 ou 10, e targetRpe

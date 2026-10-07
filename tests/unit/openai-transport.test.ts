@@ -25,6 +25,31 @@ afterEach(() => {
 });
 
 describe('OpenAI transport completion and deadline', () => {
+  it('records bounded diagnostics for an incomplete response without exposing its text', async () => {
+    respond({
+      status: 'incomplete',
+      incomplete_details: { reason: 'max_output_tokens' },
+      output_text: 'private partial response',
+      id: 'resp-incomplete',
+      model: 'gpt-5-mini',
+      usage: { input_tokens: 100, output_tokens: 2500, total_tokens: 2600 },
+    });
+    const error = await createOpenAiMessageSender('test-key')(PARAMS).catch((err: unknown) => err);
+    expect(error).toMatchObject({
+      diagnostics: {
+        responseStatus: 'incomplete',
+        incompleteReason: 'max_output_tokens',
+        maxOutputTokens: 2500,
+        metadata: {
+          responseId: 'resp-incomplete',
+          model: 'gpt-5-mini',
+          usage: { inputTokens: 100, outputTokens: 2500, totalTokens: 2600 },
+        },
+      },
+    });
+    expect(JSON.stringify(error)).not.toContain('private partial response');
+    expect(describeOpenAiApiError(error)?.status).toBe(502);
+  });
   it('preserves reported zero usage rather than treating it as absent', async () => {
     respond({
       status: 'completed',
