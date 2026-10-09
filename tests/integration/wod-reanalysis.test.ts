@@ -517,6 +517,75 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
     },
   );
 
+  describe('scored interval prescription', () => {
+    const source = "4 Sets\nAMRAP 3'\n200m run\n8 Ring muscle up\nMax Squat snatch 43kg\nRest 1'";
+    const movements = [
+      { name: 'Run', category: 'monostructural', distanceMeters: 200 },
+      { name: 'Ring muscle up', category: 'gymnastics', reps: 8 },
+      { name: 'Squat snatch', category: 'weightlifting', reps: null, loadDescription: '43kg' },
+    ];
+    const intervalAnalysis = {
+      ...ANALYSIS,
+      format: 'INTERVAL',
+      durationMinutes: 12,
+      extractedText: source,
+      movements: [
+        { ...movements[0], distanceMeters: 800 },
+        { ...movements[1], reps: 32 },
+        movements[2],
+      ],
+      rounds: Array.from({ length: 4 }, (_, index) => ({
+        roundNumber: index + 1,
+        label: `Bloco ${index + 1}: AMRAP 3 min; rest 1 min`,
+        movements,
+      })),
+    };
+    const intervalStrategy = {
+      ...STRATEGY,
+      target: null,
+      goal: 'Maximizar a soma de squat snatches nos 4 blocos.',
+      pacing: 'Controle a corrida em cada bloco.',
+      restStrategy: 'Descanse 1 min entre blocos.',
+      breakStrategy: [{ movement: 'Ring muscle up', strategy: 'Individuais antes da falha.' }],
+      movementStrategy: [{ movement: 'Squat snatch', strategy: 'Individuais no tempo restante.' }],
+    };
+    it.each(['text', 'image'])(
+      'blocks legacy %s analysis without AI or state changes',
+      async (kind) => {
+        await seedAnalyzedWod();
+        store.wod.rawText = kind === 'text' ? source : 'Carga confirmada';
+        store.analysis!.rawResponse = intervalAnalysis;
+        store.analysis!.roundBreakdown = null;
+        const previous = structuredClone(store);
+        mocks.sendMessage.mockClear();
+        expect((await request('POST', 'strategy')).statusCode).toBe(409);
+        expect(mocks.sendMessage).not.toHaveBeenCalled();
+        expect(store).toEqual(previous);
+        expect(lease).toBeNull();
+      },
+    );
+    it.each(['text', 'image'])(
+      'preserves %s score context and rejects invalid advice without persistence',
+      async (kind) => {
+        store.wod.rawText = kind === 'text' ? source : 'Carga confirmada';
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(intervalAnalysis) });
+        expect((await request('POST', 'analyze')).statusCode).toBe(200);
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(intervalStrategy) });
+        expect((await request('POST', 'strategy')).statusCode).toBe(200);
+        expect(store.strategyVersions.at(-1)!.inputSnapshot).toMatchObject({
+          wodAnalysis: { extractedText: source, rounds: intervalAnalysis.rounds },
+        });
+        const previous = structuredClone(store);
+        mocks.sendMessage.mockResolvedValue({
+          text: JSON.stringify({ ...intervalStrategy, target: '2-3 rounds completos em 16:00' }),
+        });
+        expect((await request('POST', 'strategy')).statusCode).toBe(502);
+        expect(store).toEqual(previous);
+        expect(lease).toBeNull();
+      },
+    );
+  });
+
   it('persists aligned ladders and rejects aggregate strategy without publishing a version', async () => {
     store.wod.rawText = ladderSource;
     mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ladderAnalysis) });

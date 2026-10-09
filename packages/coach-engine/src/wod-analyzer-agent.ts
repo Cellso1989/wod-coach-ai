@@ -14,6 +14,7 @@ import {
   reconcileTimeWarnings,
 } from './wod-time-prescription.js';
 import { WOD_TERMINOLOGY } from './wod-terminology.js';
+import { readScoredIntervals, scoredIntervalAnalysisIssue } from './wod-interval-integrity.js';
 import {
   callAiForJson,
   AiJsonError,
@@ -108,6 +109,13 @@ Regra crítica sobre "rounds" (WODs com estrutura por round):
   com "sets" dentro de um único movimento — só use "rounds" para a estrutura macro do WOD.
 
 Regras críticas:
+- Sets de AMRAP com descanso sao INTERVAL, com um item em rounds por set.
+  Ex.: 4 Sets / AMRAP 3' / 200m run / 8 Ring muscle up / Max Squat snatch / Rest 1'.
+  Cada set executa corrida e RMU uma vez; o restante dos 3 min e max squat snatch.
+  Reinicie na corrida a cada set. Score: soma dos squat snatches, nao rounds.
+  Use labels "Bloco 1: AMRAP 3 min; rest 1 min" etc. Reps de max snatch: null.
+  durationMinutes = soma das janelas de trabalho (12 neste exemplo); descanso nao soma.
+  Preserve carga informada e nao invente descanso final como tempo para pontuar.
 - Target e a META de conclusao; Time cap e o LIMITE MAXIMO. "Target 10' / Time cap 15'"
   significa targetMinutes 10 e durationMinutes 15. Apostrofo (', ’ ou ′) significa minutos.
   Nunca use Target como duracao/time cap. Em AMRAP/EMOM, durationMinutes e a janela prescrita.
@@ -457,6 +465,8 @@ function validateSourceFormatIntegrity(
     return formats;
   };
   const textFormats = formatsIn(input.rawText ?? '');
+  if ([input.rawText, output.extractedText].some((source) => source && readScoredIntervals(source)))
+    return;
   // Explicit athlete context takes precedence over headings inferred by transcription.
   const formats = textFormats.size ? textFormats : formatsIn(output.extractedText ?? '');
   // Mixed phases need the analyzer; only enforce an unambiguous explicit format.
@@ -592,6 +602,9 @@ function normalizeAnalysisOutput(
   const targets = preferredTimePrescription(input.rawText, output.extractedText, 'target');
   const source = [input.rawText, output.extractedText].filter(Boolean).join('\n');
   const normalized = { ...output };
+  if (input.rawText && readScoredIntervals(input.rawText) && !output.extractedText) {
+    normalized.extractedText = input.rawText;
+  }
   if (new Set(targets).size === 1) normalized.targetMinutes = targets[0];
   if (!targets.length && output.targetMinutes != null) normalized.targetMinutes = null;
   const timingSource = source
@@ -637,6 +650,22 @@ export async function analyzeWod(
           validateSourceFormatIntegrity(output, input, ctx);
           for (const source of [input.rawText, output.extractedText]) {
             if (source?.trim()) {
+              const intervalIssue = scoredIntervalAnalysisIssue(output, source);
+              if (intervalIssue)
+                ctx.addIssue({ code: 'custom', path: ['rounds'], message: intervalIssue });
+              const interval = readScoredIntervals(source);
+              if (
+                interval &&
+                input.durationOverrideMinutes === undefined &&
+                output.durationMinutes !== interval.sets * interval.workMinutes
+              ) {
+                ctx.addIssue({
+                  code: 'custom',
+                  path: ['durationMinutes'],
+                  message:
+                    'Some somente as janelas de trabalho; descanso nao e tempo para pontuar.',
+                });
+              }
               validateSimpleSourceIntegrity(
                 output,
                 source,

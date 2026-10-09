@@ -12,6 +12,8 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 
 ## Produto
 
+- Sets de AMRAP com descanso e movimento final de max reps exigem janelas independentes e score nesse movimento. Caso protegido: 4 sets de 3 min, 200m run + 8 RMU + max squat snatch, rest 1 min. Meta soma snatches; sem base para prever reps, target null e goal explicita o score. durationMinutes soma trabalho (12 min), sem descanso; edicao manual continua prevalecendo. Labels dos blocos preservam trabalho/descanso no contrato atual, sem migration. Guarda estreita reconhece a prescricao completa run/RMU/snatch em texto ou extractedText; desconhecidos/fases adicionais seguem pelo analisador. Retry rejeita rounds agregados, ordem/volumes/carga incorretos, meta em rounds e pacing continuo. API pede reanalise de estruturas antigas antes de chamar IA e preserva fonte na estrategia. Testes de imagem usam transcricao simulada, nao OCR real nem chamada paga. Mudanca local, sem deploy.
+
 - O app e o WOD Coach AI, focado em CrossFit/WOD.
 - URL de producao: https://wod-coach-ai.onrender.com
 - O app roda no Render com Web Service Node e banco PostgreSQL.

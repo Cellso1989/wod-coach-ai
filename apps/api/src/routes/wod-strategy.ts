@@ -5,6 +5,8 @@ import {
   generateStrategy,
   StrategyGenerationError,
   compactLadderAnalysisIssue,
+  scoredIntervalAnalysisIssue,
+  readScoredIntervals,
   type StrategyCoachInput,
 } from '@wod-coach-ai/coach-engine';
 import { wodAnalysisOutputSchema, type WodRoundOutput } from '@wod-coach-ai/validation';
@@ -91,6 +93,25 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
           };
         }
 
+        if (
+          [wodWithAnalysis.rawText, extractedText].some(
+            (source) =>
+              source &&
+              scoredIntervalAnalysisIssue(
+                {
+                  format: analysis.format,
+                  rounds: (analysis.roundBreakdown as WodRoundOutput[] | null) ?? null,
+                },
+                source,
+              ),
+          )
+        ) {
+          reply.code(409);
+          return {
+            error: 'Reanalise este WOD: a analise salva nao preservou os blocos e descansos',
+          };
+        }
+
         const athleteProfile = await prisma.athleteProfile.findUnique({ where: { userId } });
 
         let sendMessage;
@@ -106,6 +127,9 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
           .safeParse(analysis.rawResponse);
         const strategyInput: StrategyCoachInput = {
           wodAnalysis: {
+            extractedText: readScoredIntervals(wodWithAnalysis.rawText ?? '')
+              ? wodWithAnalysis.rawText
+              : extractedText || wodWithAnalysis.rawText,
             format: analysis.format,
             durationMinutes: analysis.durationMinutes,
             targetMinutes: prescription.success ? prescription.data.targetMinutes : null,

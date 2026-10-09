@@ -10,6 +10,7 @@ import { loadCalculationSchema, validateLoadCalculations } from './strategy-load
 import { validateStrategyTextIntegrity } from './strategy-text-integrity.js';
 import { validateStrategyLadderIntegrity } from './wod-ladder-integrity.js';
 import { WOD_TERMINOLOGY } from './wod-terminology.js';
+import { readScoredIntervals, validateScoredIntervalStrategy } from './wod-interval-integrity.js';
 
 export type { SendMessage } from './ai-json-agent.js';
 
@@ -65,6 +66,14 @@ seguido de Thruster e BMU). Quando "rounds" existir:
   for null, nao assuma rounds ou escadas ausentes; use somente a prescricao conhecida.
 
 Determine a estratégia adaptando-a ao formato do treino:
+- Sets com AMRAP e descanso: respeite cada janela independente e o descanso prescrito.
+  Quando houver max reps no ultimo movimento, o score e a soma desse movimento.
+  Corrida e ginastica anteriores sao requisitos por bloco; nao pontuam nem se repetem
+  dentro da janela. Meta em reps do movimento pontuado, nunca rounds em tempo total.
+  Sem historico suficiente para prever reps, target null e goal com o score correto.
+  Oriente ritmo por bloco e descanso entre blocos; nao use primeiras/ultimas metades
+  de um AMRAP continuo. Capacidade de 2 RMU nao comprova duplas repetiveis: se for
+  maximo unbroken, prefira individuais e evite falha. Nao invente essa capacidade.
 - "wodAnalysis.targetMinutes" e o Target prescrito (meta), nao o limite maximo.
   Ex.: Target 10 min e durationMinutes 15 min: buscar 10 min, respeitando o cap de 15.
   Nao confunda essa meta do box com a previsao personalizada do atleta no campo target.
@@ -263,7 +272,8 @@ Regras críticas:
 - Responda APENAS com o JSON. Nenhum outro texto.`;
 
 function buildUserContent(input: StrategyCoachInput): string {
-  return `Dados para a recomendação de hoje:\n\n${JSON.stringify(input, null, 2)}`;
+  const scoredIntervals = readScoredIntervals(input.wodAnalysis.extractedText ?? '');
+  return `Dados para a recomendação de hoje:\n\n${JSON.stringify({ ...input, ...(scoredIntervals ? { scoredIntervals, scoreMovement: 'Squat snatch', scoreAggregation: 'sum across sets' } : {}) }, null, 2)}`;
 }
 
 export interface GenerateStrategyOptions {
@@ -287,6 +297,7 @@ export async function generateStrategy(
           validateLoadCalculations(input, output, ctx);
           validateStrategyTextIntegrity(output, ctx);
           validateStrategyLadderIntegrity(input.wodAnalysis, output, ctx);
+          validateScoredIntervalStrategy(input.wodAnalysis, output, ctx);
         })
         .pipe(strategyOutputSchema),
       systemPrompt: SYSTEM_PROMPT,
