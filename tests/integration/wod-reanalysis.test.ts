@@ -5,6 +5,10 @@ import { Prisma } from '../../packages/database/dist/index.js';
 import { simpleSourceCase, wodFormatCases } from '../fixtures/wod-format-cases.js';
 import { ladderAnalysis, ladderSource, ladderStrategy } from '../fixtures/wod-ladder-case.js';
 import type { WodAnalysisOutput } from '@wod-coach-ai/validation';
+import {
+  productionIntervalAnalysis,
+  productionIntervalSource,
+} from '../fixtures/wod-scored-interval-production.js';
 
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
@@ -549,6 +553,21 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
       breakStrategy: [{ movement: 'Ring muscle up', strategy: 'Individuais antes da falha.' }],
       movementStrategy: [{ movement: 'Squat snatch', strategy: 'Individuais no tempo restante.' }],
     };
+    it('persists the failed production image payload and generates its strategy', async () => {
+      store.wod.rawText = null;
+      store.wod.imageData = 'fixture-image';
+      store.wod.imageMimeType = 'image/png';
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(productionIntervalAnalysis) });
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      expect(store.analysis!.movements[0]).toMatchObject({ name: '200m run', distanceMeters: 800 });
+      expect(store.analysis!.movements[2]).toMatchObject({ loadDescription: null });
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(intervalStrategy) });
+      expect((await request('POST', 'strategy')).statusCode).toBe(200);
+      expect(store.strategyVersions.at(-1)!.inputSnapshot).toMatchObject({
+        wodAnalysis: { extractedText: productionIntervalSource },
+      });
+      expect(lease).toBeNull();
+    });
     it.each(['text', 'image'])(
       'blocks legacy %s analysis without AI or state changes',
       async (kind) => {

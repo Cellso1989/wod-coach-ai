@@ -44,6 +44,12 @@ function key(name: string) {
     .replace(/\bsnatches\b/g, 'snatch');
 }
 
+function isPrescribedRun(name: string, distance: number): boolean {
+  if (key(name) === 'run') return true;
+  const qualified = name.trim().match(/^(\d+)\s*(?:m|meters?|metros?)\s+(run|running)$/i);
+  return qualified != null && Number(qualified[1]) === distance;
+}
+
 export function scoredIntervalAnalysisIssue(
   analysis: Pick<WodAnalysisOutput, 'format' | 'rounds'>,
   source: string,
@@ -59,7 +65,7 @@ export function scoredIntervalAnalysisIssue(
       round.roundNumber !== index + 1 ||
       round.movements.length !== 3 ||
       !run ||
-      key(run.name) !== 'run' ||
+      !isPrescribedRun(run.name, distance) ||
       run.distanceMeters !== distance ||
       !rings ||
       key(rings.name) !== 'ring muscle up' ||

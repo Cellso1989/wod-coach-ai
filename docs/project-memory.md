@@ -12,6 +12,8 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 
 ## Produto
 
+- Regressao da publicacao e5a01f1: resposta real da analise de imagem tinha estrutura correta, mas nomeava Run como "200m run"; guarda estreita rejeitava somente pelo nome. Comparacao contextual agora aceita prefixo de distancia igual ao prescrito e continua rejeitando distancia divergente, row ou nomes com movimento extra. "Max effort" em loadDescription de squat snatch sem carga na fonte e normalizado para null; max reps nao e peso. Fixture de resposta de producao sem identificadores pessoais reproduz a falha antes da correcao e cobre analise, guarda de legado e geracao de estrategia. Nao representa novo teste OCR pago.
+
 - Sets de AMRAP com descanso e movimento final de max reps exigem janelas independentes e score nesse movimento. Caso protegido: 4 sets de 3 min, 200m run + 8 RMU + max squat snatch, rest 1 min. Meta soma snatches; sem base para prever reps, target null e goal explicita o score. durationMinutes soma trabalho (12 min), sem descanso; edicao manual continua prevalecendo. Labels dos blocos preservam trabalho/descanso no contrato atual, sem migration. Guarda estreita reconhece a prescricao completa run/RMU/snatch em texto ou extractedText; desconhecidos/fases adicionais seguem pelo analisador. Retry rejeita rounds agregados, ordem/volumes/carga incorretos, meta em rounds e pacing continuo. API pede reanalise de estruturas antigas antes de chamar IA e preserva fonte na estrategia. Testes de imagem usam transcricao simulada, nao OCR real nem chamada paga. Mudanca local, sem deploy.
 
 - O app e o WOD Coach AI, focado em CrossFit/WOD.

@@ -116,6 +116,8 @@ Regras críticas:
   Use labels "Bloco 1: AMRAP 3 min; rest 1 min" etc. Reps de max snatch: null.
   durationMinutes = soma das janelas de trabalho (12 neste exemplo); descanso nao soma.
   Preserve carga informada e nao invente descanso final como tempo para pontuar.
+  "Max" indica repeticoes no tempo restante, nao carga. Sem peso informado,
+  loadDescription deve ser null; nao use "Max effort" como carga.
 - Target e a META de conclusao; Time cap e o LIMITE MAXIMO. "Target 10' / Time cap 15'"
   significa targetMinutes 10 e durationMinutes 15. Apostrofo (', ’ ou ′) significa minutos.
   Nunca use Target como duracao/time cap. Em AMRAP/EMOM, durationMinutes e a janela prescrita.
@@ -602,6 +604,21 @@ function normalizeAnalysisOutput(
   const targets = preferredTimePrescription(input.rawText, output.extractedText, 'target');
   const source = [input.rawText, output.extractedText].filter(Boolean).join('\n');
   const normalized = { ...output };
+  const interval =
+    readScoredIntervals(input.rawText ?? '') ?? readScoredIntervals(output.extractedText ?? '');
+  if (interval && interval.load == null) {
+    const preserveUnknownLoad = (movement: WodMovementOutput): WodMovementOutput =>
+      movementIdentity(movement.name) === 'squat snatch' &&
+      /^max effort$/i.test(movement.loadDescription?.trim() ?? '')
+        ? { ...movement, loadDescription: null }
+        : movement;
+    normalized.movements = output.movements.map(preserveUnknownLoad);
+    normalized.rounds =
+      output.rounds?.map((round) => ({
+        ...round,
+        movements: round.movements.map(preserveUnknownLoad),
+      })) ?? output.rounds;
+  }
   if (input.rawText && readScoredIntervals(input.rawText) && !output.extractedText) {
     normalized.extractedText = input.rawText;
   }

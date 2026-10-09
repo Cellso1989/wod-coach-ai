@@ -7,6 +7,10 @@ import {
   StrategyGenerationError,
 } from '@wod-coach-ai/coach-engine';
 import type { WodAnalysisOutput } from '@wod-coach-ai/validation';
+import {
+  productionIntervalAnalysis,
+  productionIntervalSource,
+} from '../fixtures/wod-scored-interval-production.js';
 
 const source = "Wod\n4 Sets\nAmrap 3'\n200m run\n8 Ring muscle up\nMax Squat snatch 43kg\nRest 1'";
 const movements = [
@@ -73,6 +77,42 @@ const input = {
 };
 
 describe('scored AMRAP sets', () => {
+  it('accepts the production image response with a distance-qualified run name', async () => {
+    const send = sender(productionIntervalAnalysis);
+    const result = await analyzeWod({ imageBase64: 'mock', imageMimeType: 'image/png' }, send);
+    expect(result.rounds).toHaveLength(4);
+    expect(result.rounds![0]!.movements[0]!.distanceMeters).toBe(200);
+    expect(result.movements[0]!.distanceMeters).toBe(800);
+    expect(result.movements[2]!.loadDescription).toBeNull();
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+  it('accepts existing saved production rounds for strategy without reanalysis', async () => {
+    expect(
+      scoredIntervalAnalysisIssue(productionIntervalAnalysis, productionIntervalSource),
+    ).toBeNull();
+    const send = sender(strategy);
+    expect(
+      (await generateStrategy({ ...input, wodAnalysis: productionIntervalAnalysis }, send)).goal,
+    ).toBe(strategy.goal);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+  it.each(['400m run', '200m row', '200m run + burpees'])(
+    'rejects a mismatching qualified name: %s',
+    async (name) => {
+      const invalid = {
+        ...productionIntervalAnalysis,
+        rounds: productionIntervalAnalysis.rounds!.map((round) => ({
+          ...round,
+          movements: round.movements.map((movement) =>
+            movement.name === '200m run' ? { ...movement, name } : movement,
+          ),
+        })),
+      };
+      await expect(
+        analyzeWod({ rawText: productionIntervalSource }, sender(invalid)),
+      ).rejects.toBeInstanceOf(WodAnalysisError);
+    },
+  );
   it('preserves the original image transcription without inventing a load', async () => {
     const original = source.replace(' 43kg', '');
     const removeLoad = (m: (typeof movements)[number]) => ({ ...m, loadDescription: null });
