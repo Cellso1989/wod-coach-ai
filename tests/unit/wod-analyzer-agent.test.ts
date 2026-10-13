@@ -210,6 +210,30 @@ describe('analyzeWod', () => {
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 
+  it('normalizes workout load units to kg when OCR or model returns lb', async () => {
+    const output = {
+      ...VALID_OUTPUT,
+      movements: [
+        { name: 'Thruster', category: 'weightlifting', reps: 20, loadDescription: '95 lbs' },
+      ],
+      rounds: [
+        {
+          roundNumber: 1,
+          label: 'Round 1',
+          movements: [
+            { name: 'Thruster', category: 'weightlifting', reps: 20, loadDescription: '95 lb' },
+          ],
+        },
+      ],
+    };
+    const sendMessage: SendMessage = vi.fn().mockResolvedValue(textMessage(JSON.stringify(output)));
+
+    const result = await analyzeWod({ rawText: '20 Thrusters 95kg' }, sendMessage);
+
+    expect(result.movements[0]?.loadDescription).toBe('95 kg');
+    expect(result.rounds?.[0]?.movements[0]?.loadDescription).toBe('95 kg');
+  });
+
   it('strips markdown code fences before parsing', async () => {
     const fenced = '```json\n' + JSON.stringify(VALID_OUTPUT) + '\n```';
     const sendMessage: SendMessage = vi.fn().mockResolvedValue(textMessage(fenced));

@@ -55,10 +55,11 @@ for (const width of [390, 1280]) {
     await page.goto('/personal-records');
     await expect(page.getByText('Tipo nao informado - 100 kg')).toBeVisible();
     await expect(page.getByText('5RM - 100 kg')).toBeVisible();
+    await expect(page.locator('li').filter({ hasText: 'Back Squat' })).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Ver %', exact: true })).toHaveCount(0);
     await expect(page.getByText('Evolucao dos PRs')).toHaveCount(0);
     await page
-      .locator('li')
+      .getByTestId('personal-record-entry')
       .filter({ hasText: 'Tipo nao informado' })
       .getByRole('button', { name: 'Editar', exact: true })
       .click();
@@ -66,6 +67,7 @@ for (const width of [390, 1280]) {
     await page.getByLabel('Tipo de PR').selectOption('ONE_RM');
     await page.getByRole('button', { name: 'Salvar alteracoes' }).click();
     expect(payloads.at(-1)).toMatchObject({ recordType: 'ONE_RM', repetitions: null, value: 100 });
+    await expect(page.locator('li').filter({ hasText: 'Back Squat' })).toHaveCount(1);
     await page.getByRole('button', { name: 'Ver %', exact: true }).click();
     await expect(page.getByText('50 kg', { exact: true })).toBeVisible();
     await page.getByPlaceholder('Movimento (ex: Back Squat, Fran)').fill('Front Squat');
