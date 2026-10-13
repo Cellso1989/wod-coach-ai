@@ -76,6 +76,13 @@ com este formato exato:
   "warnings": [string]
 }
 
+Regra de unidade de carga:
+- Toda carga externa lida no treino deve ser tratada como quilogramas (kg). Nao use lb/lbs.
+- Se a fonte trouxer numero com unidade de peso, normalize para kg em "loadDescription"
+  (ex.: "60 kg", "60kg", "60/40kg"). Se a leitura/OCR devolver lb/lbs por engano,
+  mantenha o numero prescrito e troque apenas a unidade para kg.
+- Se um numero de carga aparecer sem unidade em contexto claro de peso externo, registre como kg.
+
 Regra crítica sobre "rounds" (WODs com estrutura por round):
 - Em uma prescricao compacta sem separadores de fases, escadas com a mesma quantidade
   de etapas se aplicam aos mesmos rounds, respeitando a ordem dos movimentos.
@@ -552,6 +559,16 @@ function movementWithPerRoundValue(
   };
 }
 
+function normalizeLoadDescriptionToKg(loadDescription: string | null | undefined) {
+  if (!loadDescription?.trim()) return loadDescription;
+  return loadDescription.replace(/\b(lb|lbs|pound|pounds|libras?)\b/gi, 'kg');
+}
+
+function normalizeMovementLoadToKg<T extends WodMovementOutput>(movement: T): T {
+  const loadDescription = normalizeLoadDescriptionToKg(movement.loadDescription);
+  return loadDescription === movement.loadDescription ? movement : { ...movement, loadDescription };
+}
+
 function inferUniformRoundsFromText(
   output: WodAnalysisOutput,
   sourceText: string,
@@ -635,6 +652,12 @@ function normalizeAnalysisOutput(
   if (!hasTime) normalized.durationMinutes = null;
   if (input.durationOverrideMinutes !== undefined)
     normalized.durationMinutes = input.durationOverrideMinutes;
+  normalized.movements = normalized.movements.map(normalizeMovementLoadToKg);
+  normalized.rounds =
+    normalized.rounds?.map((round) => ({
+      ...round,
+      movements: round.movements.map(normalizeMovementLoadToKg),
+    })) ?? normalized.rounds;
   return [input.rawText, output.extractedText].reduce<WodAnalysisOutput>(
     (result, text) => (text?.trim() ? inferUniformRoundsFromText(result, text) : result),
     normalized,

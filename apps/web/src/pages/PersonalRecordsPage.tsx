@@ -34,6 +34,11 @@ const RECORD_LABELS: Record<PersonalRecordType, string> = {
   UNBROKEN_REPS: 'Repeticoes sem quebra',
   TIME: 'Tempo',
 };
+
+function movementGroupKey(name: string) {
+  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 function recordLabel(record: PersonalRecord) {
   return record.recordType === 'REP_MAX'
     ? `${record.repetitions}RM`
@@ -60,6 +65,21 @@ export function PersonalRecordsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedMovements, setExpandedMovements] = useState<Set<string>>(new Set());
+
+  const recordGroups = useMemo(() => {
+    const groups = new Map<string, PersonalRecord[]>();
+    for (const record of records) {
+      const key = movementGroupKey(record.movementName);
+      const group = groups.get(key) ?? [];
+      group.push(record);
+      groups.set(key, group);
+    }
+    return Array.from(groups.entries()).map(([key, group]) => ({
+      key,
+      movementName: group[0]?.movementName ?? '',
+      records: group,
+    }));
+  }, [records]);
 
   const historyByMovement = useMemo(() => {
     const groups = new Map<string, PersonalRecord[]>();
@@ -327,63 +347,82 @@ export function PersonalRecordsPage() {
       )}
 
       <ul className="space-y-2">
-        {records.map((record) => {
-          const isWeight =
-            WEIGHT_UNITS.has(record.unit.toLowerCase()) && record.recordType === 'ONE_RM';
-          const isExpanded = expandedId === record.id;
+        {recordGroups.map((group) => {
           return (
             <li
-              key={record.id}
+              key={group.key}
               className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{record.movementName}</p>
-                  <p className="text-sm text-neutral-400">
-                    {recordLabel(record)}
-                    {' - '}
-                    {record.value} {record.unit}
-                    {record.notes ? ` - ${record.notes}` : ''}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {isWeight && (
-                    <button
-                      onClick={() => setExpandedId(isExpanded ? null : record.id)}
-                      className="text-xs text-orange-400"
-                    >
-                      {isExpanded ? 'Ocultar %' : 'Ver %'}
-                    </button>
-                  )}
-                  <Button
-                    onClick={() => handleEdit(record)}
-                    variant="secondary"
-                    className="min-h-8 px-2 py-1 text-xs"
-                  >
-                    Editar
-                  </Button>
-                  <Button
-                    onClick={() => void handleDelete(record)}
-                    variant="danger"
-                    className="min-h-8 px-2 py-1 text-xs"
-                  >
-                    Remover
-                  </Button>
+              <div className="space-y-3">
+                <p className="truncate font-medium">{group.movementName}</p>
+                <div className="space-y-3">
+                  {group.records.map((record, index) => {
+                    const isWeight =
+                      WEIGHT_UNITS.has(record.unit.toLowerCase()) && record.recordType === 'ONE_RM';
+                    const isExpanded = expandedId === record.id;
+                    return (
+                      <div
+                        key={record.id}
+                        data-testid="personal-record-entry"
+                        className={
+                          index > 0 ? 'border-t border-neutral-800 pt-3' : undefined
+                        }
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm text-neutral-400">
+                              {recordLabel(record)}
+                              {' - '}
+                              {record.value} {record.unit}
+                              {record.notes ? ` - ${record.notes}` : ''}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            {isWeight && (
+                              <button
+                                onClick={() => setExpandedId(isExpanded ? null : record.id)}
+                                className="text-xs text-orange-400"
+                              >
+                                {isExpanded ? 'Ocultar %' : 'Ver %'}
+                              </button>
+                            )}
+                            <Button
+                              onClick={() => handleEdit(record)}
+                              variant="secondary"
+                              className="min-h-8 px-2 py-1 text-xs"
+                            >
+                              Editar
+                            </Button>
+                            <Button
+                              onClick={() => void handleDelete(record)}
+                              variant="danger"
+                              className="min-h-8 px-2 py-1 text-xs"
+                            >
+                              Remover
+                            </Button>
+                          </div>
+                        </div>
+
+                        {isWeight && isExpanded && (
+                          <div className="mt-3 grid grid-cols-3 gap-2 border-t border-neutral-800 pt-3">
+                            {PERCENTAGE_STEPS.map((pct) => (
+                              <div
+                                key={pct}
+                                className="rounded-md bg-neutral-950 px-2 py-1.5 text-center"
+                              >
+                                <p className="text-xs text-neutral-500">{pct}%</p>
+                                <p className="text-sm font-semibold">
+                                  {roundToHalf((record.value * pct) / 100)} {record.unit}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-
-              {isWeight && isExpanded && (
-                <div className="mt-3 grid grid-cols-3 gap-2 border-t border-neutral-800 pt-3">
-                  {PERCENTAGE_STEPS.map((pct) => (
-                    <div key={pct} className="rounded-md bg-neutral-950 px-2 py-1.5 text-center">
-                      <p className="text-xs text-neutral-500">{pct}%</p>
-                      <p className="text-sm font-semibold">
-                        {roundToHalf((record.value * pct) / 100)} {record.unit}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
             </li>
           );
         })}
