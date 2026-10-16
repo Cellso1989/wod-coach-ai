@@ -175,6 +175,7 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
               <span className="mb-2 block">Mês da classificação</span>
               <TextInput
                 aria-label="Mês da classificação"
+                className="block min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:min-w-0"
                 type="month"
                 min="2020-01"
                 max={currentMonth()}

@@ -12,19 +12,24 @@ const SOURCE_LABEL: Record<WodSourceType, string> = {
   TEXT_AND_IMAGE: 'Texto + imagem',
 };
 
-export function HyroxPage() {
+export function HyroxPage({ demo = false }: { demo?: boolean }) {
+  const isDemo = import.meta.env.DEV && demo;
   const [workouts, setWorkouts] = useState<HyroxWorkout[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
+    if (isDemo) {
+      setLoading(false);
+      return;
+    }
     api
       .listHyroxWorkouts(100)
       .then(({ workouts }) => setWorkouts(workouts))
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Erro ao carregar.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isDemo]);
 
   const filteredWorkouts = useMemo(() => {
     const normalized = search.trim().toLowerCase();
@@ -51,16 +56,21 @@ export function HyroxPage() {
       <PageHeader>
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-xl font-bold">HYROX</h1>
-          <div className="flex items-center gap-3">
-            <BrandHomeLink />
-            <Link to="/hyrox/new" className="text-sm text-orange-500">
-              + Novo
-            </Link>
-          </div>
+          <BrandHomeLink />
         </div>
       </PageHeader>
 
       <NavBar />
+
+      {isDemo && (
+        <p className="rounded-lg border border-sky-900 bg-sky-950/30 px-3 py-2 text-xs text-sky-300">
+          Prévia local · lista vazia de demonstração
+        </p>
+      )}
+
+      <div className="flex justify-center">
+        <ButtonLink to="/hyrox/new">Novo Treino</ButtonLink>
+      </div>
 
       <TextInput
         type="search"

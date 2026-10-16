@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Dumbbell } from 'lucide-react';
 import { api, ApiError, type Wod, type WodSourceType } from '../lib/api.js';
 import { NavBar } from '../components/NavBar.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
@@ -20,7 +21,8 @@ const SOURCE_LABEL: Record<WodSourceType, string> = {
   TEXT_AND_IMAGE: 'Texto + imagem',
 };
 
-export function WodListPage() {
+export function WodListPage({ demo = false }: { demo?: boolean }) {
+  const isDemo = import.meta.env.DEV && demo;
   const [wods, setWods] = useState<Wod[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,12 +31,16 @@ export function WodListPage() {
   const [resultFilter, setResultFilter] = useState<'ALL' | 'WITH_RESULT' | 'WITHOUT_RESULT'>('ALL');
 
   useEffect(() => {
+    if (isDemo) {
+      setLoading(false);
+      return;
+    }
     api
       .listWods(100)
       .then(({ wods }) => setWods(wods))
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Erro ao carregar.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isDemo]);
 
   const filteredWods = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -69,17 +75,33 @@ export function WodListPage() {
     <PageShell>
       <PageHeader>
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-xl font-bold">Meus WODs</h1>
-          <div className="flex items-center gap-3">
-            <BrandHomeLink />
-            <Link to="/wods/new" className="text-sm text-orange-500">
-              + Novo
-            </Link>
-          </div>
+          <h1 className="text-xl font-bold">CrossFit</h1>
+          <BrandHomeLink />
         </div>
       </PageHeader>
 
       <NavBar />
+
+      {isDemo && (
+        <p className="rounded-lg border border-sky-900 bg-sky-950/30 px-3 py-2 text-xs text-sky-300">
+          Prévia local · lista vazia de demonstração
+        </p>
+      )}
+
+      <div className="flex justify-center">
+        <Link
+          to="/wods/new"
+          className="flex min-h-[84px] w-full items-center gap-4 rounded-[20px] border-2 border-orange-300 bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-4 text-white transition duration-200 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-4 focus-visible:ring-offset-neutral-950 active:brightness-95"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+            <Dumbbell size={22} strokeWidth={2} className="-rotate-45" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 text-left">
+            <span className="block text-lg font-bold leading-6">Novo WOD</span>
+            <span className="mt-1 block text-sm leading-5">Comece seu próximo desafio</span>
+          </span>
+        </Link>
+      </div>
 
       <div className="space-y-2 rounded-lg border border-neutral-800 p-3">
         <TextInput

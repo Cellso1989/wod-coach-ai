@@ -32,7 +32,11 @@ function App() {
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/register" element={<RegisterPage />} />
               {import.meta.env.DEV && (
-                <Route path="/preview/ranking" element={<RankingPage demo />} />
+                <>
+                  <Route path="/preview/ranking" element={<RankingPage demo />} />
+                  <Route path="/preview/wods" element={<WodListPage demo />} />
+                  <Route path="/preview/hyrox" element={<HyroxPage demo />} />
+                </>
               )}
               <Route element={<ProtectedRoute />}>
                 <Route path="/" element={<DashboardPage />} />
