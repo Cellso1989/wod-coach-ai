@@ -615,6 +615,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
 
           <WodResultSection
             wodId={wod.id}
+            analysis={analysis}
             initialResult={(wod.result as WodResult | null | undefined) ?? null}
             onResultSaved={(result) =>
               setWod((current) => (current ? { ...current, result } : current))

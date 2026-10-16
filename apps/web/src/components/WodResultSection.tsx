@@ -1,20 +1,34 @@
-import { useState, type FormEvent } from 'react';
-import { api, ApiError, type WodResult } from '../lib/api.js';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { api, ApiError, type WodAnalysis, type WodResult } from '../lib/api.js';
+import { getWodResultFeedback } from '../lib/wod-result-feedback.js';
 import { Alert, Button, Card, TextInput } from './ui.js';
 
 interface WodResultSectionProps {
   wodId: string;
   initialResult: WodResult | null;
+  analysis?: Pick<WodAnalysis, 'format' | 'durationMinutes'> | null;
   onResultSaved?: (result: WodResult) => void;
 }
 
-export function WodResultSection({ wodId, initialResult, onResultSaved }: WodResultSectionProps) {
+export function WodResultSection({
+  wodId,
+  initialResult,
+  analysis,
+  onResultSaved,
+}: WodResultSectionProps) {
   const [result, setResult] = useState<WodResult | null>(initialResult);
   const [editing, setEditing] = useState(false);
 
   const [score, setScore] = useState(initialResult?.score ?? '');
   const [resultError, setResultError] = useState<string | null>(null);
   const [savingResult, setSavingResult] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const feedbackDialog = useRef<HTMLDialogElement>(null);
+  const feedbackTitleId = useId();
+
+  useEffect(() => {
+    if (feedback) feedbackDialog.current?.showModal();
+  }, [feedback]);
 
   async function handleSaveResult(event: FormEvent) {
     event.preventDefault();
@@ -26,6 +40,7 @@ export function WodResultSection({ wodId, initialResult, onResultSaved }: WodRes
       setScore(result.score);
       setEditing(false);
       onResultSaved?.(result);
+      setFeedback(getWodResultFeedback(result.score, analysis));
     } catch (err) {
       setResultError(
         err instanceof ApiError ? err.message : 'Não foi possível salvar o resultado.',
@@ -64,7 +79,7 @@ export function WodResultSection({ wodId, initialResult, onResultSaved }: WodRes
         <TextInput
           type="text"
           required
-          placeholder='Resultado (ex: "8 rounds + 12 reps", "12:34")'
+          placeholder='Resultado (ex: "8 rounds + 12 reps", "12:34", "CAP 10")'
           value={score}
           onChange={(e) => setScore(e.target.value)}
         />
@@ -76,23 +91,43 @@ export function WodResultSection({ wodId, initialResult, onResultSaved }: WodRes
   }
 
   return (
-    <Card className="space-y-4 bg-transparent">
-      <div>
-        <h2 className="text-sm font-semibold text-neutral-300">Resultado</h2>
-        <p className="text-lg font-bold">{result.score}</p>
-      </div>
-      <Button
-        type="button"
-        variant="secondary"
-        fullWidth
-        onClick={() => {
-          setScore(result.score);
-          setResultError(null);
-          setEditing(true);
-        }}
+    <>
+      <Card className="space-y-4 bg-transparent">
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-300">Resultado</h2>
+          <p className="text-lg font-bold">{result.score}</p>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          fullWidth
+          onClick={() => {
+            setScore(result.score);
+            setResultError(null);
+            setEditing(true);
+          }}
+        >
+          Editar resultado
+        </Button>
+      </Card>
+      <dialog
+        ref={feedbackDialog}
+        aria-labelledby={feedbackTitleId}
+        onClose={() => setFeedback(null)}
+        className="!m-auto w-[calc(100%-2rem)] max-w-sm rounded-xl border border-orange-900/50 bg-neutral-950 p-6 text-center text-neutral-100 backdrop:bg-black/70"
       >
-        Editar resultado
-      </Button>
-    </Card>
+        <h2 id={feedbackTitleId} className="text-xl font-bold">
+          {feedback}
+        </h2>
+        <Button
+          type="button"
+          fullWidth
+          className="mt-5"
+          onClick={() => feedbackDialog.current?.close()}
+        >
+          Fechar
+        </Button>
+      </dialog>
+    </>
   );
 }
