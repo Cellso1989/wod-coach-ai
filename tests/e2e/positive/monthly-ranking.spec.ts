@@ -9,7 +9,7 @@ const results = [
   rankingResult('d', 'CAP 20'),
 ];
 
-for (const width of [390, 1280]) {
+for (const width of [320, 390, 1280]) {
   test(`local preview is clearly fictional and works without login at ${width}px`, async ({
     page,
   }, testInfo) => {
@@ -32,7 +32,7 @@ for (const width of [390, 1280]) {
   });
 }
 
-for (const width of [390, 1280]) {
+for (const width of [320, 390, 1280]) {
   test(`monthly performance ranking supports search, details and empty months at ${width}px`, async ({
     page,
   }, testInfo) => {
@@ -53,6 +53,26 @@ for (const width of [390, 1280]) {
       page.getByRole('status', { name: 'Abrindo WOD Coach AI', exact: true }),
     ).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Ranking', exact: true })).toBeVisible();
+    if (width < 640) {
+      const heading = await page
+        .getByRole('heading', { name: 'Ranking', exact: true })
+        .boundingBox();
+      const month = await page.getByLabel('Mês da classificação').boundingBox();
+      expect(heading!.x).toBe(16);
+      expect(month!.x).toBe(16);
+      expect(month!.x + month!.width).toBe(width - 16);
+      await expect
+        .poll(() =>
+          page.locator('nav').evaluate((nav) => {
+            const link = nav.querySelector('a[href="/ranking"]')!;
+            const menuBounds = nav.getBoundingClientRect();
+            const linkBounds = link.getBoundingClientRect();
+            return linkBounds.left >= menuBounds.left && linkBounds.right <= menuBounds.right;
+          }),
+        )
+        .toBe(true);
+      expect(await page.evaluate(() => window.scrollX)).toBe(0);
+    }
     const rows = page.getByRole('list', { name: 'Classificação mensal' });
     await expect(rows.getByRole('listitem')).toHaveCount(5);
     await expect(rows.getByRole('listitem').filter({ hasText: 'Rafael Lima' })).toContainText('75');
