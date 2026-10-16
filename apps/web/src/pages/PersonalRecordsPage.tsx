@@ -249,11 +249,10 @@ export function PersonalRecordsPage() {
               setRepetitions('');
             }}
           >
-            <option value="kg">kg</option>
-            <option value="lb">lb</option>
-            <option value="sec">segundos</option>
-            <option value="reps">reps</option>
-            {!['kg', 'lb', 'sec', 'reps'].includes(unit) && <option value={unit}>{unit}</option>}
+            <option value="kg">Kg</option>
+            <option value="reps">Reps</option>
+            <option value="m">metros</option>
+            {!['kg', 'reps', 'm'].includes(unit) && <option value={unit}>{unit}</option>}
           </SelectInput>
         </div>
 
@@ -364,9 +363,7 @@ export function PersonalRecordsPage() {
                       <div
                         key={record.id}
                         data-testid="personal-record-entry"
-                        className={
-                          index > 0 ? 'border-t border-neutral-800 pt-3' : undefined
-                        }
+                        className={index > 0 ? 'border-t border-neutral-800 pt-3' : undefined}
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
