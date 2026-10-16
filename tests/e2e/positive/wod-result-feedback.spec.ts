@@ -60,7 +60,10 @@ for (const width of [390, 1280]) {
     } finally {
       releaseSave();
     }
-    const success = page.getByRole('dialog', { name: 'Boa meu Atleta, finalizou', exact: true });
+    const success = page.getByRole('dialog', {
+      name: 'Boa, meu atleta! Mais um WOD pra conta! 🔥💪😂',
+      exact: true,
+    });
     await expect(success).toBeVisible();
     const bounds = await success.boundingBox();
     expect(bounds).not.toBeNull();
@@ -75,7 +78,10 @@ for (const width of [390, 1280]) {
       await scoreInput.fill(score);
       await page.getByRole('button', { name: 'Atualizar resultado', exact: true }).click();
       const feedback = page.getByRole('dialog', {
-        name: score === '14:00' ? 'Boa meu Atleta, finalizou' : 'Se esforce mais viu',
+        name:
+          score === '14:00'
+            ? 'Boa, meu atleta! Mais um WOD pra conta! 🔥💪😂'
+            : 'Hoje não rendeu, hein! 😂',
         exact: true,
       });
       await expect(feedback).toBeVisible();

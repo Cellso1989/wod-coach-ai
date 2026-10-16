@@ -5,7 +5,7 @@ export function getWodResultFeedback(
   analysis?: Pick<WodAnalysis, 'format' | 'durationMinutes'> | null,
 ): string {
   const text = score.trim();
-  if (/^cap(?=\s|\d|$)/i.test(text)) return 'Se esforce mais viu';
+  if (/^cap(?=\s|\d|$)/i.test(text)) return 'Hoje não rendeu, hein! 😂';
 
   if (
     analysis?.durationMinutes != null &&
@@ -19,9 +19,9 @@ export function getWodResultFeedback(
         ? Number(minutes[1]!.replace(',', '.')) * 60
         : null;
     if (seconds != null && seconds > analysis.durationMinutes * 60) {
-      return 'Se esforce mais viu';
+      return 'Hoje não rendeu, hein! 😂';
     }
   }
 
-  return 'Boa meu Atleta, finalizou';
+  return 'Boa, meu atleta! Mais um WOD pra conta! 🔥💪😂';
 }
