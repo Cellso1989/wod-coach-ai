@@ -24,6 +24,7 @@ import hyroxWorkoutRoutes from './routes/hyrox-workout.js';
 import hyroxStrategyRoutes from './routes/hyrox-strategy.js';
 import statsRoutes from './routes/stats.js';
 import adminRoutes from './routes/admin.js';
+import rankingRoutes from './routes/ranking.js';
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({ logger: true });
@@ -68,6 +69,7 @@ export function buildApp(): FastifyInstance {
       api.register(hyroxStrategyRoutes);
       api.register(statsRoutes);
       api.register(adminRoutes);
+      api.register(rankingRoutes);
     },
     { prefix: '/api' },
   );
