@@ -29,6 +29,7 @@ interface ProfileFormState {
   injuries: string;
   limitedMovements: string;
   equipment: string;
+  rankingOptIn: boolean;
 }
 
 interface PasswordFormState {
@@ -50,6 +51,7 @@ const EMPTY_FORM: ProfileFormState = {
   injuries: '',
   limitedMovements: '',
   equipment: '',
+  rankingOptIn: false,
 };
 
 const EMPTY_PASSWORD_FORM: PasswordFormState = {
@@ -84,11 +86,17 @@ export function ProfilePage() {
   const [saved, setSaved] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSaved, setPasswordSaved] = useState(false);
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setProfileLoadError(null);
     api
       .getAthleteProfile()
       .then(({ profile }) => {
+        if (!active) return;
         setForm({
           birthDate: dateField(profile.birthDate),
           heightCm: profile.heightCm != null ? String(profile.heightCm) : '',
@@ -102,13 +110,26 @@ export function ProfilePage() {
           injuries: listToText(profile.injuries),
           limitedMovements: listToText(profile.limitedMovements),
           equipment: listToText(profile.equipment),
+          rankingOptIn: profile.rankingOptIn === true,
         });
       })
-      .catch(() => {
-        // Perfil ainda não criado: mantém o formulário vazio.
+      .catch((err: unknown) => {
+        if (!active) return;
+        if (err instanceof ApiError && err.status === 404) {
+          setForm(EMPTY_FORM);
+        } else {
+          setProfileLoadError(
+            'Não foi possível carregar o perfil. Tente novamente antes de editar.',
+          );
+        }
       })
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [loadAttempt]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -129,6 +150,7 @@ export function ProfilePage() {
         injuries: textToList(form.injuries),
         limitedMovements: textToList(form.limitedMovements),
         equipment: textToList(form.equipment),
+        rankingOptIn: form.rankingOptIn,
       });
       setSaved(true);
     } catch (err) {
@@ -167,6 +189,17 @@ export function ProfilePage() {
     return <LoadingState />;
   }
 
+  if (profileLoadError) {
+    return (
+      <PageShell>
+        <h1 className="text-xl font-bold">Meu perfil</h1>
+        <NavBar />
+        <Alert>{profileLoadError}</Alert>
+        <Button onClick={() => setLoadAttempt((value) => value + 1)}>Tentar novamente</Button>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell>
       <PageHeader>
@@ -186,6 +219,33 @@ export function ProfilePage() {
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && <Alert>{error}</Alert>}
         {saved && <Alert variant="success">Perfil salvo.</Alert>}
+
+        <fieldset className="space-y-3 rounded-lg border border-orange-900/50 bg-orange-950/10 p-4">
+          <legend className="px-1 text-sm font-semibold text-neutral-300">Ranking</legend>
+          <label className="flex cursor-pointer items-start justify-between gap-4">
+            <span className="text-sm font-semibold text-neutral-200">Participar do Ranking</span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={form.rankingOptIn}
+              disabled={savingProfile}
+              aria-describedby="ranking-participation-description"
+              onChange={(event) => {
+                setForm((current) => ({ ...current, rankingOptIn: event.target.checked }));
+                setSaved(false);
+              }}
+              className="mt-0.5 h-5 w-5 shrink-0 accent-orange-500"
+            />
+          </label>
+          <p
+            id="ranking-participation-description"
+            className="text-xs leading-relaxed text-neutral-400"
+          >
+            Ao ativar, seu nome e os resultados comparáveis dos seus WODs aparecem no ranking para
+            os outros atletas. Você pode sair quando quiser.
+          </p>
+          <p className="text-xs text-neutral-500">A escolha entra em vigor ao salvar o perfil.</p>
+        </fieldset>
 
         <fieldset className="space-y-2 rounded-lg border border-neutral-800 p-4">
           <legend className="px-1 text-sm font-semibold text-neutral-300">Dados físicos</legend>

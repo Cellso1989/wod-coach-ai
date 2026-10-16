@@ -75,6 +75,7 @@ model AthleteProfile {
   level               CrossfitLevel?
   competitionCategory String?
   weeklyFrequency     Int?
+  rankingOptIn        Boolean @default(false)
 
   // Objetivos, limitações e equipamentos (seção 7).
   // Modelados como arrays simples nesta fase; normalizar em

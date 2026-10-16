@@ -1,3 +1,5 @@
+import type { MonthlyRanking } from '@wod-coach-ai/types';
+
 // Em produção o frontend é servido pela própria API (mesma origem), então
 // o padrão é string vazia (caminho relativo). Em dev, aponta pro Fastify
 // rodando em outra porta via VITE_API_URL.
@@ -347,13 +349,7 @@ export interface AdminUserSummary {
 }
 
 export type AdminActivityType =
-  | 'WOD'
-  | 'ANALYSIS'
-  | 'STRATEGY'
-  | 'HYROX_STRATEGY'
-  | 'RESULT'
-  | 'CHECKIN'
-  | 'PERSONAL_RECORD';
+  'WOD' | 'ANALYSIS' | 'STRATEGY' | 'HYROX_STRATEGY' | 'RESULT' | 'CHECKIN' | 'PERSONAL_RECORD';
 
 export interface AdminActivity {
   id: string;
@@ -491,6 +487,9 @@ export const api = {
     }),
 
   listPersonalRecords: () => request<{ records: PersonalRecord[] }>('/personal-records'),
+
+  getMonthlyRanking: (month: string, signal?: AbortSignal) =>
+    request<MonthlyRanking>(`/ranking/monthly?${new URLSearchParams({ month })}`, { signal }),
 
   createPersonalRecord: (input: PersonalRecordInput) =>
     request<{ record: PersonalRecord }>('/personal-records', {

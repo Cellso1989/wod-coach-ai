@@ -18,6 +18,7 @@ import { HyroxPage } from './pages/HyroxPage.js';
 import { SubmitHyroxPage } from './pages/SubmitHyroxPage.js';
 import { HyroxDetailPage } from './pages/HyroxDetailPage.js';
 import { AdminPage } from './pages/AdminPage.js';
+import { RankingPage } from './pages/RankingPage.js';
 
 function App() {
   return (
@@ -30,6 +31,9 @@ function App() {
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              {import.meta.env.DEV && (
+                <Route path="/preview/ranking" element={<RankingPage demo />} />
+              )}
               <Route element={<ProtectedRoute />}>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
@@ -38,6 +42,7 @@ function App() {
                 <Route path="/wods/:id" element={<WodDetailPage />} />
                 <Route path="/wods" element={<WodListPage />} />
                 <Route path="/personal-records" element={<PersonalRecordsPage />} />
+                <Route path="/ranking" element={<RankingPage />} />
                 <Route path="/hyrox/new" element={<SubmitHyroxPage />} />
                 <Route path="/hyrox/:id" element={<HyroxDetailPage />} />
                 <Route path="/hyrox" element={<HyroxPage />} />

@@ -13,6 +13,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/wods', icon: '🏋️', label: 'Meus WODs' },
   { to: '/hyrox', label: 'HYROX' },
   { to: '/personal-records', icon: '🏆', label: 'PRs' },
+  { to: '/ranking', label: 'Ranking' },
   { to: '/profile', icon: '👤', label: 'Perfil' },
 ];
 

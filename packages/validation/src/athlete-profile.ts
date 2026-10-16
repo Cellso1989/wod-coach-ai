@@ -13,6 +13,8 @@ export const athleteProfileSchema = z.object({
   level: crossfitLevelSchema.optional(),
   competitionCategory: z.string().trim().max(120).optional(),
   weeklyFrequency: z.number().int().min(0).max(14).optional(),
+  // Omission preserves an existing choice when an older client saves the profile.
+  rankingOptIn: z.boolean().optional(),
 
   goals: z.array(z.string().trim().min(1).max(60)).max(20).default([]),
   injuries: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
