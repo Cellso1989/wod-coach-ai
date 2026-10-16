@@ -8,8 +8,6 @@ interface MovementAutocompleteProps {
   placeholder?: string;
 }
 
-const MAX_SUGGESTIONS = 8;
-
 /**
  * Autocomplete próprio em vez do <datalist> nativo do HTML — o Safari no
  * iOS nunca mostra as sugestões de um datalist, então no celular o campo
@@ -35,9 +33,7 @@ export function MovementAutocomplete({
   }, []);
 
   const query = value.trim().toLowerCase();
-  const filtered = (
-    query ? suggestions.filter((s) => s.toLowerCase().includes(query)) : suggestions
-  ).slice(0, MAX_SUGGESTIONS);
+  const filtered = query ? suggestions.filter((s) => s.toLowerCase().includes(query)) : suggestions;
 
   return (
     <div ref={containerRef} className="relative">

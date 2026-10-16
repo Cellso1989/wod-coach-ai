@@ -53,6 +53,22 @@ for (const width of [390, 1280]) {
       return route.fulfill({ json: {} });
     });
     await page.goto('/personal-records');
+    await expect(page.getByLabel('Unidade', { exact: true }).locator('option')).toHaveText([
+      'Kg',
+      'Reps',
+      'metros',
+    ]);
+    const movementInput = page.getByPlaceholder('Movimento (ex: Back Squat, Fran)');
+    await movementInput.click();
+    await page.getByRole('button', { name: 'Bench Press', exact: true }).click();
+    await expect(movementInput).toHaveValue('Bench Press');
+    await movementInput.fill('press');
+    await expect(page.getByRole('button', { name: 'Shoulder Press', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Push Press', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Bench Press', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Back Squat', exact: true })).toHaveCount(0);
+    await movementInput.clear();
+    await page.getByRole('heading', { name: 'Meus PRs', exact: true }).click();
     await expect(page.getByText('Tipo nao informado - 100 kg')).toBeVisible();
     await expect(page.getByText('5RM - 100 kg')).toBeVisible();
     await expect(page.locator('li').filter({ hasText: 'Back Squat' })).toHaveCount(1);
@@ -96,6 +112,18 @@ for (const width of [390, 1280]) {
     });
     await expect(page.getByText('Repeticoes sem quebra - 80 reps')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Ver %', exact: true })).toHaveCount(1);
+    await movementInput.fill('Handstand Walk');
+    await page.getByPlaceholder('Valor', { exact: true }).fill('12.5');
+    await page.getByLabel('Unidade', { exact: true }).selectOption({ label: 'metros' });
+    await page.getByRole('button', { name: 'Adicionar PR', exact: true }).click();
+    expect(payloads.at(-1)).toMatchObject({
+      movementName: 'Handstand Walk',
+      value: 12.5,
+      unit: 'm',
+      recordType: 'UNKNOWN',
+    });
+    await page.reload();
+    await expect(page.getByText('Tipo nao informado - 12.5 m', { exact: true })).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
