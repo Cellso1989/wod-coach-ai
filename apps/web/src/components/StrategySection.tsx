@@ -153,7 +153,6 @@ export function StrategySection({
         </dl>
 
         <StrategyNoteList title="Quebras" notes={strategy.breakStrategy} />
-        <StrategyNoteList title="Execucao por movimento" notes={strategy.movementStrategy} />
 
         <WhatsAppShareButton message={formatWodStrategy(strategy, workoutName)} />
 

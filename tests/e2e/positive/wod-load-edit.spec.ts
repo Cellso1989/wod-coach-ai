@@ -15,6 +15,8 @@ for (const width of [320, 390, 1280]) {
         loadDescription: null as string | null,
       },
       { id: 't2b', name: 'Toes to Bar', category: 'gymnastics', reps: 50, loadDescription: null },
+      { id: 'hsw', name: 'Handstand walk', category: 'gymnastics', loadDescription: null },
+      { id: 'bike', name: 'Bike', category: 'monostructural', loadDescription: '30 calorias' },
     ];
     let analysis = {
       ...MOCK_ANALYSIS.analysis,
@@ -62,7 +64,7 @@ for (const width of [320, 390, 1280]) {
             ...analysis,
             versionId: 'v2',
             warnings: [],
-            movements: [{ ...movements[0]!, loadDescription: '60/40 kg' }, movements[1]!],
+            movements: [{ ...movements[0]!, loadDescription: '60/40 kg' }, ...movements.slice(1)],
             roundBreakdown: analysis.roundBreakdown.map((round) => ({
               ...round,
               movements: [
@@ -96,6 +98,11 @@ for (const width of [320, 390, 1280]) {
     await page.goto('/wods/loads');
     await expect(page.getByRole('region', { name: 'Estrategia de execucao' })).toBeVisible();
     await page.getByRole('button', { name: 'Editar cargas', exact: true }).click();
+    const loadForm = page.getByRole('form', { name: 'Cargas do treino' });
+    await expect(loadForm.getByRole('textbox')).toHaveCount(1);
+    for (const name of ['Toes to Bar', 'Handstand walk', 'Bike']) {
+      await expect(loadForm.getByRole('textbox', { name, exact: true })).toHaveCount(0);
+    }
     await expect(
       page.getByRole('button', { name: 'Reanalisar treino', exact: true }),
     ).toBeDisabled();

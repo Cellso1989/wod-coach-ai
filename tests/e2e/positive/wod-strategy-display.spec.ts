@@ -78,7 +78,6 @@ for (const viewport of [
         for (const text of [
           COMPLETE.pacing,
           COMPLETE.restStrategy,
-          COMPLETE.movementStrategy[0]!.strategy,
           COMPLETE.transitionStrategy,
           COMPLETE.energyManagement,
           COMPLETE.warnings[0]!,
@@ -94,6 +93,12 @@ for (const viewport of [
           exact: true,
         });
         await expect(strategyRegion).toBeVisible();
+        await expect(
+          strategyRegion.getByRole('heading', { name: 'Execucao por movimento', exact: true }),
+        ).toHaveCount(0);
+        await expect(
+          strategyRegion.getByText(COMPLETE.movementStrategy[0]!.strategy, { exact: true }),
+        ).toHaveCount(0);
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);

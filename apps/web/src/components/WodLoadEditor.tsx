@@ -22,6 +22,9 @@ export function WodLoadEditor({
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadMovements = analysis.movements.filter(
+    (movement) => movement.category === 'weightlifting',
+  );
 
   function close() {
     setEditing(false);
@@ -30,7 +33,7 @@ export function WodLoadEditor({
 
   async function save() {
     if (disabled || saving) return;
-    const movementLoads = analysis.movements
+    const movementLoads = loadMovements
       .map((item) => ({
         id: item.id,
         loadDescription: values[item.id]?.trim() || null,
@@ -64,6 +67,8 @@ export function WodLoadEditor({
     }
   }
 
+  if (loadMovements.length === 0) return null;
+
   if (!editing)
     return (
       <Button
@@ -72,9 +77,7 @@ export function WodLoadEditor({
         disabled={disabled}
         onClick={() => {
           setValues(
-            Object.fromEntries(
-              analysis.movements.map((item) => [item.id, item.loadDescription ?? '']),
-            ),
+            Object.fromEntries(loadMovements.map((item) => [item.id, item.loadDescription ?? ''])),
           );
           setError(null);
           setEditing(true);
@@ -96,7 +99,7 @@ export function WodLoadEditor({
       }}
     >
       {error && <Alert>{error}</Alert>}
-      {analysis.movements.map((movement) => (
+      {loadMovements.map((movement) => (
         <label key={movement.id} className="block space-y-1 text-sm text-neutral-300">
           <span>{movement.name}</span>
           <TextInput
