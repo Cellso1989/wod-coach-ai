@@ -417,7 +417,8 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
-  getTodayCheckin: () => request<{ checkin: DailyCheckin }>('/checkins/today'),
+  getTodayCheckin: (signal?: AbortSignal) =>
+    request<{ checkin: DailyCheckin }>('/checkins/today', { signal }),
 
   saveCheckin: (input: DailyCheckinInput) =>
     request<{ checkin: DailyCheckin }>('/checkins', {
@@ -434,7 +435,8 @@ export const api = {
     return requestForm<{ wod: Wod }>('/wods', formData);
   },
 
-  listWods: (limit?: number) => request<{ wods: Wod[] }>(`/wods${limit ? `?limit=${limit}` : ''}`),
+  listWods: (limit?: number, signal?: AbortSignal) =>
+    request<{ wods: Wod[] }>(`/wods${limit ? `?limit=${limit}` : ''}`, { signal }),
 
   getWod: (id: string, signal?: AbortSignal) => request<{ wod: Wod }>(`/wods/${id}`, { signal }),
 

@@ -6,7 +6,7 @@ import { NavBar } from '../components/NavBar.js';
 import { LogoutButton } from '../components/LogoutButton.js';
 import { TrainingCalendar } from '../components/TrainingCalendar.js';
 import { PageHeader } from '../components/PageHeader.js';
-import { ButtonLink, Card, LoadingState, PageShell } from '../components/ui.js';
+import { Alert, Button, ButtonLink, Card, PageShell } from '../components/ui.js';
 
 function isToday(dateStr: string): boolean {
   const d = new Date(dateStr);
@@ -23,21 +23,41 @@ export function DashboardPage() {
   const [checkin, setCheckin] = useState<DailyCheckin | null>(null);
   const [recentWods, setRecentWods] = useState<Wod[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    Promise.allSettled([
-      api.getTodayCheckin().then(({ checkin }) => setCheckin(checkin)),
-      api.listWods(20).then(({ wods }) => setRecentWods(wods)),
-    ]).finally(() => setLoading(false));
+    const controller = new AbortController();
+    void api
+      .getTodayCheckin(controller.signal)
+      .then(({ checkin }) => {
+        if (!controller.signal.aborted) setCheckin(checkin);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError(false);
+    void api
+      .listWods(20, controller.signal)
+      .then(({ wods }) => {
+        if (!controller.signal.aborted) setRecentWods(wods);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setError(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [attempt]);
 
   const todayWod = recentWods.find((wod) => isToday(wod.date));
   const lastResultWod = recentWods.find((wod) => wod.result);
   const otherRecentWods = recentWods.filter((wod) => wod.id !== todayWod?.id).slice(0, 3);
-
-  if (loading) {
-    return <LoadingState message="Carregando seu painel..." />;
-  }
 
   return (
     <PageShell>
@@ -70,7 +90,18 @@ export function DashboardPage() {
           )}
         </div>
 
-        {todayWod ? (
+        {loading ? (
+          <p role="status" className="text-sm text-neutral-400">
+            Carregando seus WODs...
+          </p>
+        ) : error ? (
+          <div className="space-y-3">
+            <Alert>Não foi possível carregar seus WODs.</Alert>
+            <Button variant="secondary" fullWidth onClick={() => setAttempt((value) => value + 1)}>
+              Tentar novamente
+            </Button>
+          </div>
+        ) : todayWod ? (
           <div className="space-y-3">
             <p className="line-clamp-3 text-sm text-neutral-400">
               {todayWod.rawText ?? todayWod.notes ?? 'Abra o treino para revisar a estrategia.'}
@@ -90,12 +121,14 @@ export function DashboardPage() {
           </div>
         )}
 
-        <div className="border-t border-neutral-800 pt-3 text-center">
-          <div>
-            <p className="text-lg font-bold">{recentWods.length}</p>
-            <p className="text-xs text-neutral-500">Wod's Realizados</p>
+        {!loading && !error && (
+          <div className="border-t border-neutral-800 pt-3 text-center">
+            <div>
+              <p className="text-lg font-bold">{recentWods.length}</p>
+              <p className="text-xs text-neutral-500">Wod's Realizados</p>
+            </div>
           </div>
-        </div>
+        )}
       </Card>
 
       {lastResultWod && (
