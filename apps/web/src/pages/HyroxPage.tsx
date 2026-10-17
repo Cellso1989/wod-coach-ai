@@ -69,7 +69,21 @@ export function HyroxPage({ demo = false }: { demo?: boolean }) {
       )}
 
       <div className="flex justify-center">
-        <ButtonLink to="/hyrox/new">Novo Treino</ButtonLink>
+        <Link
+          to="/hyrox/new"
+          className="flex min-h-[84px] w-full items-center gap-4 rounded-[20px] border-2 border-orange-300 bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-4 text-white transition duration-200 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-4 focus-visible:ring-offset-neutral-950 active:brightness-95"
+        >
+          <span
+            aria-hidden="true"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl"
+          >
+            🏃
+          </span>
+          <span className="min-w-0 text-left">
+            <span className="block text-lg font-bold leading-6">Novo Treino</span>
+            <span className="mt-1 block text-sm leading-5">Comece seu próximo desafio</span>
+          </span>
+        </Link>
       </div>
 
       <TextInput
