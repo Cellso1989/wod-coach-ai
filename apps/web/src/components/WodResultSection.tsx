@@ -25,7 +25,6 @@ export function WodResultSection({
   const [feedback, setFeedback] = useState<string | null>(null);
   const feedbackDialog = useRef<HTMLDialogElement>(null);
   const feedbackTitleId = useId();
-  const scoreHelpId = useId();
 
   useEffect(() => {
     if (feedback) feedbackDialog.current?.showModal();
@@ -81,13 +80,9 @@ export function WodResultSection({
           type="text"
           required
           placeholder='Resultado (ex: "8 rounds + 12 reps", "12:34", "CAP 10")'
-          aria-describedby={scoreHelpId}
           value={score}
           onChange={(e) => setScore(e.target.value)}
         />
-        <p id={scoreHelpId} className="text-xs text-neutral-500">
-          Para WODs por tempo: CAP 10 = faltaram 10 repetições.
-        </p>
         <Button type="submit" disabled={savingResult} fullWidth>
           {savingResult ? 'Salvando...' : result ? 'Atualizar resultado' : 'Salvar resultado'}
         </Button>
