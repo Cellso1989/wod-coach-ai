@@ -12,6 +12,7 @@ import {
 import { WodResultSection } from '../components/WodResultSection.js';
 import { AthleteContextSection } from '../components/AthleteContextSection.js';
 import { StrategySection } from '../components/StrategySection.js';
+import { WorkoutDetails } from '../components/WorkoutDetails.js';
 import { WodGenerationProgress } from '../components/WodGenerationProgress.js';
 import { WodLoadEditor } from '../components/WodLoadEditor.js';
 import { formatWodAnalysisWarnings } from '../lib/wod-analysis-warnings.js';
@@ -30,14 +31,6 @@ const FORMAT_LABEL: Record<NonNullable<WodAnalysis['format']>, string> = {
   ROUNDS_FOR_TIME: 'Rounds For Time',
   STRENGTH: 'Strength',
   INTERVAL: 'Intervalos',
-};
-
-const CATEGORY_ICON: Record<string, string> = {
-  gymnastics: '🤸',
-  weightlifting: '🏋️',
-  conditioning: '🔥',
-  monostructural: '🏃',
-  mixed_modal: '⚙️',
 };
 
 function WodFlowCard({
@@ -514,64 +507,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
                 <p className="text-sm text-neutral-400">Estímulo: {analysis.stimulus}</p>
               )}
 
-              {analysis.roundBreakdown && analysis.roundBreakdown.length > 0 ? (
-                <div className="space-y-3">
-                  <h2 className="text-sm font-semibold text-neutral-300">Sequência do treino</h2>
-                  {analysis.roundBreakdown.map((round) => {
-                    const roundLabel = round.label?.trim() || `Bloco ${round.roundNumber}`;
-
-                    return (
-                      <div key={`${round.roundNumber}-${roundLabel}`} className="space-y-1">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-orange-400">
-                          {roundLabel}
-                        </p>
-                        <ul className="space-y-1">
-                          {round.movements.map((movement, index) => (
-                            <li key={index} className="flex flex-wrap items-center gap-2 text-sm">
-                              <span>{CATEGORY_ICON[movement.category] ?? '•'}</span>
-                              <span>{movement.name}</span>
-                              {movement.reps != null && (
-                                <span className="text-neutral-500">{movement.reps} reps</span>
-                              )}
-                              {movement.distanceMeters != null && (
-                                <span className="text-neutral-500">{movement.distanceMeters}m</span>
-                              )}
-                              {movement.loadDescription && (
-                                <span className="min-w-0 max-w-full break-words text-neutral-500 [overflow-wrap:anywhere]">
-                                  {movement.loadDescription}
-                                </span>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <h2 className="text-sm font-semibold text-neutral-300">Movimentos</h2>
-                  <ul className="space-y-1">
-                    {analysis.movements.map((movement) => (
-                      <li key={movement.id} className="flex flex-wrap items-center gap-2 text-sm">
-                        <span>{CATEGORY_ICON[movement.category] ?? '•'}</span>
-                        <span>{movement.name}</span>
-                        {movement.reps != null && (
-                          <span className="text-neutral-500">{movement.reps} reps</span>
-                        )}
-                        {movement.distanceMeters != null && (
-                          <span className="text-neutral-500">{movement.distanceMeters}m</span>
-                        )}
-                        {movement.loadDescription && (
-                          <span className="min-w-0 max-w-full break-words text-neutral-500 [overflow-wrap:anywhere]">
-                            {movement.loadDescription}
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <WorkoutDetails analysis={analysis} />
 
               <p className="text-xs text-neutral-600">
                 Confiança da análise: {Math.round(analysis.confidence * 100)}%
@@ -601,6 +537,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
               key={`strategy-${analysis.versionId ?? analysisRevision}`}
               wodId={wod.id}
               initialStrategy={strategy}
+              analysis={analysis}
               workoutName={wod.name}
               disabled={blocked || editing || editingDuration || editingLoads}
               onGeneratingChange={(generating) => {

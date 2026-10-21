@@ -157,8 +157,7 @@ depois — com este formato exato:
   "target": string ou null (meta OBJETIVA e mensurável — sempre baseada em tempo total ou em
     rounds/reps, nunca uma frase vaga. Para FOR_TIME/CHIPPER/ROUNDS_FOR_TIME: se
     "wodAnalysis.durationMinutes" existir (time cap), a faixa estimada de conclusão deve
-    ficar DENTRO desse tempo (ex: cap de 15min → "Terminar entre 13:00-14:30, dentro do
-    time cap de 15min") — nunca sugira uma faixa que ultrapasse o cap; se o cap for
+    ficar DENTRO desse tempo (ex: cap de 15min → "13:00-14:30") — nunca sugira uma faixa que ultrapasse o cap; se o cap for
     inviável para este atleta, ainda assim proponha a faixa mais rápida realista e explique
     o risco de não bater o cap em "warnings". Se não houver durationMinutes, estime a faixa
     de tempo total a partir dos movimentos do wodAnalysis e do nível/histórico do atleta.
@@ -216,6 +215,15 @@ Regras críticas:
   Nao use abreviacoes como "R1-2" ou "R3-4" nem hifen entre numeros de rounds.
   Liste todos os rounds do intervalo; "Rounds 1 e 3" nao significa rounds 1, 2 e 3.
   Preserve a notacao das repeticoes (21-15-9), quebras (6/6) e tempos (8-12s).
+- Apresentacao compacta: target deve conter somente a meta mensuravel (ex.: "8:30-11:30").
+  Nao repita o time cap no target; ele ja aparece na analise. goal complementa a meta,
+  sem repeti-la. pacing resume a progressao de ritmo em uma frase; transitionStrategy
+  e energyManagement so acrescentam instrucoes que ainda nao apareceram no pacing.
+  Quebras: use "6 + 6; 1 respiracao entre series" ou "10 direto", preservando rounds,
+  escadas e condicoes importantes. Nao repita o nome do movimento no texto da quebra.
+  Nunca exponha termos internos como dataSufficiency, low, schemas ou nomes de campos.
+  Para poucos dados, diga "Pouco historico; confirme a escala com o coach".
+  Avisos de interpretacao devem ser separados de avisos de dor, lesao ou adaptacao.
 - Limites de texto: pacing/restStrategy/energyManagement ate ~120 caracteres; cada item de
   breakStrategy/movementStrategy ate ~90 caracteres; warnings ate ~120 caracteres.
 - Seja OBJETIVO E CONCISO. O atleta lê isso no celular, no meio do treino — não é um
