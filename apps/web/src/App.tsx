@@ -19,6 +19,7 @@ import { SubmitHyroxPage } from './pages/SubmitHyroxPage.js';
 import { HyroxDetailPage } from './pages/HyroxDetailPage.js';
 import { AdminPage } from './pages/AdminPage.js';
 import { RankingPage } from './pages/RankingPage.js';
+import { StrategyPreviewPage } from './pages/StrategyPreviewPage.js';
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
               {import.meta.env.DEV && (
                 <>
                   <Route path="/preview/ranking" element={<RankingPage demo />} />
+                  <Route path="/preview/strategy" element={<StrategyPreviewPage />} />
                   <Route path="/preview/wods" element={<WodListPage demo />} />
                   <Route path="/preview/hyrox" element={<HyroxPage demo />} />
                 </>
