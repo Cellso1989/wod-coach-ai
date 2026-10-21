@@ -30,6 +30,7 @@ describe('monthly performance ranking', () => {
     const otherA = rankingResult('a', '08:00');
     const otherB = rankingResult('b', '07:00');
     otherA.wod.rawText = otherB.wod.rawText = 'Other prescription';
+    otherA.wod.analysis!.movements[0]!.reps = otherB.wod.analysis!.movements[0]!.reps = 30;
     const results = [rankingResult('a', '05:00'), rankingResult('b', '06:00'), otherA, otherB];
     const before = rank(results);
     const after = rank([...results, rankingResult('a', '06:30')]);
@@ -62,20 +63,22 @@ describe('monthly performance ranking', () => {
     'load',
     'reps',
     'order',
-    'source',
+    'movement',
+    'distance',
+    'calories',
     'rounds',
     'format',
     'duration',
     'missingLoad',
-    'notes',
   ])('keeps different or incomplete %s prescriptions out of a shared confrontation', (change) => {
     const different = rankingResult('b', '04:00');
     const analysis = different.wod.analysis!;
     if (change === 'load') analysis.movements[0]!.loadDescription = '30 kg';
     if (change === 'reps') analysis.movements[0]!.reps = 30;
     if (change === 'order') analysis.movements.reverse();
-    if (change === 'source') different.wod.rawText = '10 rounds different workout';
-    if (change === 'notes') different.wod.notes = 'Adaptei para ring rows.';
+    if (change === 'movement') analysis.movements[0]!.name = 'Front squat';
+    if (change === 'distance') analysis.movements[0]!.distanceMeters = 200;
+    if (change === 'calories') analysis.movements[0]!.calories = 20;
     if (change === 'rounds') analysis.roundBreakdown = [{ roundNumber: 1, movements: [] }];
     if (change === 'format') analysis.format = 'AMRAP';
     if (change === 'duration') analysis.durationMinutes = 12;
@@ -94,6 +97,94 @@ describe('monthly performance ranking', () => {
     b.wod.rawText = `  ${b.wod.rawText!.toUpperCase()}  `;
     b.wod.name = 'My private title';
     expect(rank([rankingResult('a', '05:00'), b]).summary.rankedAthletes).toBe(2);
+  });
+
+  it.each(['Wod\n', 'WOD:\r\n', '  wod  \n\n'])(
+    'ignores the standalone source heading %j when the prescription matches',
+    (heading) => {
+      const a = rankingResult('a', '9:15 min');
+      const b = rankingResult('b', '9:50');
+      b.wod.rawText = `${heading}${a.wod.rawText}`;
+      const data = rank([a, b]);
+      expect(data.summary.comparableWorkouts).toBe(1);
+      expect(data.athletes.slice(0, 2).map((athlete) => [athlete.userId, athlete.points])).toEqual([
+        ['a', 100],
+        ['b', 50],
+      ]);
+    },
+  );
+
+  it('normalizes the same heading in image transcription', () => {
+    const a = rankingResult('a', '9:15 min');
+    const b = rankingResult('b', '9:50');
+    b.wod.analysis!.rawResponse = { extractedText: `Wod\n${b.wod.rawText}` };
+    b.wod.rawText = null;
+    expect(rank([a, b]).summary.rankedAthletes).toBe(2);
+  });
+
+  it.each(['Treino de terça', 'WOD', null])(
+    'compares the saved prescription regardless of source text %j',
+    (source) => {
+      const a = rankingResult('a', '9:15 min');
+      const b = rankingResult('b', '9:50');
+      b.wod.rawText = source;
+      b.wod.notes = 'Foi difícil hoje';
+      b.wod.name = 'Outro título';
+      expect(rank([a, b]).summary.rankedAthletes).toBe(2);
+    },
+  );
+
+  it('normalizes numeric load notation without equating different units or weights', () => {
+    const a = rankingResult('a', '9:15 min');
+    const b = rankingResult('b', '9:50');
+    b.wod.analysis!.movements[0]!.loadDescription = '43,0KG';
+    expect(rank([a, b]).summary.rankedAthletes).toBe(2);
+    b.wod.analysis!.movements[0]!.loadDescription = '43 lb';
+    expect(rank([a, b]).summary.rankedAthletes).toBe(0);
+  });
+
+  it('compares per-round prescriptions regardless of labels and aggregate summaries', () => {
+    const a = rankingResult('a', '9:15 min');
+    const b = rankingResult('b', '9:50');
+    a.wod.analysis!.format = b.wod.analysis!.format = 'ROUNDS_FOR_TIME';
+    const rounds = [1, 2, 3].map((roundNumber) => ({
+      roundNumber,
+      label: `Round ${roundNumber}`,
+      movements: structuredClone(a.wod.analysis!.movements),
+    }));
+    a.wod.analysis!.roundBreakdown = rounds;
+    b.wod.analysis!.roundBreakdown = rounds.map((round) => ({ ...round, label: 'Volta' }));
+    b.wod.analysis!.movements[0]!.reps = 135;
+    expect(rank([a, b]).summary.rankedAthletes).toBe(2);
+    b.wod.analysis!.roundBreakdown = rounds.slice(0, 2);
+    expect(rank([a, b]).summary.rankedAthletes).toBe(0);
+  });
+
+  it.each(['reps', 'load', 'order', 'missingLoad', 'number'])(
+    'rejects differing or incomplete %s inside rounds even when totals match',
+    (change) => {
+      const a = rankingResult('a', '9:15 min');
+      const b = rankingResult('b', '9:50');
+      const round = { roundNumber: 1, movements: structuredClone(a.wod.analysis!.movements) };
+      a.wod.analysis!.roundBreakdown = [structuredClone(round)];
+      b.wod.analysis!.roundBreakdown = [round];
+      if (change === 'reps') round.movements[0]!.reps = 30;
+      if (change === 'load') round.movements[0]!.loadDescription = '30 kg';
+      if (change === 'order') round.movements.reverse();
+      if (change === 'missingLoad') round.movements[0]!.loadDescription = null;
+      if (change === 'number') round.roundNumber = 2;
+      expect(rank([a, b]).summary.rankedAthletes).toBe(0);
+    },
+  );
+
+  it('keeps incomplete repetitions and round-based workouts without rounds unclassified', () => {
+    const a = rankingResult('a', '9:15 min');
+    const b = rankingResult('b', '9:50');
+    a.wod.analysis!.format = b.wod.analysis!.format = 'ROUNDS_FOR_TIME';
+    expect(rank([a, b]).summary.rankedAthletes).toBe(0);
+    a.wod.analysis!.format = b.wod.analysis!.format = 'FOR_TIME';
+    a.wod.analysis!.movements[0]!.reps = b.wod.analysis!.movements[0]!.reps = null;
+    expect(rank([a, b]).summary.rankedAthletes).toBe(0);
   });
 
   it('recognizes pure-rep AMRAP totals and equivalent rounds/reps notation', () => {

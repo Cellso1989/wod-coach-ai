@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { MonthlyRanking, RankedAthlete, RankingPerformance } from '@wod-coach-ai/types';
+import { wodRoundOutputSchema, type WodMovementOutput } from '@wod-coach-ai/validation';
 
 interface RankingMovement {
   name: string;
@@ -57,6 +58,28 @@ function canonical(value: unknown): unknown {
   return value;
 }
 
+function prescribedMovement(movement: Omit<WodMovementOutput, 'category'> & { category: string }) {
+  const load = movement.loadDescription?.trim();
+  if (!movement.name.trim() || (movement.category === 'weightlifting' && !load)) return null;
+  const volume = [movement.reps, movement.distanceMeters, movement.calories];
+  if (
+    !volume.some((value) => value != null && value > 0) ||
+    volume.some((value) => value != null && (!Number.isFinite(value) || value < 0))
+  )
+    return null;
+  const normalizedLoad = load ? normalize(load) : null;
+  const numericLoad = normalizedLoad?.match(/^(\d+(?:[.,]\d+)?)\s*(kg|lb|lbs)$/);
+  return {
+    name: normalize(movement.name).replace(/-/g, ' '),
+    reps: movement.reps ?? null,
+    distanceMeters: movement.distanceMeters ?? null,
+    calories: movement.calories ?? null,
+    load: numericLoad
+      ? `${Number(numericLoad[1]!.replace(',', '.'))} ${numericLoad[2] === 'lbs' ? 'lb' : numericLoad[2]}`
+      : normalizedLoad,
+  };
+}
+
 function workoutKey(result: RankingResult): string | null {
   const analysis = result.wod.analysis;
   if (
@@ -64,30 +87,26 @@ function workoutKey(result: RankingResult): string | null {
     !['FOR_TIME', 'ROUNDS_FOR_TIME', 'CHIPPER', 'AMRAP'].includes(analysis.format ?? '')
   )
     return null;
-  const raw = analysis.rawResponse;
-  const extractedText =
-    raw &&
-    typeof raw === 'object' &&
-    'extractedText' in raw &&
-    typeof raw.extractedText === 'string'
-      ? raw.extractedText
-      : null;
-  const source = result.wod.rawText?.trim() || extractedText?.trim();
-  if (!source || !analysis.movements.length) return null;
-  // Do not group athletes by a name or profile level: compare the registered prescription.
-  if (
-    analysis.movements.some(
-      (movement) => movement.category === 'weightlifting' && !movement.loadDescription?.trim(),
-    )
-  )
+  // Compare the saved execution prescription, not the athlete's prose or AI labels.
+  // Explicit rounds carry per-round volume; aggregate totals cannot replace them.
+  let rounds = null;
+  if (analysis.roundBreakdown != null) {
+    const parsed = wodRoundOutputSchema.array().min(1).safeParse(analysis.roundBreakdown);
+    if (!parsed.success) return null;
+    if (parsed.data.some((round, index) => round.roundNumber !== index + 1)) return null;
+    rounds = parsed.data.map((round) => round.movements.map(prescribedMovement));
+    if (rounds.some((movements) => movements.some((movement) => movement == null))) return null;
+  } else if (analysis.format === 'ROUNDS_FOR_TIME') {
+    return null;
+  }
+  const movements = rounds ? null : analysis.movements.map(prescribedMovement);
+  if (movements && (!movements.length || movements.some((movement) => movement == null)))
     return null;
   const prescription = {
-    source,
-    notes: result.wod.notes?.trim() || null,
     format: analysis.format,
     durationMinutes: analysis.durationMinutes,
-    movements: analysis.movements,
-    rounds: analysis.roundBreakdown,
+    movements,
+    rounds,
   };
   return createHash('sha256')
     .update(JSON.stringify(canonical(prescription)))
