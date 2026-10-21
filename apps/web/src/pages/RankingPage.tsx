@@ -360,8 +360,11 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
               <div className="mt-4 space-y-3 leading-relaxed">
                 <p>
                   Comparamos o mesmo treino e a mesma prescrição registrada: formato, movimentos,
-                  repetições, cargas e tempo. Cada confronto precisa de pelo menos dois atletas.
-                  Vale o melhor resultado de cada atleta no mês.
+                  ordem, rounds, repetições, cargas, distâncias, calorias e tempo. O título, o texto
+                  original e as observações pessoais não definem o confronto: vale a prescrição
+                  salva na análise. Adaptações precisam estar refletidas nessa prescrição. Cada
+                  confronto precisa de pelo menos dois atletas. Vale o melhor resultado de cada
+                  atleta no mês.
                 </p>
                 <p>
                   Nos WODs por tempo, vence o menor tempo. Nos AMRAPs de repetições, vence o maior

@@ -90,6 +90,22 @@ describe('monthly ranking API', () => {
     );
   });
 
+  it('compares matching loads and repetitions despite different source text and notes', async () => {
+    const a = rankingResult('a', '9:15 min');
+    const b = rankingResult('b', '9:50');
+    a.wod.rawText = `Wod\n${a.wod.rawText}`;
+    b.wod.rawText = 'Outro texto descrevendo a mesma prescrição';
+    b.wod.notes = 'Observação pessoal';
+    mocks.results.mockResolvedValue([a, b]);
+    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().summary).toMatchObject({ rankedAthletes: 2, comparableWorkouts: 1 });
+    expect(response.json().athletes.slice(0, 2)).toMatchObject([
+      { userId: 'a', position: 1, points: 100 },
+      { userId: 'b', position: 2, points: 50 },
+    ]);
+  });
+
   it('returns unclassified users for a month without results', async () => {
     mocks.results.mockResolvedValue([]);
     const response = await app.inject({ url: '/api/ranking/monthly?month=2026-09', headers });
