@@ -69,8 +69,18 @@ function prescribedMovement(movement: Omit<WodMovementOutput, 'category'> & { ca
     return null;
   const normalizedLoad = load ? normalize(load) : null;
   const numericLoad = normalizedLoad?.match(/^(\d+(?:[.,]\d+)?)\s*(kg|lb|lbs)$/);
+  const name = normalize(movement.name).replace(/-/g, ' ');
+  // "calories" describes the saved unit, not a different machine. Keep this alias
+  // narrow: equipment alternatives and other volume units must remain distinct.
+  const isCalorieBike =
+    movement.category === 'monostructural' &&
+    movement.calories != null &&
+    movement.calories > 0 &&
+    movement.reps == null &&
+    movement.distanceMeters == null &&
+    (name === 'bike' || name === 'bike calories');
   return {
-    name: normalize(movement.name).replace(/-/g, ' '),
+    name: isCalorieBike ? 'bike' : name,
     reps: movement.reps ?? null,
     distanceMeters: movement.distanceMeters ?? null,
     calories: movement.calories ?? null,

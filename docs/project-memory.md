@@ -12,6 +12,8 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 
 ## Produto
 
+- Ranking: Bike e Bike calories sao equivalentes somente para categoria monostructural, calorias positivas e sem reps/distancia. Regra aplicada a rounds e prescricoes agregadas; cargas, calorias, limite de tempo e equipamentos alternativos continuam distinguindo os WODs. Corrige resultado salvo que ficava sem comparacao por variacao do nome da bike; nao reescreve analises nem resultados. Validacao: 75 testes unitarios/API, tipos, lint e build aprovados. Commit e deploy autorizados pelo usuario para esta correcao; a inclusao ocorre automaticamente quando o codigo e publicado.
+
 - Ranking mensal acumula a soma dos pontos por WOD, substituindo a media. Cada WOD inclui todos os participantes opt-in com resultado valido na mesma prescricao; novas entradas recalculam as colocacoes. Melhor tentativa por atleta/WOD evita pontos duplicados. Interface usa Wod/Wod's em lugar de confronto/confrontos. Validacao: 60 testes unitarios/API, 7 testes de interface, tipos, lint e build aprovados. Commit e deploy de producao autorizados pelo usuario nesta alteracao.
 
 - Treino completo em painel expansivel Ver treino completo, no mesmo estilo da estrategia completa. Previa preserva o resumo curto no cabecalho; painel mostra cada round/bloco, reps, distancias, calorias, cargas e tempo da analise salva. Componente compartilhado com a sequencia na tela real do WOD, sem alterar a prescricao.
