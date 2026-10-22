@@ -8,7 +8,7 @@ import { NavBar } from '../components/NavBar.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { Alert, Button, Card, TextInput } from '../components/ui.js';
 
-const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
+const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 function currentDay() {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
 }
@@ -373,11 +373,13 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                   faltando significa melhor posição e a mesma quantidade gera empate.
                 </p>
                 <p>
-                  O vencedor recebe 100 pontos. Cada posição seguinte reduz 100 dividido pelo número
-                  de atletas do Wod: com quatro atletas, são 100, 75, 50 e 25 pontos. Empates
-                  recebem os mesmos pontos. Cada atleta recebe uma única pontuação por dia, de até
-                  100 pontos. O total do mês soma essas pontuações diárias e reinicia a cada mês.
-                  Por exemplo: 100 hoje, 75 amanhã e 50 depois totalizam 225 pontos. Wod's
+                  A pontuação é proporcional ao número de participantes: 100 − (posição − 1) × 75 ÷
+                  (participantes − 1). O primeiro recebe 100 pontos e a última colocação recebe 25.
+                  Os pontos de cada dia são arredondados para o inteiro mais próximo antes da soma
+                  mensal. Com seis atletas: 100, 85, 70, 55, 40 e 25 pontos. Empates na mesma
+                  colocação recebem os mesmos pontos. Cada atleta recebe uma única pontuação por
+                  dia, de até 100 pontos. O total do mês soma essas pontuações diárias e reinicia a
+                  cada mês. Por exemplo: 100 hoje, 75 amanhã e 50 depois totalizam 225 pontos. Wod's
                   adicionais no mesmo dia não somam pontos extras. Ao abrir um atleta, aparecem
                   somente seu Wod e sua colocação de hoje. CAP também pontua pela colocação. Quando
                   novos atletas enviam resultados válidos para o mesmo WOD, as posições e os pontos

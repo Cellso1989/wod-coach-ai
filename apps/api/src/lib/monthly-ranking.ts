@@ -271,7 +271,7 @@ export function buildMonthlyRanking(
   for (const athlete of monthly.athletes) {
     athlete.comparedWorkouts = athlete.performances.length;
     athlete.points = athlete.comparedWorkouts
-      ? Math.round(athlete.performances.reduce((sum, p) => sum + p.points, 0) * 100) / 100
+      ? athlete.performances.reduce((sum, p) => sum + p.points, 0)
       : null;
   }
   sortAndPosition(monthly.athletes);
@@ -335,7 +335,7 @@ function buildResultRanking(
         score: attempt.result.score,
         position,
         athletes: best.size,
-        points: (100 * (best.size - position + 1)) / best.size,
+        points: Math.round(100 - ((position - 1) * 75) / (best.size - 1)),
         status: attempt.parsed.status,
         remainingReps: attempt.parsed.remainingReps ?? null,
       };
@@ -344,13 +344,8 @@ function buildResultRanking(
   }
   for (const entry of entries.values()) {
     entry.comparedWorkouts = entry.performances.length;
-    entry.performances = entry.performances.map((item) => ({
-      ...item,
-      points: Math.round(item.points * 100) / 100,
-    }));
     if (entry.comparedWorkouts)
-      entry.points =
-        Math.round(entry.performances.reduce((sum, item) => sum + item.points, 0) * 100) / 100;
+      entry.points = entry.performances.reduce((sum, item) => sum + item.points, 0);
   }
   const athletes = [...entries.values()];
   sortAndPosition(athletes);
