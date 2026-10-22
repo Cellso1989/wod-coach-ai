@@ -52,10 +52,41 @@ describe('monthly ranking API', () => {
     expect(mocks.results).not.toHaveBeenCalled();
   });
 
+  it('requires authentication on the daily ranking too', async () => {
+    const response = await app.inject({ url: '/api/ranking/daily' });
+    expect(response.statusCode).toBe(401);
+    expect(mocks.results).not.toHaveBeenCalled();
+  });
+
+  it('serves only one score per athlete for today instead of accumulated monthly points', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-16T23:00:00Z'));
+    try {
+      const results = ['09:30', '10:30', '11:10', '11:58'].map((score, index) =>
+        calorieBikeRankingResult(['a', 'b', 'c', 'd'][index]!, score),
+      );
+      const old = rankingResult('a', '08:05', { createdAt: new Date('2026-10-16T10:00:00Z') });
+      const oldPeer = rankingResult('c', '09:15', { createdAt: new Date('2026-10-16T10:00:00Z') });
+      mocks.results.mockResolvedValue([old, oldPeer, ...results]);
+      const response = await app.inject({ url: '/api/ranking/daily', headers });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().date).toBe('2026-10-16');
+      expect(response.json().athletes.slice(0, 4)).toMatchObject([
+        { userId: 'a', points: 100, comparedWorkouts: 1 },
+        { userId: 'b', points: 75, comparedWorkouts: 1 },
+        { userId: 'c', points: 50, comparedWorkouts: 1 },
+        { userId: 'd', points: 25, comparedWorkouts: 1 },
+      ]);
+      expect(response.headers['cache-control']).toBe('private, no-store');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('includes an existing Bike score in the monthly standings alongside Bike calories', async () => {
     mocks.results.mockResolvedValue([
-      rankingResult('a', '09:39'),
-      rankingResult('b', '10:05'),
+      rankingResult('a', '09:39', { createdAt: new Date('2026-10-15T15:00:00Z') }),
+      rankingResult('b', '10:05', { createdAt: new Date('2026-10-15T15:00:00Z') }),
       calorieBikeRankingResult('a', '11:10 min', 'Bike calories'),
       calorieBikeRankingResult('b', '11:58'),
     ]);
@@ -140,6 +171,7 @@ describe('monthly ranking API', () => {
 
   it('returns cumulative monthly standings with all submitters in each WOD', async () => {
     const first = rankingUsers.map((user, index) => rankingResult(user.id, `0${index + 5}:00`));
+    for (const result of first) result.createdAt = new Date('2026-10-15T15:00:00Z');
     const second = ['b', 'c', 'd', 'e'].map((userId, index) => {
       const result = rankingResult(userId, `0${index + 5}:00`);
       result.wod.analysis!.movements[0]!.reps = 30;

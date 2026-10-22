@@ -36,8 +36,9 @@ for (const width of [390, 1280]) {
           json: buildMonthlyRanking(
             rankingUsers.filter((user) => user.id === 'a' || (user.id === 'b' && optedIn)),
             [rankingResult('a', '05:00'), rankingResult('b', '06:00')],
-            url.searchParams.get('month')!,
+            '2026-10',
             'b',
+            new Date('2026-10-16T15:00:00Z'),
           ),
         });
       return route.fulfill({ status: 404, json: {} });

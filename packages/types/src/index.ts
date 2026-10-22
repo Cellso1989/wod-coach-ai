@@ -35,7 +35,7 @@ export const PERSONAL_RECORD_TYPES = [
   "TIME",
 ] as const;
 export type PersonalRecordType = (typeof PERSONAL_RECORD_TYPES)[number];
-export type { MonthlyRanking, RankedAthlete, RankingPerformance } from './ranking.js';
+export type { DailyRanking, MonthlyRanking, RankedAthlete, RankingPerformance } from './ranking.js';
 
 /**
  * Biblioteca sugerida de PRs (seção 24). Lista inicial, expansível —

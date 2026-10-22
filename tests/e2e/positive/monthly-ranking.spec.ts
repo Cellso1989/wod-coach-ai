@@ -8,6 +8,20 @@ const results = [
   rankingResult('c', 'CAP 10'),
   rankingResult('d', 'CAP 20'),
 ];
+const dailyNow = new Date('2026-10-16T15:00:00Z');
+const buildTestRanking = (
+  users: typeof rankingUsers,
+  records: ReturnType<typeof rankingResult>[],
+  userId: string,
+  now: Date,
+) => buildMonthlyRanking(users, records, '2026-10', userId, now);
+const previousResults = ['a', 'b'].map((id, index) => {
+  const result = rankingResult(id, index === 0 ? '08:00' : '09:00');
+  result.createdAt = new Date('2026-10-15T15:00:00Z');
+  result.wod.name = 'Treino anterior';
+  result.wod.analysis!.movements[0]!.reps = 30;
+  return result;
+});
 
 for (const width of [320, 390, 1280]) {
   test(`local preview is clearly fictional and works without login at ${width}px`, async ({
@@ -26,9 +40,10 @@ for (const width of [320, 390, 1280]) {
       page.getByRole('list', { name: 'Classificação mensal' }).getByRole('listitem'),
     ).toHaveCount(8);
     const highlights = page.getByRole('region', { name: 'Destaques do mês' });
-    await expect(highlights).toContainText('200');
-    await expect(highlights).toContainText('175');
-    await expect(highlights).toContainText("Total em 2 Wod's");
+    await expect(highlights).toContainText('225');
+    await expect(highlights).toContainText('150');
+    await expect(highlights).toContainText('Acumulado do mês');
+    await expect(page.locator('input[type="month"]')).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('ranking-preview.png'), fullPage: true });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
@@ -37,7 +52,7 @@ for (const width of [320, 390, 1280]) {
 }
 
 for (const width of [320, 390, 1280]) {
-  test(`monthly performance ranking supports search, details and empty months at ${width}px`, async ({
+  test(`daily ranking excludes older WODs and supports search and details at ${width}px`, async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
@@ -48,7 +63,7 @@ for (const width of [320, 390, 1280]) {
         return route.fulfill({ json: { user: { id: 'b', name: 'Rafael Lima' } } });
       if (url.pathname === '/api/ranking/monthly')
         return route.fulfill({
-          json: buildMonthlyRanking(rankingUsers, results, url.searchParams.get('month')!, 'b'),
+          json: buildTestRanking(rankingUsers, [...results, ...previousResults], 'b', dailyNow),
         });
       return route.fulfill({ status: 404, json: { error: 'Not found' } });
     });
@@ -61,10 +76,7 @@ for (const width of [320, 390, 1280]) {
       const heading = await page
         .getByRole('heading', { name: 'Ranking', exact: true })
         .boundingBox();
-      const month = await page.getByLabel('Mês da classificação').boundingBox();
       expect(heading!.x).toBe(16);
-      expect(month!.x).toBe(16);
-      expect(month!.x + month!.width).toBe(width - 16);
       await expect
         .poll(() =>
           page.locator('nav').evaluate((nav) => {
@@ -79,11 +91,17 @@ for (const width of [320, 390, 1280]) {
     }
     const rows = page.getByRole('list', { name: 'Classificação mensal' });
     await expect(rows.getByRole('listitem')).toHaveCount(5);
-    await expect(rows.getByRole('listitem').filter({ hasText: 'Rafael Lima' })).toContainText('75');
+    await expect(rows.getByRole('listitem').filter({ hasText: 'Rafael Lima' })).toContainText(
+      '125',
+    );
     await expect(rows.getByRole('listitem').filter({ hasText: 'Luiza Santos' })).toContainText(
       'Sem classificação',
     );
     await rows.locator('summary').filter({ hasText: 'Rafael Lima' }).click();
+    const rafaelRow = rows.getByRole('listitem').filter({ hasText: 'Rafael Lima' });
+    await expect(rafaelRow.getByText('Colocação no Wod de hoje', { exact: true })).toBeVisible();
+    await expect(rows.getByText('Treino anterior', { exact: true })).toHaveCount(0);
+    await expect(rows.getByText('09:00', { exact: false })).toHaveCount(0);
     await expect(rows.getByText('06:00', { exact: false })).toBeVisible();
     await expect(rows.getByText('75 pts', { exact: true })).toBeVisible();
     const capRow = rows.getByRole('listitem').filter({ hasText: 'Camila Souza' });
@@ -106,33 +124,29 @@ for (const width of [320, 390, 1280]) {
     await page.getByRole('button', { name: 'Todos os atletas', exact: true }).click();
     await expect(rows.getByRole('listitem')).toHaveCount(1);
     await page.getByPlaceholder('Buscar atleta').clear();
-    await page.getByLabel('Mês da classificação').fill('2026-09');
-    await expect(page.getByText('O próximo destaque pode ser você.')).toBeVisible();
     await expect(rows.getByRole('listitem')).toHaveCount(5);
-    await expect(rows.getByText('Sem classificação', { exact: true })).toHaveCount(5);
+    await rows.locator('summary').filter({ hasText: 'Luiza Santos' }).click();
+    await expect(
+      rows
+        .getByRole('listitem')
+        .filter({ hasText: 'Luiza Santos' })
+        .getByText('Nenhum resultado comparável deste atleta hoje.', { exact: true }),
+    ).toBeVisible();
     await page.getByText('Como o ranking é calculado', { exact: true }).click();
-    await expect(page.getByText(/a soma dos pontos dos Wod's forma/i)).toBeVisible();
+    await expect(page.getByText(/cada atleta recebe uma única pontuação por dia/i)).toBeVisible();
   });
 }
 
-test('ranking recovers after an API failure and does not display stale month data', async ({
-  page,
-}) => {
+test('daily ranking recovers after an API failure', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-10-16T15:00:00Z'));
   let fail = true;
-  let releaseSeptember!: () => void;
-  const september = new Promise<void>((resolve) => {
-    releaseSeptember = resolve;
-  });
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith('/auth/me'))
       return route.fulfill({ json: { user: { id: 'b', name: 'Rafael' } } });
     if (url.pathname === '/api/ranking/monthly') {
       if (fail) return route.fulfill({ status: 500, json: { error: 'Ranking indisponível.' } });
-      const month = url.searchParams.get('month')!;
-      if (month === '2026-09') await september;
-      return route.fulfill({ json: buildMonthlyRanking(rankingUsers, results, month, 'b') });
+      return route.fulfill({ json: buildTestRanking(rankingUsers, results, 'b', dailyNow) });
     }
     return route.fulfill({ status: 404, json: {} });
   });
@@ -143,21 +157,34 @@ test('ranking recovers after an API failure and does not display stale month dat
   await expect(page.getByRole('region', { name: 'Destaques do mês' })).toContainText(
     'Marina Costa',
   );
-  const septemberRequest = page.waitForRequest((request) =>
-    request.url().includes('month=2026-09'),
-  );
-  await page.getByLabel('Mês da classificação').fill('2026-09');
-  await septemberRequest;
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Carregando classificação...' }),
-  ).toBeVisible();
-  await page.getByLabel('Mês da classificação').fill('2026-10');
-  await expect(page.getByRole('region', { name: 'Destaques do mês' })).toContainText(
-    'Marina Costa',
-  );
-  releaseSeptember();
-  await expect(page.getByLabel('Mês da classificação')).toHaveValue('2026-10');
   await expect(
     page.getByRole('list', { name: 'Classificação mensal' }).getByRole('listitem'),
   ).toHaveCount(5);
+});
+
+test('monthly total persists without a result today and details show no older WOD', async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(dailyNow);
+  await page.route('**/api/**', (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/auth/me'))
+      return route.fulfill({ json: { user: { id: 'b', name: 'Rafael' } } });
+    if (url.pathname === '/api/ranking/monthly')
+      return route.fulfill({
+        json: buildTestRanking(rankingUsers, previousResults, 'b', dailyNow),
+      });
+    return route.fulfill({ status: 404, json: {} });
+  });
+  await page.goto('/ranking');
+  await expect(page.getByRole('region', { name: 'Destaques do mês' })).toContainText('100');
+  const rows = page.getByRole('list', { name: 'Classificação mensal' });
+  await expect(rows.getByText('Sem classificação', { exact: true })).toHaveCount(3);
+  const rafael = rows.getByRole('listitem').filter({ hasText: 'Rafael Lima' });
+  await expect(rafael).toContainText('50');
+  await rafael.locator('summary').click();
+  await expect(
+    rafael.getByText('Nenhum resultado comparável deste atleta hoje.', { exact: true }),
+  ).toBeVisible();
+  await expect(rows.getByText('Treino anterior', { exact: true })).toHaveCount(0);
 });

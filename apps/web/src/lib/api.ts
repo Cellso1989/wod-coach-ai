@@ -1,4 +1,4 @@
-import type { MonthlyRanking } from '@wod-coach-ai/types';
+import type { DailyRanking, MonthlyRanking } from '@wod-coach-ai/types';
 
 // Em produção o frontend é servido pela própria API (mesma origem), então
 // o padrão é string vazia (caminho relativo). Em dev, aponta pro Fastify
@@ -492,6 +492,7 @@ export const api = {
 
   getMonthlyRanking: (month: string, signal?: AbortSignal) =>
     request<MonthlyRanking>(`/ranking/monthly?${new URLSearchParams({ month })}`, { signal }),
+  getDailyRanking: (signal?: AbortSignal) => request<DailyRanking>('/ranking/daily', { signal }),
 
   createPersonalRecord: (input: PersonalRecordInput) =>
     request<{ record: PersonalRecord }>('/personal-records', {
