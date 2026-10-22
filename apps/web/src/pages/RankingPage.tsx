@@ -51,7 +51,7 @@ function AthleteRow({ athlete }: { athlete: RankedAthlete }) {
             </span>
             <span className="mt-1 block text-xs text-neutral-500">
               {athlete.comparedWorkouts
-                ? `${athlete.comparedWorkouts} confronto${athlete.comparedWorkouts === 1 ? '' : 's'}`
+                ? `${athlete.comparedWorkouts} ${athlete.comparedWorkouts === 1 ? 'Wod' : "Wod's"}`
                 : 'Sem classificação'}
             </span>
           </span>
@@ -225,7 +225,7 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
               {[
                 { label: 'Atletas participantes', value: data.summary.users, icon: Users },
                 { label: 'Atletas classificados', value: data.summary.rankedAthletes, icon: Medal },
-                { label: 'WODs em confronto', value: data.summary.comparableWorkouts, icon: Zap },
+                { label: "Wod's comparáveis", value: data.summary.comparableWorkouts, icon: Zap },
                 {
                   label: 'Sua posição',
                   value: own?.position ? `${own.position}º` : '—',
@@ -279,7 +279,8 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                         <span className="ml-1 text-xs font-normal text-neutral-500">pts</span>
                       </p>
                       <p className="mt-2 text-xs text-neutral-500">
-                        Média em {athlete.comparedWorkouts} confrontos
+                        Total em {athlete.comparedWorkouts}{' '}
+                        {athlete.comparedWorkouts === 1 ? 'Wod' : "Wod's"}
                       </p>
                     </div>
                   ))}
@@ -301,7 +302,7 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                 <div>
                   <h2 className="text-lg font-bold">Classificação geral</h2>
                   <p className="mt-1 text-xs text-neutral-500">
-                    Média de desempenho · abra um atleta para ver os resultados
+                    Pontos acumulados no mês · abra um atleta para ver os resultados
                   </p>
                 </div>
                 <label className="relative sm:w-64">
@@ -361,10 +362,12 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                 <p>
                   Comparamos o mesmo treino e a mesma prescrição registrada: formato, movimentos,
                   ordem, rounds, repetições, cargas, distâncias, calorias e tempo. O título, o texto
-                  original e as observações pessoais não definem o confronto: vale a prescrição
-                  salva na análise. Adaptações precisam estar refletidas nessa prescrição. Cada
-                  confronto precisa de pelo menos dois atletas. Vale o melhor resultado de cada
-                  atleta no mês.
+                  original e as observações pessoais não definem o Wod: vale a prescrição salva na
+                  análise. Adaptações precisam estar refletidas nessa prescrição. Cada Wod reúne
+                  todos os atletas participantes do ranking que enviaram um resultado válido para a
+                  mesma prescrição no mês, sem limite de participantes. É preciso ter pelo menos
+                  dois atletas para haver comparação. Vale apenas o melhor resultado de cada atleta
+                  por WOD no mês.
                 </p>
                 <p>
                   Nos WODs por tempo, vence o menor tempo. Nos AMRAPs de repetições, vence o maior
@@ -374,10 +377,12 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                 </p>
                 <p>
                   O vencedor recebe 100 pontos. Cada posição seguinte reduz 100 dividido pelo número
-                  de atletas do confronto: com quatro atletas, são 100, 75, 50 e 25 pontos. Empates
-                  recebem os mesmos pontos. A média dos confrontos forma a classificação mensal;
-                  mais registros não somam pontos extras. CAP também pontua pela colocação. Os
-                  pontos representam a posição no confronto.
+                  de atletas do Wod: com quatro atletas, são 100, 75, 50 e 25 pontos. Empates
+                  recebem os mesmos pontos. A soma dos pontos dos Wod's forma a classificação
+                  mensal: participar de mais Wod's comparáveis permite acumular mais pontos. WODs
+                  sem participação não somam pontos; repetir o mesmo WOD não gera pontos extras. CAP
+                  também pontua pela colocação. Quando novos atletas enviam resultados válidos para
+                  o mesmo WOD, as posições e os pontos desse Wod são recalculados.
                 </p>
                 <p>
                   O mês considera a data do primeiro registro do resultado, no horário de São Paulo.
@@ -385,7 +390,7 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                   atletas.
                 </p>
                 <p>
-                  Quem não tem confronto comparável aparece sem classificação. WODs sem prescrição
+                  Quem não tem Wod comparável aparece sem classificação. WODs sem prescrição
                   suficiente, formatos ainda não suportados e resultados não reconhecidos ficam fora
                   do cálculo. Um tempo acima do limite ou CAP sem quantidade precisa ser informado
                   como CAP e repetições faltantes para entrar no ranking. Em AMRAP, registre as reps

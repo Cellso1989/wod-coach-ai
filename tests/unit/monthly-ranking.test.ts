@@ -26,7 +26,7 @@ describe('monthly performance ranking', () => {
     expect(data.athletes[2]?.performances[0]).toMatchObject({ status: 'cap', remainingReps: 10 });
   });
 
-  it('averages relative performance across WODs and selects only the best attempt', () => {
+  it('accumulates placement points across WODs and selects only the best attempt', () => {
     const otherA = rankingResult('a', '08:00');
     const otherB = rankingResult('b', '07:00');
     otherA.wod.rawText = otherB.wod.rawText = 'Other prescription';
@@ -37,8 +37,8 @@ describe('monthly performance ranking', () => {
     expect(after.athletes).toEqual(before.athletes);
     expect(after.athletes.slice(0, 2).map((athlete) => [athlete.position, athlete.points])).toEqual(
       [
-        [1, 75],
-        [1, 75],
+        [1, 150],
+        [1, 150],
       ],
     );
     expect(after.athletes[0]?.comparedWorkouts).toBe(2);
@@ -57,6 +57,59 @@ describe('monthly performance ranking', () => {
       [3, 50],
       [4, 25],
     ]);
+  });
+
+  it('ranks accumulated participation above one isolated win', () => {
+    const secondB = rankingResult('b', '07:00');
+    const secondC = rankingResult('c', '08:00');
+    secondB.wod.analysis!.movements[0]!.reps = 30;
+    secondC.wod.analysis!.movements[0]!.reps = 30;
+    const data = rank([rankingResult('a', '05:00'), rankingResult('b', '06:00'), secondB, secondC]);
+    expect(data.athletes.slice(0, 3)).toMatchObject([
+      { userId: 'b', position: 1, points: 150, comparedWorkouts: 2 },
+      { userId: 'a', position: 2, points: 100, comparedWorkouts: 1 },
+      { userId: 'c', position: 3, points: 50, comparedWorkouts: 1 },
+    ]);
+    expect(data.summary.comparableWorkouts).toBe(2);
+  });
+
+  it('includes every submitter in one WOD standings and recalculates when more arrive', () => {
+    const initial = [rankingResult('a', '05:00'), rankingResult('b', '06:00')];
+    expect(rank(initial).athletes.find((athlete) => athlete.userId === 'b')?.points).toBe(50);
+    const data = rank([
+      ...initial,
+      rankingResult('c', '04:00'),
+      rankingResult('d', '07:00'),
+      rankingResult('e', '08:00'),
+      rankingResult('c', '09:00'),
+    ]);
+    expect(data.summary).toMatchObject({ comparableWorkouts: 1, rankedAthletes: 5 });
+    expect(data.athletes.map((athlete) => [athlete.userId, athlete.points])).toEqual([
+      ['c', 100],
+      ['a', 80],
+      ['b', 60],
+      ['d', 40],
+      ['e', 20],
+    ]);
+    for (const athlete of data.athletes) {
+      expect(athlete.comparedWorkouts).toBe(1);
+      expect(athlete.performances[0]?.athletes).toBe(5);
+    }
+  });
+
+  it('keeps the monthly total equal to the sum of displayed WOD points', () => {
+    const results = [45, 30, 15].flatMap((reps) =>
+      ['a', 'b', 'c'].map((userId, index) => {
+        const result = rankingResult(userId, `0${index + 5}:00`);
+        result.wod.analysis!.movements[0]!.reps = reps;
+        return result;
+      }),
+    );
+    const athlete = rank(results).athletes.find((entry) => entry.userId === 'b')!;
+    expect(athlete.performances.map((performance) => performance.points)).toEqual([
+      66.67, 66.67, 66.67,
+    ]);
+    expect(athlete.points).toBe(200.01);
   });
 
   it.each([

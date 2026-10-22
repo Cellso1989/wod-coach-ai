@@ -12,8 +12,8 @@ export function createRankingDemo(month: string, activeMonth: string): MonthlyRa
     'Luiza Santos',
     'Pedro Rocha',
   ];
-  const scores = [100, 75, 75, 50, 50, 25, null, null];
-  const positions = [1, 2, 2, 4, 4, 6, null, null];
+  const scores = [200, 150, 175, 125, 125, 50, null, null];
+  const positions = [1, 3, 2, 4, 4, 6, null, null];
   const hasResults = month === activeMonth;
   const results: RankingPerformance[][] = Array.from({ length: names.length }, () => []);
   const events = [
@@ -57,14 +57,16 @@ export function createRankingDemo(month: string, activeMonth: string): MonthlyRa
       recordedResults: hasResults ? 15 : 0,
       uncomparedResults: hasResults ? 3 : 0,
     },
-    athletes: names.map((name, index) => ({
-      userId: `demo-${index}`,
-      name,
-      position: hasResults ? positions[index]! : null,
-      points: hasResults ? scores[index]! : null,
-      comparedWorkouts: hasResults ? results[index]!.length : 0,
-      isCurrentUser: index === 2,
-      performances: hasResults ? results[index]! : [],
-    })),
+    athletes: names
+      .map((name, index) => ({
+        userId: `demo-${index}`,
+        name,
+        position: hasResults ? positions[index]! : null,
+        points: hasResults ? scores[index]! : null,
+        comparedWorkouts: hasResults ? results[index]!.length : 0,
+        isCurrentUser: index === 2,
+        performances: hasResults ? results[index]! : [],
+      }))
+      .sort((a, b) => (b.points ?? -1) - (a.points ?? -1) || a.name.localeCompare(b.name, 'pt-BR')),
   };
 }
