@@ -116,6 +116,28 @@ describe('monthly ranking API', () => {
     ).toBe(true);
   });
 
+  it('returns cumulative monthly standings with all submitters in each WOD', async () => {
+    const first = rankingUsers.map((user, index) => rankingResult(user.id, `0${index + 5}:00`));
+    const second = ['b', 'c', 'd', 'e'].map((userId, index) => {
+      const result = rankingResult(userId, `0${index + 5}:00`);
+      result.wod.analysis!.movements[0]!.reps = 30;
+      return result;
+    });
+    mocks.results.mockResolvedValue([...first, ...second]);
+    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+    expect(response.statusCode).toBe(200);
+    const data = response.json();
+    expect(data.summary).toMatchObject({ comparableWorkouts: 2, rankedAthletes: 5 });
+    expect(data.athletes).toMatchObject([
+      { userId: 'b', position: 1, points: 180, comparedWorkouts: 2 },
+      { userId: 'c', position: 2, points: 135, comparedWorkouts: 2 },
+      { userId: 'a', position: 3, points: 100, comparedWorkouts: 1 },
+      { userId: 'd', position: 4, points: 90, comparedWorkouts: 2 },
+      { userId: 'e', position: 5, points: 45, comparedWorkouts: 2 },
+    ]);
+    expect(data.athletes[0].performances).toMatchObject([{ athletes: 5 }, { athletes: 4 }]);
+  });
+
   it('returns positive points ordered by remaining CAP reps after finishers', async () => {
     mocks.results.mockResolvedValue([
       rankingResult('a', '14:00'),

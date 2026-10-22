@@ -222,6 +222,7 @@ export function buildMonthlyRanking(
         best.set(attempt.result.wod.userId, attempt);
     }
     if (best.size < 2) continue;
+    // One shared standings table includes every eligible athlete for this prescription.
     const sorted = [...best.values()].sort((a, b) => compare(a.parsed, b.parsed));
     comparableWorkouts++;
     includedResults += best.size;
@@ -243,17 +244,13 @@ export function buildMonthlyRanking(
   }
   for (const entry of entries.values()) {
     entry.comparedWorkouts = entry.performances.length;
-    if (entry.comparedWorkouts)
-      entry.points =
-        Math.round(
-          (entry.performances.reduce((sum, item) => sum + item.points, 0) /
-            entry.comparedWorkouts) *
-            100,
-        ) / 100;
     entry.performances = entry.performances.map((item) => ({
       ...item,
       points: Math.round(item.points * 100) / 100,
     }));
+    if (entry.comparedWorkouts)
+      entry.points =
+        Math.round(entry.performances.reduce((sum, item) => sum + item.points, 0) * 100) / 100;
   }
   const athletes = [...entries.values()].sort(
     (a, b) =>

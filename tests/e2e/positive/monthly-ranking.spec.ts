@@ -25,6 +25,10 @@ for (const width of [320, 390, 1280]) {
     await expect(
       page.getByRole('list', { name: 'Classificação mensal' }).getByRole('listitem'),
     ).toHaveCount(8);
+    const highlights = page.getByRole('region', { name: 'Destaques do mês' });
+    await expect(highlights).toContainText('200');
+    await expect(highlights).toContainText('175');
+    await expect(highlights).toContainText("Total em 2 Wod's");
     await page.screenshot({ path: testInfo.outputPath('ranking-preview.png'), fullPage: true });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
@@ -107,7 +111,7 @@ for (const width of [320, 390, 1280]) {
     await expect(rows.getByRole('listitem')).toHaveCount(5);
     await expect(rows.getByText('Sem classificação', { exact: true })).toHaveCount(5);
     await page.getByText('Como o ranking é calculado', { exact: true }).click();
-    await expect(page.getByText(/a média dos confrontos forma/i)).toBeVisible();
+    await expect(page.getByText(/a soma dos pontos dos Wod's forma/i)).toBeVisible();
   });
 }
 
