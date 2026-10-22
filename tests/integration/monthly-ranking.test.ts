@@ -71,8 +71,8 @@ describe('monthly ranking API', () => {
     const data = response.json();
     expect(data.athletes.slice(0, 3)).toMatchObject([
       { userId: 'a', points: 200 },
-      { userId: 'b', points: 88 },
-      { userId: 'c', points: 25 },
+      { userId: 'b', points: 150 },
+      { userId: 'c', points: 50 },
     ]);
     for (const athlete of data.athletes) {
       for (const performance of athlete.performances)
@@ -118,9 +118,9 @@ describe('monthly ranking API', () => {
     const athlete = response
       .json()
       .athletes.find((entry: { userId: string }) => entry.userId === 'b');
-    expect(athlete).toMatchObject({ points: 50, comparedWorkouts: 2 });
+    expect(athlete).toMatchObject({ points: 150, comparedWorkouts: 2 });
     expect(athlete.performances).toContainEqual(
-      expect.objectContaining({ score: '11:58', points: 25 }),
+      expect.objectContaining({ score: '11:58', points: 75 }),
     );
   });
 
@@ -142,7 +142,7 @@ describe('monthly ranking API', () => {
     expect(data.athletes[1]).toMatchObject({
       userId: 'b',
       position: 2,
-      points: 25,
+      points: 75,
       isCurrentUser: true,
     });
     expect(response.body).not.toContain('private@example.com');
@@ -178,7 +178,7 @@ describe('monthly ranking API', () => {
     expect(response.json().summary).toMatchObject({ rankedAthletes: 2, comparableWorkouts: 1 });
     expect(response.json().athletes.slice(0, 2)).toMatchObject([
       { userId: 'a', position: 1, points: 100 },
-      { userId: 'b', position: 2, points: 25 },
+      { userId: 'b', position: 2, points: 75 },
     ]);
   });
 
@@ -206,11 +206,11 @@ describe('monthly ranking API', () => {
     const data = response.json();
     expect(data.summary).toMatchObject({ comparableWorkouts: 2, rankedAthletes: 5 });
     expect(data.athletes).toMatchObject([
-      { userId: 'b', position: 1, points: 181, comparedWorkouts: 2 },
-      { userId: 'c', position: 2, points: 138, comparedWorkouts: 2 },
+      { userId: 'b', position: 1, points: 175, comparedWorkouts: 2 },
+      { userId: 'c', position: 2, points: 125, comparedWorkouts: 2 },
       { userId: 'a', position: 3, points: 100, comparedWorkouts: 1 },
-      { userId: 'd', position: 4, points: 94, comparedWorkouts: 2 },
-      { userId: 'e', position: 5, points: 50, comparedWorkouts: 2 },
+      { userId: 'd', position: 4, points: 75, comparedWorkouts: 2 },
+      { userId: 'e', position: 5, points: 35, comparedWorkouts: 2 },
     ]);
     expect(data.athletes[0].performances).toMatchObject([{ athletes: 5 }, { athletes: 4 }]);
   });
@@ -281,7 +281,7 @@ describe('monthly ranking API', () => {
     response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
     expect(
       response.json().athletes.find((athlete: { userId: string }) => athlete.userId === 'b'),
-    ).toMatchObject({ position: 2, points: 25 });
+    ).toMatchObject({ position: 2, points: 75 });
   });
 
   it('persists the explicit choice only for the authenticated user and preserves it for older clients', async () => {

@@ -335,7 +335,7 @@ function buildResultRanking(
         score: attempt.result.score,
         position,
         athletes: best.size,
-        points: Math.round(100 - ((position - 1) * 75) / (best.size - 1)),
+        points: [100, 75, 50, 25][position - 1] ?? 10,
         status: attempt.parsed.status,
         remainingReps: attempt.parsed.remainingReps ?? null,
       };
