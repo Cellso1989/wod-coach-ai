@@ -1,11 +1,86 @@
 import { describe, expect, it } from 'vitest';
 import { buildMonthlyRanking, rankingMonth } from '../../apps/api/src/lib/monthly-ranking.js';
-import { rankingResult, rankingUsers } from '../fixtures/monthly-ranking.js';
+import {
+  calorieBikeRankingResult,
+  rankingResult,
+  rankingUsers,
+} from '../fixtures/monthly-ranking.js';
 
 const rank = (results: ReturnType<typeof rankingResult>[]) =>
   buildMonthlyRanking(rankingUsers, results, '2026-10', 'b');
 
 describe('monthly performance ranking', () => {
+  it('counts the saved Bike result alongside Bike calories with matching rounds and prescription', () => {
+    const results = [
+      rankingResult('a', '09:39'),
+      rankingResult('b', '10:05'),
+      calorieBikeRankingResult('a', '11:10 min', 'Bike calories'),
+      calorieBikeRankingResult('b', '11:58'),
+    ];
+    const original = structuredClone(results);
+    const data = rank(results);
+    expect(data.summary.comparableWorkouts).toBe(2);
+    expect(data.athletes.slice(0, 2)).toMatchObject([
+      { userId: 'a', points: 200, comparedWorkouts: 2 },
+      { userId: 'b', points: 100, comparedWorkouts: 2 },
+    ]);
+    expect(data.athletes[1]?.performances).toContainEqual(
+      expect.objectContaining({
+        score: '11:58',
+        points: 50,
+        athletes: 2,
+      }),
+    );
+    expect(results).toEqual(original);
+  });
+
+  it('normalizes calorie Bike labels in aggregate prescriptions too', () => {
+    const a = calorieBikeRankingResult('a', '11:10', '  BIKE  CALORIES ');
+    const b = calorieBikeRankingResult('b', '11:58');
+    a.wod.analysis!.roundBreakdown = b.wod.analysis!.roundBreakdown = null;
+    a.wod.analysis!.format = b.wod.analysis!.format = 'FOR_TIME';
+    expect(rank([a, b]).summary.comparableWorkouts).toBe(1);
+  });
+
+  it.each(['Rower', 'Ski erg', 'Bike / Rower / Ski erg', 'Cal bike/remo/ski erg', 'Echo Bike'])(
+    'keeps %s distinct from a calorie Bike',
+    (name) => {
+      expect(
+        rank([calorieBikeRankingResult('a', '11:10', name), calorieBikeRankingResult('b', '11:58')])
+          .summary.comparableWorkouts,
+      ).toBe(0);
+    },
+  );
+
+  it.each(['load', 'calories', 'duration', 'rounds', 'distance', 'reps', 'category'])(
+    'preserves %s differences when matching Bike labels',
+    (change) => {
+      const a = calorieBikeRankingResult('a', '11:10', 'Bike calories');
+      const b = calorieBikeRankingResult('b', '11:58');
+      const analysis = b.wod.analysis!;
+      const rounds = analysis.roundBreakdown as Array<{ movements: typeof analysis.movements }>;
+      if (change === 'duration') analysis.durationMinutes = 14;
+      if (change === 'rounds') rounds.pop();
+      for (const round of rounds) {
+        if (change === 'load') round.movements[0]!.loadDescription = '20 kg';
+        if (change === 'calories') round.movements[2]!.calories = 15;
+        if (change === 'distance') {
+          round.movements[2]!.calories = null;
+          round.movements[2]!.distanceMeters = 200;
+        }
+        if (change === 'reps') {
+          round.movements[2]!.calories = null;
+          round.movements[2]!.reps = 20;
+        }
+      }
+      if (change === 'category') {
+        const labeledRounds = a.wod.analysis!.roundBreakdown as typeof rounds;
+        for (const round of labeledRounds) round.movements[2]!.category = 'mixed_modal';
+      }
+      expect(rank([a, b]).summary.comparableWorkouts).toBe(0);
+    },
+  );
+
   it('awards positive placement points to CAP and keeps users without results unclassified', () => {
     const data = rank([
       rankingResult('a', '05:00'),

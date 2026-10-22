@@ -8,6 +8,49 @@ export const rankingUsers = [
   { id: 'e', name: 'Luiza Santos' },
 ];
 
+export function calorieBikeRankingResult(userId: string, score: string, bikeName = 'Bike') {
+  const result = rankingResult(userId, score);
+  const analysis = result.wod.analysis!;
+  analysis.format = 'ROUNDS_FOR_TIME';
+  analysis.durationMinutes = 12;
+  const movements = [
+    {
+      name: 'Double DB Devil Press',
+      category: 'mixed_modal',
+      reps: 10,
+      calories: null,
+      distanceMeters: null,
+      loadDescription: '22 kg',
+    },
+    {
+      name: 'Toes to Bar',
+      category: 'gymnastics',
+      reps: 20,
+      calories: null,
+      distanceMeters: null,
+      loadDescription: null,
+    },
+    {
+      name: bikeName,
+      category: 'monostructural',
+      reps: null,
+      calories: 20,
+      distanceMeters: null,
+      loadDescription: null,
+    },
+  ];
+  analysis.roundBreakdown = [1, 2, 3].map((roundNumber) => ({
+    roundNumber,
+    movements: structuredClone(movements),
+  }));
+  analysis.movements = movements.map((movement) => ({
+    ...movement,
+    reps: movement.reps == null ? null : movement.reps * 3,
+    calories: movement.calories == null ? null : movement.calories * 3,
+  }));
+  return result;
+}
+
 export function rankingResult(
   userId: string,
   score: string,

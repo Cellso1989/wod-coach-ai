@@ -1,7 +1,11 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../apps/api/src/app.js';
-import { rankingResult, rankingUsers } from '../fixtures/monthly-ranking.js';
+import {
+  calorieBikeRankingResult,
+  rankingResult,
+  rankingUsers,
+} from '../fixtures/monthly-ranking.js';
 
 const mocks = vi.hoisted(() => ({
   users: vi.fn(),
@@ -46,6 +50,24 @@ describe('monthly ranking API', () => {
     expect(response.statusCode).toBe(401);
     expect(mocks.users).not.toHaveBeenCalled();
     expect(mocks.results).not.toHaveBeenCalled();
+  });
+
+  it('includes an existing Bike score in the monthly standings alongside Bike calories', async () => {
+    mocks.results.mockResolvedValue([
+      rankingResult('a', '09:39'),
+      rankingResult('b', '10:05'),
+      calorieBikeRankingResult('a', '11:10 min', 'Bike calories'),
+      calorieBikeRankingResult('b', '11:58'),
+    ]);
+    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+    expect(response.statusCode).toBe(200);
+    const athlete = response
+      .json()
+      .athletes.find((entry: { userId: string }) => entry.userId === 'b');
+    expect(athlete).toMatchObject({ points: 100, comparedWorkouts: 2 });
+    expect(athlete.performances).toContainEqual(
+      expect.objectContaining({ score: '11:58', points: 50 }),
+    );
   });
 
   it.each(['2026-13', 'invalid', '2026-1', '2026-00'])(
