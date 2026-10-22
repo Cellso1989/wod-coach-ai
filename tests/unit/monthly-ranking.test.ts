@@ -14,6 +14,72 @@ const rank = (results: ReturnType<typeof rankingResult>[]) =>
   buildMonthlyRanking(rankingUsers, results, '2026-10', 'b');
 
 describe('monthly performance ranking', () => {
+  it.each([
+    [2, [100, 25]],
+    [3, [100, 63, 25]],
+    [4, [100, 75, 50, 25]],
+    [5, [100, 81, 63, 44, 25]],
+    [6, [100, 85, 70, 55, 40, 25]],
+    [7, [100, 88, 75, 63, 50, 38, 25]],
+  ] as const)('awards proportional integer points with %i participants', (count, expected) => {
+    const users = Array.from({ length: count }, (_, index) => ({
+      id: `athlete-${index}`,
+      name: `Athlete ${index}`,
+    }));
+    const data = buildMonthlyRanking(
+      users,
+      users.map((u, index) => rankingResult(u.id, `${index + 5}:00`)),
+      '2026-10',
+      users[0]!.id,
+    );
+    const ranked = data.athletes.filter((a) => a.position != null);
+    expect(ranked.map((a) => a.points)).toEqual(expected);
+    expect(ranked.every((a) => a.performances[0]?.athletes === count)).toBe(true);
+  });
+
+  it('recalculates all days of the month using the participant count for each day', () => {
+    const days = [
+      {
+        day: 13,
+        scores: [
+          ['a', '09:39'],
+          ['d', '10:05'],
+        ],
+      },
+      {
+        day: 20,
+        scores: [
+          ['b', '08:05'],
+          ['a', '09:15'],
+          ['d', '09:50'],
+        ],
+      },
+      {
+        day: 21,
+        scores: [
+          ['b', '09:30'],
+          ['c', '10:30'],
+          ['a', '11:10'],
+          ['d', '11:58'],
+        ],
+      },
+    ];
+    const results = days.flatMap(({ day, scores }) =>
+      scores.map(([id, score]) => {
+        const result = calorieBikeRankingResult(id!, score!);
+        result.createdAt = new Date(`2026-10-${day}T15:00:00Z`);
+        return result;
+      }),
+    );
+    const data = rank(results);
+    expect(data.athletes.slice(0, 4).map((a) => [a.userId, a.points])).toEqual([
+      ['a', 213],
+      ['b', 200],
+      ['c', 75],
+      ['d', 75],
+    ]);
+  });
+
   it('accumulates 100 + 75 + 50 across days, counts the same WOD again on a new day and resets each month', () => {
     const results = [
       ['05:00', '06:00', '07:00', '08:00'],
@@ -191,12 +257,12 @@ describe('monthly performance ranking', () => {
     expect(data.summary.comparableWorkouts).toBe(2);
     expect(data.athletes.slice(0, 2)).toMatchObject([
       { userId: 'a', points: 200, comparedWorkouts: 2 },
-      { userId: 'b', points: 100, comparedWorkouts: 2 },
+      { userId: 'b', points: 50, comparedWorkouts: 2 },
     ]);
     expect(data.athletes[1]?.performances).toContainEqual(
       expect.objectContaining({
         score: '11:58',
-        points: 50,
+        points: 25,
         athletes: 2,
       }),
     );
@@ -260,8 +326,8 @@ describe('monthly performance ranking', () => {
       data.athletes.map((athlete) => [athlete.userId, athlete.position, athlete.points]),
     ).toEqual([
       ['a', 1, 100],
-      ['b', 2, 66.67],
-      ['c', 3, 33.33],
+      ['b', 2, 63],
+      ['c', 3, 25],
       ['d', null, null],
       ['e', null, null],
     ]);
@@ -282,8 +348,8 @@ describe('monthly performance ranking', () => {
     expect(after.athletes).toEqual(before.athletes);
     expect(after.athletes.slice(0, 2).map((athlete) => [athlete.position, athlete.points])).toEqual(
       [
-        [1, 150],
-        [1, 150],
+        [1, 125],
+        [1, 125],
       ],
     );
     expect(after.athletes[0]?.comparedWorkouts).toBe(2);
@@ -312,16 +378,16 @@ describe('monthly performance ranking', () => {
     secondC.wod.analysis!.movements[0]!.reps = 30;
     const data = rank([rankingResult('a', '05:00'), rankingResult('b', '06:00'), secondB, secondC]);
     expect(data.athletes.slice(0, 3)).toMatchObject([
-      { userId: 'b', position: 1, points: 150, comparedWorkouts: 2 },
+      { userId: 'b', position: 1, points: 125, comparedWorkouts: 2 },
       { userId: 'a', position: 2, points: 100, comparedWorkouts: 1 },
-      { userId: 'c', position: 3, points: 50, comparedWorkouts: 1 },
+      { userId: 'c', position: 3, points: 25, comparedWorkouts: 1 },
     ]);
     expect(data.summary.comparableWorkouts).toBe(2);
   });
 
   it('includes every submitter in one WOD standings and recalculates when more arrive', () => {
     const initial = [rankingResult('a', '05:00'), rankingResult('b', '06:00')];
-    expect(rank(initial).athletes.find((athlete) => athlete.userId === 'b')?.points).toBe(50);
+    expect(rank(initial).athletes.find((athlete) => athlete.userId === 'b')?.points).toBe(25);
     const data = rank([
       ...initial,
       rankingResult('c', '04:00'),
@@ -332,10 +398,10 @@ describe('monthly performance ranking', () => {
     expect(data.summary).toMatchObject({ comparableWorkouts: 1, rankedAthletes: 5 });
     expect(data.athletes.map((athlete) => [athlete.userId, athlete.points])).toEqual([
       ['c', 100],
-      ['a', 80],
-      ['b', 60],
-      ['d', 40],
-      ['e', 20],
+      ['a', 81],
+      ['b', 63],
+      ['d', 44],
+      ['e', 25],
     ]);
     for (const athlete of data.athletes) {
       expect(athlete.comparedWorkouts).toBe(1);
@@ -355,10 +421,8 @@ describe('monthly performance ranking', () => {
       }),
     );
     const athlete = rank(results).athletes.find((entry) => entry.userId === 'b')!;
-    expect(athlete.performances.map((performance) => performance.points)).toEqual([
-      66.67, 66.67, 66.67,
-    ]);
-    expect(athlete.points).toBe(200.01);
+    expect(athlete.performances.map((performance) => performance.points)).toEqual([63, 63, 63]);
+    expect(athlete.points).toBe(189);
   });
 
   it.each([
@@ -411,7 +475,7 @@ describe('monthly performance ranking', () => {
       expect(data.summary.comparableWorkouts).toBe(1);
       expect(data.athletes.slice(0, 2).map((athlete) => [athlete.userId, athlete.points])).toEqual([
         ['a', 100],
-        ['b', 50],
+        ['b', 25],
       ]);
     },
   );
@@ -503,7 +567,7 @@ describe('monthly performance ranking', () => {
     expect(data.athletes.slice(0, 3).map((athlete) => [athlete.position, athlete.points])).toEqual([
       [1, 100],
       [1, 100],
-      [3, 33.33],
+      [3, 25],
     ]);
   });
 
@@ -529,7 +593,7 @@ describe('monthly performance ranking', () => {
       rankingResult('b', 'CAP 1'),
       rankingResult('c', '14:01'),
     ]);
-    expect(data.athletes.slice(0, 2).map((athlete) => athlete.points)).toEqual([100, 50]);
+    expect(data.athletes.slice(0, 2).map((athlete) => athlete.points)).toEqual([100, 25]);
     expect(data.athletes.find((athlete) => athlete.userId === 'c')?.position).toBeNull();
   });
 
