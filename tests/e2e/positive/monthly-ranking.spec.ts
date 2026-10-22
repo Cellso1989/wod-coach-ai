@@ -92,7 +92,7 @@ for (const width of [320, 390, 1280]) {
     const rows = page.getByRole('list', { name: 'Classificação mensal' });
     await expect(rows.getByRole('listitem')).toHaveCount(5);
     await expect(rows.getByRole('listitem').filter({ hasText: 'Rafael Lima' })).toContainText(
-      '100',
+      '150',
     );
     await expect(rows.getByRole('listitem').filter({ hasText: 'Luiza Santos' })).toContainText(
       'Sem classificação',
@@ -134,6 +134,9 @@ for (const width of [320, 390, 1280]) {
     ).toBeVisible();
     await page.getByText('Como o ranking é calculado', { exact: true }).click();
     await expect(page.getByText(/cada atleta recebe uma única pontuação por dia/i)).toBeVisible();
+    await expect(
+      page.getByText(/do 5º lugar em diante, cada atleta recebe 10 pontos/i),
+    ).toBeVisible();
   });
 }
 
@@ -181,7 +184,7 @@ test('monthly total persists without a result today and details show no older WO
   const rows = page.getByRole('list', { name: 'Classificação mensal' });
   await expect(rows.getByText('Sem classificação', { exact: true })).toHaveCount(3);
   const rafael = rows.getByRole('listitem').filter({ hasText: 'Rafael Lima' });
-  await expect(rafael).toContainText('25');
+  await expect(rafael).toContainText('75');
   await rafael.locator('summary').click();
   await expect(
     rafael.getByText('Nenhum resultado comparável deste atleta hoje.', { exact: true }),

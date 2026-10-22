@@ -12,6 +12,8 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 
 ## Produto
 
+- Nova regra solicitada em 22/10/2026: pontuacao fixa por colocacao, 1o 100, 2o 75, 3o 50, 4o 25; do 5o em diante, 10 pontos por atleta. Substitui a escala proporcional anterior, independentemente do total de participantes. Preservar empates por colocacao, minimo de 2 participantes comparaveis, uma unica pontuacao por atleta/dia e soma mensal com reinicio mensal. Dias anteriores tambem sao recalculados pela nova tabela. Validacao: 92 testes unitarios/API, 12 testes de interface, lint e builds aprovados. Usuario autorizou commit e deploy desta alteracao em 22/10/2026.
+
 - Pontuacao proporcional solicitada pelo usuario: round(100 - (posicao - 1) * 75 / (participantes - 1)), primeiro 100 e ultima colocacao 25; com 6 atletas: 100/85/70/55/40/25. Arredondar cada dia ao inteiro mais proximo antes de somar o mes (com 3: 100/63/25). Empates compartilham colocacao/pontos; manter minimo de 2 participantes comparaveis. Total mensal soma uma unica pontuacao por atleta/dia, recalculando inclusive dias anteriores. Substitui a proposta anterior de tabela fixa. Usuario confirmou time cap de 12 minutos para todos no WOD de 20/10; durationMinutes null foi corrigido para 12 em producao com nova versao da analise, incluindo o terceiro participante. Validacao: 92 testes unitarios/API, 12 testes de interface, lint e builds aprovados. Usuario autorizou commit e deploy desta formula em 22/10/2026.
 
 - Validacao da regra final de acumulado diario no mes: 84 testes unitarios/API, 12 testes de interface, lint e build aprovados. Previa local usa dados ficticios com total de 225 e detalhe somente de hoje. Usuario autorizou explicitamente commit e deploy desta versao.

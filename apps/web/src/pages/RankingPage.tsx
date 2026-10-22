@@ -373,17 +373,16 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                   faltando significa melhor posição e a mesma quantidade gera empate.
                 </p>
                 <p>
-                  A pontuação é proporcional ao número de participantes: 100 − (posição − 1) × 75 ÷
-                  (participantes − 1). O primeiro recebe 100 pontos e a última colocação recebe 25.
-                  Os pontos de cada dia são arredondados para o inteiro mais próximo antes da soma
-                  mensal. Com seis atletas: 100, 85, 70, 55, 40 e 25 pontos. Empates na mesma
-                  colocação recebem os mesmos pontos. Cada atleta recebe uma única pontuação por
-                  dia, de até 100 pontos. O total do mês soma essas pontuações diárias e reinicia a
-                  cada mês. Por exemplo: 100 hoje, 75 amanhã e 50 depois totalizam 225 pontos. Wod's
-                  adicionais no mesmo dia não somam pontos extras. Ao abrir um atleta, aparecem
-                  somente seu Wod e sua colocação de hoje. CAP também pontua pela colocação. Quando
-                  novos atletas enviam resultados válidos para o mesmo WOD, as posições e os pontos
-                  desse Wod são recalculados.
+                  A pontuação por colocação é fixa: 1º recebe 100 pontos, 2º recebe 75, 3º recebe 50
+                  e 4º recebe 25. Do 5º lugar em diante, cada atleta recebe 10 pontos. Essa regra
+                  vale independentemente da quantidade de participantes: com seis atletas, são 100,
+                  75, 50, 25, 10 e 10 pontos. Empates na mesma colocação recebem os mesmos pontos.
+                  Cada atleta recebe uma única pontuação por dia, de até 100 pontos. O total do mês
+                  soma essas pontuações diárias e reinicia a cada mês. Por exemplo: 100 hoje, 75
+                  amanhã e 50 depois totalizam 225 pontos. Wod's adicionais no mesmo dia não somam
+                  pontos extras. Ao abrir um atleta, aparecem somente seu Wod e sua colocação de
+                  hoje. CAP também pontua pela colocação. Quando novos atletas enviam resultados
+                  válidos para o mesmo WOD, as posições e os pontos desse Wod são recalculados.
                 </p>
                 <p>
                   O dia considera a data do primeiro registro do resultado, no horário de São Paulo.
