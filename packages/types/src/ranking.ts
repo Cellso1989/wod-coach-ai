@@ -1,4 +1,5 @@
 export interface RankingPerformance {
+  date: string;
   workout: string;
   score: string;
   position: number;
@@ -16,6 +17,7 @@ export interface RankedAthlete {
   comparedWorkouts: number;
   isCurrentUser: boolean;
   performances: RankingPerformance[];
+  todayPerformances: RankingPerformance[];
 }
 
 export interface MonthlyRanking {
@@ -28,4 +30,8 @@ export interface MonthlyRanking {
     uncomparedResults: number;
   };
   athletes: RankedAthlete[];
+}
+
+export interface DailyRanking extends Omit<MonthlyRanking, 'month'> {
+  date: string;
 }

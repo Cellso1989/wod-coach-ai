@@ -9,11 +9,12 @@ import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { Alert, Button, Card, TextInput } from '../components/ui.js';
 
 const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
-function currentMonth() {
-  return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }).slice(0, 7);
+function currentDay() {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
 }
-function monthLabel(month: string) {
-  return new Date(`${month}-15T12:00:00Z`).toLocaleDateString('pt-BR', {
+function dateLabel(date: string) {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString('pt-BR', {
+    day: 'numeric',
     month: 'long',
     year: 'numeric',
     timeZone: 'America/Sao_Paulo',
@@ -51,7 +52,7 @@ function AthleteRow({ athlete }: { athlete: RankedAthlete }) {
             </span>
             <span className="mt-1 block text-xs text-neutral-500">
               {athlete.comparedWorkouts
-                ? `${athlete.comparedWorkouts} ${athlete.comparedWorkouts === 1 ? 'Wod' : "Wod's"}`
+                ? `${athlete.comparedWorkouts} ${athlete.comparedWorkouts === 1 ? 'dia pontuado' : 'dias pontuados'}`
                 : 'Sem classificação'}
             </span>
           </span>
@@ -70,8 +71,9 @@ function AthleteRow({ athlete }: { athlete: RankedAthlete }) {
           />
         </summary>
         <div className="space-y-2 border-t border-neutral-800 p-4">
-          {athlete.performances.length ? (
-            athlete.performances.map((performance, index) => (
+          <p className="text-xs font-semibold text-neutral-300">Colocação no Wod de hoje</p>
+          {athlete.todayPerformances.length ? (
+            athlete.todayPerformances.map((performance, index) => (
               <div
                 key={index}
                 className="flex items-start justify-between gap-3 rounded-lg bg-neutral-950 p-3 text-xs"
@@ -94,7 +96,7 @@ function AthleteRow({ athlete }: { athlete: RankedAthlete }) {
             ))
           ) : (
             <p className="text-sm text-neutral-400">
-              Ainda não há resultados comparáveis deste atleta no mês.
+              Nenhum resultado comparável deste atleta hoje.
             </p>
           )}
         </div>
@@ -104,7 +106,7 @@ function AthleteRow({ athlete }: { athlete: RankedAthlete }) {
 }
 
 export function RankingPage({ demo = false }: { demo?: boolean }) {
-  const [month, setMonth] = useState(currentMonth);
+  const [today, setToday] = useState(currentDay);
   const [data, setData] = useState<MonthlyRanking | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -113,17 +115,22 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    const timer = window.setInterval(() => setToday(currentDay()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError('');
     setData(null);
     if (import.meta.env.DEV && demo) {
-      setData(createRankingDemo(month, currentMonth()));
+      setData(createRankingDemo(today));
       setLoading(false);
       return () => controller.abort();
     }
     void api
-      .getMonthlyRanking(month, controller.signal)
+      .getMonthlyRanking(today.slice(0, 7), controller.signal)
       .then((response) => {
         if (!controller.signal.aborted) setData(response);
       })
@@ -135,7 +142,7 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [month, demo, attempt]);
+  }, [today, demo, attempt]);
 
   const leaders =
     data?.athletes.filter((athlete) => athlete.points != null && athlete.points > 0).slice(0, 3) ??
@@ -168,24 +175,12 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
             <div>
               <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Ranking</h1>
               <p className="mt-2 text-sm text-neutral-400">
-                Cada treino conta, o desempenho define a posição.
+                Acumulado do mês. Uma única pontuação por dia.
               </p>
             </div>
-            <label className="block min-w-0 text-xs text-neutral-400">
-              <span className="mb-2 block">Mês da classificação</span>
-              <TextInput
-                aria-label="Mês da classificação"
-                className="block min-w-0 max-w-full appearance-none [&::-webkit-date-and-time-value]:min-w-0"
-                type="month"
-                min="2020-01"
-                max={currentMonth()}
-                value={month}
-                onChange={(event) => {
-                  if (/^20\d{2}-(0[1-9]|1[0-2])$/.test(event.target.value))
-                    setMonth(event.target.value);
-                }}
-              />
-            </label>
+            <p aria-label="Data da classificação" className="text-xs text-neutral-400">
+              Hoje · {dateLabel(today)}
+            </p>
           </div>
         </header>
 
@@ -247,7 +242,11 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
               <div className="mb-5 flex items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold">Destaques do mês</h2>
                 <span className="text-xs capitalize text-neutral-500">
-                  {monthLabel(data.month)}
+                  {new Date(`${data.month}-15T12:00:00Z`).toLocaleDateString('pt-BR', {
+                    month: 'long',
+                    year: 'numeric',
+                    timeZone: 'America/Sao_Paulo',
+                  })}
                 </span>
               </div>
               {leaders.length ? (
@@ -278,10 +277,7 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                         {number.format(athlete.points!)}
                         <span className="ml-1 text-xs font-normal text-neutral-500">pts</span>
                       </p>
-                      <p className="mt-2 text-xs text-neutral-500">
-                        Total em {athlete.comparedWorkouts}{' '}
-                        {athlete.comparedWorkouts === 1 ? 'Wod' : "Wod's"}
-                      </p>
+                      <p className="mt-2 text-xs text-neutral-500">Acumulado do mês</p>
                     </div>
                   ))}
                 </div>
@@ -291,7 +287,7 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                   <p className="font-semibold">O próximo destaque pode ser você.</p>
                   <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
                     O ranking começa quando dois atletas registram resultados válidos para o mesmo
-                    WOD e prescrição no mês.
+                    WOD e prescrição no mesmo dia deste mês.
                   </p>
                 </div>
               )}
@@ -302,7 +298,7 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                 <div>
                   <h2 className="text-lg font-bold">Classificação geral</h2>
                   <p className="mt-1 text-xs text-neutral-500">
-                    Pontos acumulados no mês · abra um atleta para ver os resultados
+                    Acumulado do mês · abra um atleta para ver o Wod de hoje
                   </p>
                 </div>
                 <label className="relative sm:w-64">
@@ -365,9 +361,10 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                   original e as observações pessoais não definem o Wod: vale a prescrição salva na
                   análise. Adaptações precisam estar refletidas nessa prescrição. Cada Wod reúne
                   todos os atletas participantes do ranking que enviaram um resultado válido para a
-                  mesma prescrição no mês, sem limite de participantes. É preciso ter pelo menos
-                  dois atletas para haver comparação. Vale apenas o melhor resultado de cada atleta
-                  por WOD no mês.
+                  mesma prescrição hoje, sem limite de participantes. É preciso ter pelo menos dois
+                  atletas para haver comparação. Vale apenas o melhor resultado de cada atleta no
+                  Wod do dia. Se enviar Wod's diferentes hoje, vale a prescrição do último resultado
+                  válido enviado. Repetir essa prescrição mantém apenas a melhor tentativa.
                 </p>
                 <p>
                   Nos WODs por tempo, vence o menor tempo. Nos AMRAPs de repetições, vence o maior
@@ -378,14 +375,16 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                 <p>
                   O vencedor recebe 100 pontos. Cada posição seguinte reduz 100 dividido pelo número
                   de atletas do Wod: com quatro atletas, são 100, 75, 50 e 25 pontos. Empates
-                  recebem os mesmos pontos. A soma dos pontos dos Wod's forma a classificação
-                  mensal: participar de mais Wod's comparáveis permite acumular mais pontos. WODs
-                  sem participação não somam pontos; repetir o mesmo WOD não gera pontos extras. CAP
-                  também pontua pela colocação. Quando novos atletas enviam resultados válidos para
-                  o mesmo WOD, as posições e os pontos desse Wod são recalculados.
+                  recebem os mesmos pontos. Cada atleta recebe uma única pontuação por dia, de até
+                  100 pontos. O total do mês soma essas pontuações diárias e reinicia a cada mês.
+                  Por exemplo: 100 hoje, 75 amanhã e 50 depois totalizam 225 pontos. Wod's
+                  adicionais no mesmo dia não somam pontos extras. Ao abrir um atleta, aparecem
+                  somente seu Wod e sua colocação de hoje. CAP também pontua pela colocação. Quando
+                  novos atletas enviam resultados válidos para o mesmo WOD, as posições e os pontos
+                  desse Wod são recalculados.
                 </p>
                 <p>
-                  O mês considera a data do primeiro registro do resultado, no horário de São Paulo.
+                  O dia considera a data do primeiro registro do resultado, no horário de São Paulo.
                   Editar um resultado recalcula a classificação. Os resultados são informados pelos
                   atletas.
                 </p>
@@ -396,7 +395,7 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                   como CAP e repetições faltantes para entrar no ranking. Em AMRAP, registre as reps
                   ou rounds completados.{' '}
                   {data.summary.uncomparedResults > 0
-                    ? `${data.summary.uncomparedResults} de ${data.summary.recordedResults} registros ficaram fora do cálculo neste mês, incluindo tentativas repetidas.`
+                    ? `${data.summary.uncomparedResults} de ${data.summary.recordedResults} registros ficaram fora do cálculo neste mês, incluindo tentativas repetidas e Wod's adicionais.`
                     : ''}
                 </p>
               </div>

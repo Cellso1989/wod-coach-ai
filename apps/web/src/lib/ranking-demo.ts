@@ -1,7 +1,7 @@
 import type { MonthlyRanking, RankingPerformance } from '@wod-coach-ai/types';
 
-// A complete fictional example of three four-athlete confrontations.
-export function createRankingDemo(month: string, activeMonth: string): MonthlyRanking {
+// Fictional daily WOD: four athletes share one standings table.
+export function createRankingDemo(date: string): MonthlyRanking {
   const names = [
     'Marina Costa',
     'Rafael Lima',
@@ -12,61 +12,73 @@ export function createRankingDemo(month: string, activeMonth: string): MonthlyRa
     'Luiza Santos',
     'Pedro Rocha',
   ];
-  const scores = [200, 150, 175, 125, 125, 50, null, null];
-  const positions = [1, 3, 2, 4, 4, 6, null, null];
-  const hasResults = month === activeMonth;
-  const results: RankingPerformance[][] = Array.from({ length: names.length }, () => []);
-  const events = [
-    {
-      workout: 'Fran · 21-15-9',
-      athletes: [0, 1, 2, 3],
-      scores: ['05:10', '05:30', 'CAP 5', 'CAP 15'],
-    },
-    {
-      workout: 'AMRAP 12 · ginásticos',
-      athletes: [0, 1, 4, 5],
-      scores: ['10 rounds', '8 rounds', '6 rounds', '4 rounds'],
-    },
-    {
-      workout: 'Sprint · 5 rounds',
-      athletes: [2, 3, 4, 5],
-      scores: ['08:00', '08:30', 'CAP 8', 'CAP 20'],
-    },
-  ];
-  for (const event of events) {
-    event.athletes.forEach((athlete, place) => {
-      const score = event.scores[place]!;
-      const status = score.startsWith('CAP') ? 'cap' : 'finished';
-      results[athlete]!.push({
-        workout: event.workout,
-        score,
-        position: place + 1,
-        athletes: 4,
-        points: 100 - place * 25,
-        status,
-        remainingReps: status === 'cap' ? Number(score.replace('CAP ', '')) : null,
-      });
-    });
-  }
-  return {
-    month,
+  const scores = ['05:10', '05:30', 'CAP 5', 'CAP 15'];
+  const data: MonthlyRanking = {
+    month: date.slice(0, 7),
     summary: {
       users: 8,
-      rankedAthletes: hasResults ? 6 : 0,
-      comparableWorkouts: hasResults ? 3 : 0,
-      recordedResults: hasResults ? 15 : 0,
-      uncomparedResults: hasResults ? 3 : 0,
+      rankedAthletes: 4,
+      comparableWorkouts: Math.min(3, Number(date.slice(8))),
+      recordedResults: 4 * Math.min(3, Number(date.slice(8))),
+      uncomparedResults: 0,
     },
-    athletes: names
-      .map((name, index) => ({
+    athletes: names.map((name, index) => {
+      const score = scores[index];
+      const performance: RankingPerformance[] = score
+        ? [
+            {
+              date,
+              workout: 'Wod de hoje - Fran',
+              score,
+              position: index + 1,
+              athletes: 4,
+              points: 100 - index * 25,
+              status: score.startsWith('CAP') ? 'cap' : 'finished',
+              remainingReps: score.startsWith('CAP') ? Number(score.replace('CAP ', '')) : null,
+            },
+          ]
+        : [];
+      const history = [
+        { offset: 2, points: [50, 25, 75, 100] },
+        { offset: 1, points: [75, 50, 100, 25] },
+      ]
+        .filter((day) => Number(date.slice(8)) > day.offset)
+        .flatMap((day) =>
+          score
+            ? [
+                {
+                  ...performance[0]!,
+                  date: new Date(new Date(`${date}T12:00:00Z`).getTime() - day.offset * 86400000)
+                    .toISOString()
+                    .slice(0, 10),
+                  workout: 'Wod anterior',
+                  points: day.points[index]!,
+                },
+              ]
+            : [],
+        );
+      return {
         userId: `demo-${index}`,
         name,
-        position: hasResults ? positions[index]! : null,
-        points: hasResults ? scores[index]! : null,
-        comparedWorkouts: hasResults ? results[index]!.length : 0,
+        position: score ? index + 1 : null,
+        points: score
+          ? history.reduce((sum, p) => sum + p.points, 0) + performance[0]!.points
+          : null,
+        comparedWorkouts: score ? history.length + 1 : 0,
         isCurrentUser: index === 2,
-        performances: hasResults ? results[index]! : [],
-      }))
-      .sort((a, b) => (b.points ?? -1) - (a.points ?? -1) || a.name.localeCompare(b.name, 'pt-BR')),
+        performances: [...history, ...performance],
+        todayPerformances: performance,
+      };
+    }),
   };
+  data.athletes.sort(
+    (a, b) => (b.points ?? -1) - (a.points ?? -1) || a.name.localeCompare(b.name, 'pt-BR'),
+  );
+  let position = 1;
+  data.athletes.forEach((athlete, index) => {
+    if (athlete.points == null) return;
+    if (index > 0 && athlete.points !== data.athletes[index - 1]!.points) position = index + 1;
+    athlete.position = position;
+  });
+  return data;
 }

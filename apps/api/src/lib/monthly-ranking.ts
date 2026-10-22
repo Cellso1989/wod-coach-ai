@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
-import type { MonthlyRanking, RankedAthlete, RankingPerformance } from '@wod-coach-ai/types';
+import type {
+  DailyRanking,
+  MonthlyRanking,
+  RankedAthlete,
+  RankingPerformance,
+} from '@wod-coach-ai/types';
 import { wodRoundOutputSchema, type WodMovementOutput } from '@wod-coach-ai/validation';
 
 interface RankingMovement {
@@ -188,12 +193,97 @@ function compare(a: ParsedScore, b: ParsedScore): number {
   return (b.values[0] ?? 0) - (a.values[0] ?? 0);
 }
 
+const dayFormatter = new Intl.DateTimeFormat('sv-SE', {
+  timeZone: 'America/Sao_Paulo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+export function buildDailyRanking(
+  users: Array<{ id: string; name: string }>,
+  results: RankingResult[],
+  currentUserId: string,
+  now = new Date(),
+): DailyRanking {
+  const date = dayFormatter.format(now);
+  const eligible = new Set(users.map((user) => user.id));
+  const today = results.filter(
+    (result) => dayFormatter.format(result.createdAt) === date && eligible.has(result.wod.userId),
+  );
+  // One active prescription per athlete/day: the latest valid submitted WOD.
+  // Repeated attempts on that prescription still use the best score, never extra points.
+  const keyed = today
+    .map((result) => ({ result, key: workoutKey(result) }))
+    .filter((item) => item.key != null && parseScore(item.result) != null)
+    .sort(
+      (a, b) =>
+        b.result.createdAt.getTime() - a.result.createdAt.getTime() ||
+        b.result.id.localeCompare(a.result.id),
+    );
+  const active = new Map<string, string>();
+  for (const { result, key } of keyed) {
+    if (!active.has(result.wod.userId)) active.set(result.wod.userId, key!);
+  }
+  const ranking = buildResultRanking(
+    users,
+    keyed
+      .filter(({ result, key }) => active.get(result.wod.userId) === key)
+      .map((item) => item.result),
+    currentUserId,
+  );
+  ranking.summary.recordedResults = today.length;
+  ranking.summary.uncomparedResults =
+    today.length - ranking.athletes.reduce((sum, a) => sum + a.performances.length, 0);
+  for (const athlete of ranking.athletes) athlete.todayPerformances = athlete.performances;
+  return { date, ...ranking };
+}
+
 export function buildMonthlyRanking(
   users: Array<{ id: string; name: string }>,
   results: RankingResult[],
   month: string,
   currentUserId: string,
+  now = new Date(),
 ): MonthlyRanking {
+  const monthlyResults = results.filter((result) => rankingMonth(result.createdAt) === month);
+  const monthly = buildResultRanking(users, [], currentUserId);
+  const entries = new Map(monthly.athletes.map((athlete) => [athlete.userId, athlete]));
+  const byDay = new Map<string, RankingResult[]>();
+  for (const result of monthlyResults) {
+    const date = dayFormatter.format(result.createdAt);
+    const day = byDay.get(date) ?? [];
+    day.push(result);
+    byDay.set(date, day);
+  }
+  const today = dayFormatter.format(now);
+  for (const [date, records] of [...byDay].sort(([a], [b]) => a.localeCompare(b))) {
+    const day = buildDailyRanking(users, records, currentUserId, new Date(`${date}T12:00:00Z`));
+    monthly.summary.comparableWorkouts += day.summary.comparableWorkouts;
+    monthly.summary.recordedResults += day.summary.recordedResults;
+    monthly.summary.uncomparedResults += day.summary.uncomparedResults;
+    for (const athlete of day.athletes) {
+      const entry = entries.get(athlete.userId)!;
+      entry.performances.push(...athlete.performances);
+      if (date === today) entry.todayPerformances = athlete.performances;
+    }
+  }
+  for (const athlete of monthly.athletes) {
+    athlete.comparedWorkouts = athlete.performances.length;
+    athlete.points = athlete.comparedWorkouts
+      ? Math.round(athlete.performances.reduce((sum, p) => sum + p.points, 0) * 100) / 100
+      : null;
+  }
+  sortAndPosition(monthly.athletes);
+  monthly.summary.rankedAthletes = monthly.athletes.filter((a) => a.position != null).length;
+  return { month, ...monthly };
+}
+
+function buildResultRanking(
+  users: Array<{ id: string; name: string }>,
+  results: RankingResult[],
+  currentUserId: string,
+): Omit<MonthlyRanking, 'month'> {
   const entries = new Map<string, RankedAthlete>(
     users.map((user) => [
       user.id,
@@ -205,13 +295,12 @@ export function buildMonthlyRanking(
         comparedWorkouts: 0,
         isCurrentUser: user.id === currentUserId,
         performances: [],
+        todayPerformances: [],
       },
     ]),
   );
   const groups = new Map<string, Array<{ result: RankingResult; parsed: ParsedScore }>>();
-  const monthlyResults = results.filter(
-    (result) => rankingMonth(result.createdAt) === month && entries.has(result.wod.userId),
-  );
+  const monthlyResults = results.filter((result) => entries.has(result.wod.userId));
   for (const result of monthlyResults) {
     const key = workoutKey(result);
     if (!key) continue;
@@ -241,6 +330,7 @@ export function buildMonthlyRanking(
       if (index > 0 && compare(attempt.parsed, sorted[index - 1]!.parsed) !== 0)
         position = index + 1;
       const performance: RankingPerformance = {
+        date: dayFormatter.format(attempt.result.createdAt),
         workout: sorted[0]!.result.wod.name?.trim() || 'WOD do mês',
         score: attempt.result.score,
         position,
@@ -262,20 +352,9 @@ export function buildMonthlyRanking(
       entry.points =
         Math.round(entry.performances.reduce((sum, item) => sum + item.points, 0) * 100) / 100;
   }
-  const athletes = [...entries.values()].sort(
-    (a, b) =>
-      (b.points ?? -1) - (a.points ?? -1) ||
-      a.name.localeCompare(b.name, 'pt-BR') ||
-      a.userId.localeCompare(b.userId),
-  );
-  let position = 1;
-  athletes.forEach((athlete, index) => {
-    if (athlete.points == null) return;
-    if (index > 0 && athlete.points !== athletes[index - 1]!.points) position = index + 1;
-    athlete.position = position;
-  });
+  const athletes = [...entries.values()];
+  sortAndPosition(athletes);
   return {
-    month,
     summary: {
       users: users.length,
       rankedAthletes: athletes.filter((athlete) => athlete.position != null).length,
@@ -285,4 +364,22 @@ export function buildMonthlyRanking(
     },
     athletes,
   };
+}
+
+function sortAndPosition(athletes: RankedAthlete[]) {
+  athletes.sort(
+    (a, b) =>
+      (b.points ?? -1) - (a.points ?? -1) ||
+      a.name.localeCompare(b.name, 'pt-BR') ||
+      a.userId.localeCompare(b.userId),
+  );
+  let position = 1;
+  athletes.forEach((athlete, index) => {
+    if (athlete.points == null) {
+      athlete.position = null;
+      return;
+    }
+    if (index > 0 && athlete.points !== athletes[index - 1]!.points) position = index + 1;
+    athlete.position = position;
+  });
 }

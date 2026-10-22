@@ -1,7 +1,7 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '@wod-coach-ai/database';
 import { z } from 'zod';
-import { buildMonthlyRanking, rankingMonth } from '../lib/monthly-ranking.js';
+import { buildDailyRanking, buildMonthlyRanking, rankingMonth } from '../lib/monthly-ranking.js';
 
 const querySchema = z.object({
   month: z
@@ -12,12 +12,13 @@ const querySchema = z.object({
 
 export default async function rankingRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
-  app.get('/ranking/monthly', async (request, reply) => {
+  const respond = async (request: FastifyRequest, reply: FastifyReply, daily: boolean) => {
+    const now = new Date();
     reply.header('Cache-Control', 'private, no-store');
     const parsed = querySchema.safeParse(request.query);
     if (!parsed.success)
       return reply.code(400).send({ error: 'Selecione um mês válido (AAAA-MM).' });
-    const month = parsed.data.month ?? rankingMonth(new Date());
+    const month = daily ? rankingMonth(now) : (parsed.data.month ?? rankingMonth(now));
     const [year, monthNumber] = month.split('-').map(Number) as [number, number];
     // Fetch a broad UTC window; the ranking applies exact São Paulo month boundaries.
     const start = new Date(Date.UTC(year, monthNumber - 1, 1));
@@ -67,6 +68,12 @@ export default async function rankingRoutes(app: FastifyInstance) {
         },
       }),
     ]);
-    return reply.send(buildMonthlyRanking(users, results, month, request.user.sub));
-  });
+    return reply.send(
+      daily
+        ? buildDailyRanking(users, results, request.user.sub, now)
+        : buildMonthlyRanking(users, results, month, request.user.sub, now),
+    );
+  };
+  app.get('/ranking/monthly', (request, reply) => respond(request, reply, false));
+  app.get('/ranking/daily', (request, reply) => respond(request, reply, true));
 }
