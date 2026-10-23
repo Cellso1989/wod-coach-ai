@@ -1,7 +1,8 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { api } from "./api.js";
-import { AuthContext, type AuthContextValue } from "./auth-context.js";
-import type { PublicUser } from "./api.js";
+import { useEffect, useState, type ReactNode } from 'react';
+import { api } from './api.js';
+import { AuthContext, type AuthContextValue } from './auth-context.js';
+import type { PublicUser } from './api.js';
+import { disablePushNotifications } from './push-notifications.js';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<PublicUser | null>(null);
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
+    await disablePushNotifications().catch(() => {});
     await api.logout();
     setUser(null);
   }

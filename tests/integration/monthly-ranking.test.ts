@@ -19,6 +19,13 @@ vi.mock('../../packages/database/dist/index.js', async (importOriginal) => ({
     user: { findMany: mocks.users },
     wodResult: { findMany: mocks.results },
     athleteProfile: { findUnique: mocks.profile, upsert: mocks.saveProfile },
+    $transaction: async (work: (tx: unknown) => Promise<unknown>) =>
+      work({
+        athleteProfile: { upsert: mocks.saveProfile },
+        pushSubscription: { deleteMany: vi.fn() },
+        rankingNotification: { deleteMany: vi.fn() },
+        resultAnnouncement: { deleteMany: vi.fn() },
+      }),
     $disconnect: vi.fn(),
   },
 }));

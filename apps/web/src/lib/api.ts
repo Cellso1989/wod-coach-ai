@@ -75,6 +75,20 @@ export interface PublicUser {
   name: string;
 }
 
+export interface RankingNotification {
+  id: string;
+  message: string;
+  url: string;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface NotificationFeed {
+  enabled: boolean;
+  notifications: RankingNotification[];
+  unreadCount: number;
+}
+
 export interface DailyCheckin {
   id: string;
   date: string;
@@ -579,4 +593,33 @@ export const api = {
     ),
 
   getAdminUsers: () => request<AdminUsersResponse>('/admin/users'),
+
+  getNotifications: (signal?: AbortSignal) =>
+    request<NotificationFeed>('/notifications', { signal }),
+  markNotificationsRead: (ids: string[]) =>
+    request<{ ok: true }>('/notifications/read', {
+      method: 'PATCH',
+      body: JSON.stringify({ ids }),
+    }),
+  getPushConfig: () => request<{ publicKey: string | null }>('/notifications/push-config'),
+  markAllNotificationsRead: () =>
+    request<{ ok: true }>('/notifications/read', {
+      method: 'PATCH',
+      body: JSON.stringify({ all: true }),
+    }),
+  getPushSubscriptionStatus: (endpoint: string) =>
+    request<{ enabled: boolean }>('/notifications/push-subscriptions/status', {
+      method: 'POST',
+      body: JSON.stringify({ endpoint }),
+    }),
+  savePushSubscription: (subscription: PushSubscriptionJSON) =>
+    request<{ ok: true }>('/notifications/push-subscriptions', {
+      method: 'POST',
+      body: JSON.stringify(subscription),
+    }),
+  deletePushSubscription: (endpoint: string) =>
+    request<{ ok: true }>('/notifications/push-subscriptions', {
+      method: 'DELETE',
+      body: JSON.stringify({ endpoint }),
+    }),
 };
