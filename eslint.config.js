@@ -12,7 +12,7 @@ export default tseslint.config(
   {
     files: ["apps/web/public/sw.js"],
     languageOptions: {
-      globals: { self: "readonly" },
+      globals: { self: "readonly", fetch: "readonly", URL: "readonly" },
     },
   },
   {

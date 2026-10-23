@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { NotificationCenter } from './NotificationCenter.js';
 
 interface NavItem {
   to: string;
@@ -53,30 +54,33 @@ export function NavBar() {
   }, [activeItem]);
 
   return (
-    <nav
-      ref={navRef}
-      className="flex min-w-0 max-w-full gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-    >
-      {NAV_ITEMS.map((item) => {
-        const active = isActiveNavItem(navigationPath, item);
-        return (
-          <Link
-            key={item.to}
-            ref={(element) => {
-              itemRefs.current[item.to] = element;
-            }}
-            to={item.to}
-            className={`flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-sm font-medium transition-colors duration-150 ${
-              active
-                ? 'border-orange-600 bg-orange-600/10 text-orange-400'
-                : 'border-neutral-800 bg-neutral-900 text-neutral-100 hover:border-orange-900/60 hover:bg-neutral-800'
-            }`}
-          >
-            {item.icon ? <span aria-hidden="true">{item.icon}</span> : null}
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
+    <div className="flex min-w-0 items-start gap-2">
+      <nav
+        ref={navRef}
+        className="flex min-w-0 max-w-full flex-1 gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {NAV_ITEMS.map((item) => {
+          const active = isActiveNavItem(navigationPath, item);
+          return (
+            <Link
+              key={item.to}
+              ref={(element) => {
+                itemRefs.current[item.to] = element;
+              }}
+              to={item.to}
+              className={`flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-sm font-medium transition-colors duration-150 ${
+                active
+                  ? 'border-orange-600 bg-orange-600/10 text-orange-400'
+                  : 'border-neutral-800 bg-neutral-900 text-neutral-100 hover:border-orange-900/60 hover:bg-neutral-800'
+              }`}
+            >
+              {item.icon ? <span aria-hidden="true">{item.icon}</span> : null}
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+      <NotificationCenter />
+    </div>
   );
 }

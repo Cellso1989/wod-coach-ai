@@ -5,6 +5,7 @@ import { NavBar } from '../components/NavBar.js';
 import { LogoutButton } from '../components/LogoutButton.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { PageHeader } from '../components/PageHeader.js';
+import { disablePushNotifications } from '../lib/push-notifications.js';
 import {
   Alert,
   Button,
@@ -152,6 +153,8 @@ export function ProfilePage() {
         equipment: textToList(form.equipment),
         rankingOptIn: form.rankingOptIn,
       });
+      if (!form.rankingOptIn) await disablePushNotifications().catch(() => {});
+      window.dispatchEvent(new Event('ranking-participation-changed'));
       setSaved(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Não foi possível salvar o perfil.');
@@ -245,6 +248,9 @@ export function ProfilePage() {
             os outros atletas. Você pode sair quando quiser.
           </p>
           <p className="text-xs text-neutral-500">A escolha entra em vigor ao salvar o perfil.</p>
+          <p className="text-xs text-neutral-500">
+            Ao registrar um resultado, os outros participantes recebem um aviso sem a sua pontuação.
+          </p>
         </fieldset>
 
         <fieldset className="space-y-2 rounded-lg border border-neutral-800 p-4">

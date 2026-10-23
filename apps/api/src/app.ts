@@ -25,6 +25,8 @@ import hyroxStrategyRoutes from './routes/hyrox-strategy.js';
 import statsRoutes from './routes/stats.js';
 import adminRoutes from './routes/admin.js';
 import rankingRoutes from './routes/ranking.js';
+import notificationRoutes from './routes/notifications.js';
+import { registerPushDeliveryWorker } from './services/web-push.js';
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({ logger: true });
@@ -70,6 +72,7 @@ export function buildApp(): FastifyInstance {
       api.register(statsRoutes);
       api.register(adminRoutes);
       api.register(rankingRoutes);
+      api.register(notificationRoutes);
     },
     { prefix: '/api' },
   );
@@ -100,5 +103,6 @@ export function buildApp(): FastifyInstance {
     return reply.code(200).sendFile('index.html');
   });
 
+  registerPushDeliveryWorker(app);
   return app;
 }

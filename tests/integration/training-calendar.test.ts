@@ -8,6 +8,11 @@ vi.mock('../../packages/database/dist/index.js', async (importOriginal) => ({
   prisma: {
     wod: { findFirst: mocks.findFirst },
     wodResult: { findMany: mocks.findMany, upsert: mocks.upsert },
+    $transaction: async (work: (tx: unknown) => Promise<unknown>) =>
+      work({
+        wodResult: { findUnique: vi.fn().mockResolvedValue(null), upsert: mocks.upsert },
+        athleteProfile: { findUnique: vi.fn().mockResolvedValue({ rankingOptIn: false }) },
+      }),
     $disconnect: vi.fn(),
   },
 }));

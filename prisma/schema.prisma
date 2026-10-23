@@ -18,12 +18,15 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  athleteProfile      AthleteProfile?
-  dailyCheckins       DailyCheckin[]
-  aiDailyUsages       AiDailyUsage[]
-  wods                Wod[]
-  personalRecords     PersonalRecord[]
-  passwordResetTokens PasswordResetToken[]
+  athleteProfile       AthleteProfile?
+  dailyCheckins        DailyCheckin[]
+  aiDailyUsages        AiDailyUsage[]
+  wods                 Wod[]
+  personalRecords      PersonalRecord[]
+  passwordResetTokens  PasswordResetToken[]
+  resultAnnouncements  ResultAnnouncement[]
+  rankingNotifications RankingNotification[]
+  pushSubscriptions    PushSubscription[]
 
   @@map("users")
 }
@@ -75,7 +78,7 @@ model AthleteProfile {
   level               CrossfitLevel?
   competitionCategory String?
   weeklyFrequency     Int?
-  rankingOptIn        Boolean @default(false)
+  rankingOptIn        Boolean        @default(false)
 
   // Objetivos, limitações e equipamentos (seção 7).
   // Modelados como arrays simples nesta fase; normalizar em
@@ -287,7 +290,68 @@ model WodResult {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  announcement ResultAnnouncement?
+
   @@map("wod_results")
+}
+
+// No score or workout contents are copied into notifications.
+model ResultAnnouncement {
+  id            String                @id @default(uuid())
+  resultId      String                @unique
+  result        WodResult             @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  actorId       String
+  actor         User                  @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  createdAt     DateTime              @default(now())
+  notifications RankingNotification[]
+
+  @@map("result_announcements")
+}
+
+model RankingNotification {
+  id             String             @id @default(uuid())
+  announcementId String
+  announcement   ResultAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime           @default(now())
+  readAt         DateTime?
+  pushDeliveries PushDelivery[]
+
+  @@unique([announcementId, userId])
+  @@index([userId, createdAt])
+  @@map("ranking_notifications")
+}
+
+model PushSubscription {
+  id             String         @id @default(uuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint       String         @unique
+  p256dh         String
+  auth           String
+  createdAt      DateTime       @default(now())
+  pushDeliveries PushDelivery[]
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+// Durable outbox: delivery failures never roll back a saved workout result.
+model PushDelivery {
+  id             String              @id @default(uuid())
+  notificationId String
+  notification   RankingNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  subscriptionId String
+  subscription   PushSubscription    @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  attempts       Int                 @default(0)
+  nextAttemptAt  DateTime            @default(now())
+  leaseUntil     DateTime            @default(now())
+  finishedAt     DateTime?
+
+  @@unique([notificationId, subscriptionId])
+  @@index([finishedAt, nextAttemptAt])
+  @@map("push_deliveries")
 }
 
 // PRs de CrossFit (seção 24). movementName é texto livre para permitir
@@ -310,7 +374,7 @@ model PersonalRecord {
   unit         String
   recordType   PersonalRecordType @default(UNKNOWN)
   repetitions  Int?
-  achievedAt   DateTime @default(now())
+  achievedAt   DateTime           @default(now())
   notes        String?
 
   createdAt DateTime @default(now())
