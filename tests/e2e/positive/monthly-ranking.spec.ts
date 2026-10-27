@@ -99,7 +99,9 @@ for (const width of [320, 390, 1280]) {
     );
     await rows.locator('summary').filter({ hasText: 'Rafael Lima' }).click();
     const rafaelRow = rows.getByRole('listitem').filter({ hasText: 'Rafael Lima' });
-    await expect(rafaelRow.getByText('Colocação no Wod de hoje', { exact: true })).toBeVisible();
+    await expect(
+      rafaelRow.getByText('Colocação no resultado de hoje', { exact: true }),
+    ).toBeVisible();
     await expect(rows.getByText('Treino anterior', { exact: true })).toHaveCount(0);
     await expect(rows.getByText('09:00', { exact: false })).toHaveCount(0);
     await expect(rows.getByText('06:00', { exact: false })).toBeVisible();
@@ -134,6 +136,7 @@ for (const width of [320, 390, 1280]) {
     ).toBeVisible();
     await page.getByText('Como o ranking é calculado', { exact: true }).click();
     await expect(page.getByText(/cada atleta recebe uma única pontuação por dia/i)).toBeVisible();
+    await expect(page.getByText(/o ranking usa somente o campo resultado/i)).toBeVisible();
     await expect(
       page.getByText(/do 5º lugar em diante, cada atleta recebe 10 pontos/i),
     ).toBeVisible();

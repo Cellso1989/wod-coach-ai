@@ -1,4 +1,30 @@
-import type { RankingResult } from '../../apps/api/src/lib/monthly-ranking.js';
+interface RankingMovement {
+  name: string;
+  category: string;
+  reps: number | null;
+  distanceMeters: number | null;
+  calories: number | null;
+  loadDescription: string | null;
+}
+
+export interface RankingResult {
+  id: string;
+  score: string;
+  createdAt: Date;
+  wod: {
+    userId: string;
+    name: string | null;
+    rawText: string | null;
+    notes?: string | null;
+    analysis: {
+      format: string | null;
+      durationMinutes: number | null;
+      movements: RankingMovement[];
+      roundBreakdown: unknown;
+      rawResponse: unknown;
+    } | null;
+  };
+}
 
 export const rankingUsers = [
   { id: 'a', name: 'Marina Costa' },

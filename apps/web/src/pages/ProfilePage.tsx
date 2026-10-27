@@ -244,8 +244,8 @@ export function ProfilePage() {
             id="ranking-participation-description"
             className="text-xs leading-relaxed text-neutral-400"
           >
-            Ao ativar, seu nome e os resultados comparáveis dos seus WODs aparecem no ranking para
-            os outros atletas. Você pode sair quando quiser.
+            Ao ativar, seu nome e seus resultados aparecem no ranking para os outros atletas. Você
+            pode sair quando quiser.
           </p>
           <p className="text-xs text-neutral-500">A escolha entra em vigor ao salvar o perfil.</p>
           <p className="text-xs text-neutral-500">
