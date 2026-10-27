@@ -85,7 +85,7 @@ export function rankingResult(
   return {
     id: `${userId}-${score}`,
     score,
-    createdAt: new Date('2026-10-16T15:00:00Z'),
+    createdAt: new Date('2026-11-16T15:00:00Z'),
     wod: {
       userId,
       name: 'Fran',

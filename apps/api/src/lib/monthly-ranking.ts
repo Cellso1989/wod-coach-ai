@@ -11,6 +11,9 @@ export interface RankingResult {
   wod: { userId: string };
 }
 
+// First scoring day of the new ranking. Preserve earlier results as history.
+export const RANKING_SCORING_START = '2026-10-26';
+
 const monthFormatter = new Intl.DateTimeFormat('en', {
   timeZone: 'America/Sao_Paulo',
   year: 'numeric',
@@ -88,6 +91,45 @@ const dayFormatter = new Intl.DateTimeFormat('sv-SE', {
   day: '2-digit',
 });
 
+export function rankingWeekStart(now: Date): string {
+  const date = new Date(`${dayFormatter.format(now)}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+  return date.toISOString().slice(0, 10);
+}
+
+function attachWeekResults(athletes: RankedAthlete[], results: RankingResult[], now: Date) {
+  const start = rankingWeekStart(now);
+  const today = dayFormatter.format(now);
+  const entries = new Map(athletes.map((athlete) => [athlete.userId, athlete]));
+  const scored = new Map<string, RankingPerformance>();
+  const week = results.filter((result) => {
+    const date = dayFormatter.format(result.createdAt);
+    return date >= start && date <= today;
+  });
+  const dates = new Set(week.map((result) => dayFormatter.format(result.createdAt)));
+  const users = athletes.map((athlete) => ({ id: athlete.userId, name: athlete.name }));
+  for (const date of dates) {
+    const day = buildDailyRanking(users, week, '', new Date(`${date}T12:00:00Z`));
+    for (const athlete of day.athletes)
+      for (const performance of athlete.performances) scored.set(performance.resultId, performance);
+  }
+  for (const result of [...results].sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id),
+  )) {
+    const date = dayFormatter.format(result.createdAt);
+    if (date < start || date > today) continue;
+    const performance = scored.get(result.id);
+    entries.get(result.wod.userId)?.weekResults.push({
+      id: result.id,
+      date,
+      score: result.score,
+      position: performance?.position ?? null,
+      points: performance?.points ?? null,
+      beforeScoringStart: date < RANKING_SCORING_START,
+    });
+  }
+}
+
 export function buildDailyRanking(
   users: Array<{ id: string; name: string }>,
   results: RankingResult[],
@@ -97,7 +139,10 @@ export function buildDailyRanking(
   const date = dayFormatter.format(now);
   const eligible = new Set(users.map((user) => user.id));
   const today = results.filter(
-    (result) => dayFormatter.format(result.createdAt) === date && eligible.has(result.wod.userId),
+    (result) =>
+      date >= RANKING_SCORING_START &&
+      dayFormatter.format(result.createdAt) === date &&
+      eligible.has(result.wod.userId),
   );
   // One result type per athlete/day, selected by the latest valid submission.
   // Repeated submissions of that type use the best result, never extra points.
@@ -134,7 +179,11 @@ export function buildMonthlyRanking(
   currentUserId: string,
   now = new Date(),
 ): MonthlyRanking {
-  const monthlyResults = results.filter((result) => rankingMonth(result.createdAt) === month);
+  const monthlyResults = results.filter(
+    (result) =>
+      rankingMonth(result.createdAt) === month &&
+      dayFormatter.format(result.createdAt) >= RANKING_SCORING_START,
+  );
   const monthly = buildResultRanking(users, [], currentUserId);
   const entries = new Map(monthly.athletes.map((athlete) => [athlete.userId, athlete]));
   const byDay = new Map<string, RankingResult[]>();
@@ -164,6 +213,7 @@ export function buildMonthlyRanking(
   }
   sortAndPosition(monthly.athletes);
   monthly.summary.rankedAthletes = monthly.athletes.filter((a) => a.position != null).length;
+  attachWeekResults(monthly.athletes, results, now);
   return { month, ...monthly };
 }
 
@@ -184,6 +234,7 @@ function buildResultRanking(
         isCurrentUser: user.id === currentUserId,
         performances: [],
         todayPerformances: [],
+        weekResults: [],
       },
     ]),
   );
@@ -217,6 +268,7 @@ function buildResultRanking(
       if (index > 0 && compare(attempt.parsed, sorted[index - 1]!.parsed) !== 0)
         position = index + 1;
       const performance: RankingPerformance = {
+        resultId: attempt.result.id,
         date: dayFormatter.format(attempt.result.createdAt),
         workout: resultLabels[attempt.parsed.kind],
         score: attempt.result.score,
@@ -237,6 +289,7 @@ function buildResultRanking(
   const athletes = [...entries.values()];
   sortAndPosition(athletes);
   return {
+    scoringStartsOn: RANKING_SCORING_START,
     summary: {
       users: users.length,
       rankedAthletes: athletes.filter((athlete) => athlete.position != null).length,
