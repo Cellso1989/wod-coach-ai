@@ -3,21 +3,25 @@ import { buildMonthlyRanking } from '../../../apps/api/src/lib/monthly-ranking.j
 import { rankingResult, rankingUsers } from '../../fixtures/monthly-ranking.js';
 
 const results = [
-  rankingResult('a', '05:00'),
-  rankingResult('b', '06:00'),
-  rankingResult('c', 'CAP 10'),
-  rankingResult('d', 'CAP 20'),
+  rankingResult('a', '05:00', { createdAt: new Date('2026-11-18T15:00:00Z') }),
+  rankingResult('b', '06:00', { createdAt: new Date('2026-11-18T15:00:00Z') }),
+  rankingResult('c', 'CAP 10', { createdAt: new Date('2026-11-18T15:00:00Z') }),
+  rankingResult('d', 'CAP 20', { createdAt: new Date('2026-11-18T15:00:00Z') }),
+  rankingResult('b', 'registrado sem tempo', {
+    id: 'invalid-b',
+    createdAt: new Date('2026-11-18T16:00:00Z'),
+  }),
 ];
-const dailyNow = new Date('2026-10-16T15:00:00Z');
+const dailyNow = new Date('2026-11-18T15:00:00Z');
 const buildTestRanking = (
   users: typeof rankingUsers,
   records: ReturnType<typeof rankingResult>[],
   userId: string,
   now: Date,
-) => buildMonthlyRanking(users, records, '2026-10', userId, now);
+) => buildMonthlyRanking(users, records, '2026-11', userId, now);
 const previousResults = ['a', 'b'].map((id, index) => {
   const result = rankingResult(id, index === 0 ? '08:00' : '09:00');
-  result.createdAt = new Date('2026-10-15T15:00:00Z');
+  result.createdAt = new Date('2026-11-17T15:00:00Z');
   result.wod.name = 'Treino anterior';
   result.wod.analysis!.movements[0]!.reps = 30;
   return result;
@@ -28,6 +32,7 @@ for (const width of [320, 390, 1280]) {
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
+    await page.clock.setFixedTime(new Date('2026-11-18T15:00:00Z'));
     await page.route('**/api/**', (route) =>
       route.fulfill({ status: 401, json: { error: 'Não autenticado' } }),
     );
@@ -52,11 +57,11 @@ for (const width of [320, 390, 1280]) {
 }
 
 for (const width of [320, 390, 1280]) {
-  test(`daily ranking excludes older WODs and supports search and details at ${width}px`, async ({
+  test(`weekly results dropdown supports search and details at ${width}px`, async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.clock.setFixedTime(new Date('2026-10-16T15:00:00Z'));
+    await page.clock.setFixedTime(new Date('2026-11-18T15:00:00Z'));
     await page.route('**/api/**', async (route) => {
       const url = new URL(route.request().url());
       if (url.pathname.endsWith('/auth/me'))
@@ -95,24 +100,27 @@ for (const width of [320, 390, 1280]) {
       '150',
     );
     await expect(rows.getByRole('listitem').filter({ hasText: 'Luiza Santos' })).toContainText(
-      'Sem classificação',
+      'Resultados da semana (0)',
     );
     await rows.locator('summary').filter({ hasText: 'Rafael Lima' }).click();
     const rafaelRow = rows.getByRole('listitem').filter({ hasText: 'Rafael Lima' });
     await expect(
-      rafaelRow.getByText('Colocação no resultado de hoje', { exact: true }),
+      rafaelRow.getByText('Resultados da semana · segunda a domingo', { exact: true }),
     ).toBeVisible();
     await expect(rows.getByText('Treino anterior', { exact: true })).toHaveCount(0);
-    await expect(rows.getByText('09:00', { exact: false })).toHaveCount(0);
+    await expect(rafaelRow.getByText('09:00', { exact: false })).toBeVisible();
+    await expect(rows.getByText(/dias? pontuados/)).toHaveCount(0);
     await expect(rows.getByText('06:00', { exact: false })).toBeVisible();
-    await expect(rows.getByText('75 pts', { exact: true })).toBeVisible();
+    await expect(rafaelRow.getByText('75 pts', { exact: true })).toHaveCount(2);
+    await expect(rafaelRow.getByText('registrado sem tempo', { exact: true })).toBeVisible();
+    await expect(rafaelRow.getByText('Não pontuou', { exact: true })).toBeVisible();
     const capRow = rows.getByRole('listitem').filter({ hasText: 'Camila Souza' });
     const lowerCapRow = rows.getByRole('listitem').filter({ hasText: 'Diego Martins' });
     await capRow.locator('summary').click();
-    await expect(capRow).toContainText('Faltaram 10 reps');
+    await expect(capRow).toContainText('CAP 10');
     await expect(capRow.getByText('50 pts', { exact: true })).toBeVisible();
     await lowerCapRow.locator('summary').click();
-    await expect(lowerCapRow).toContainText('Faltaram 20 reps');
+    await expect(lowerCapRow).toContainText('CAP 20');
     await expect(lowerCapRow.getByText('25 pts', { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('monthly-ranking.png'), fullPage: true });
     expect(
@@ -132,7 +140,7 @@ for (const width of [320, 390, 1280]) {
       rows
         .getByRole('listitem')
         .filter({ hasText: 'Luiza Santos' })
-        .getByText('Nenhum resultado comparável deste atleta hoje.', { exact: true }),
+        .getByText('Nenhum resultado registrado nesta semana.', { exact: true }),
     ).toBeVisible();
     await page.getByText('Como o ranking é calculado', { exact: true }).click();
     await expect(page.getByText(/cada atleta recebe uma única pontuação por dia/i)).toBeVisible();
@@ -144,7 +152,7 @@ for (const width of [320, 390, 1280]) {
 }
 
 test('daily ranking recovers after an API failure', async ({ page }) => {
-  await page.clock.setFixedTime(new Date('2026-10-16T15:00:00Z'));
+  await page.clock.setFixedTime(new Date('2026-11-18T15:00:00Z'));
   let fail = true;
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -168,9 +176,7 @@ test('daily ranking recovers after an API failure', async ({ page }) => {
   ).toHaveCount(5);
 });
 
-test('monthly total persists without a result today and details show no older WOD', async ({
-  page,
-}) => {
+test('weekly dropdown shows previous days even without a result today', async ({ page }) => {
   await page.clock.setFixedTime(dailyNow);
   await page.route('**/api/**', (route) => {
     const url = new URL(route.request().url());
@@ -185,12 +191,11 @@ test('monthly total persists without a result today and details show no older WO
   await page.goto('/ranking');
   await expect(page.getByRole('region', { name: 'Destaques do mês' })).toContainText('100');
   const rows = page.getByRole('list', { name: 'Classificação mensal' });
-  await expect(rows.getByText('Sem classificação', { exact: true })).toHaveCount(3);
+  await expect(rows.getByText('Resultados da semana (0)', { exact: true })).toHaveCount(3);
   const rafael = rows.getByRole('listitem').filter({ hasText: 'Rafael Lima' });
   await expect(rafael).toContainText('75');
   await rafael.locator('summary').click();
-  await expect(
-    rafael.getByText('Nenhum resultado comparável deste atleta hoje.', { exact: true }),
-  ).toBeVisible();
+  await expect(rafael.getByText('09:00', { exact: false })).toBeVisible();
+  await expect(rafael.getByText('75 pts', { exact: true })).toBeVisible();
   await expect(rows.getByText('Treino anterior', { exact: true })).toHaveCount(0);
 });

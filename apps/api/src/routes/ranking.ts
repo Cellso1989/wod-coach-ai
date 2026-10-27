@@ -1,7 +1,12 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '@wod-coach-ai/database';
 import { z } from 'zod';
-import { buildDailyRanking, buildMonthlyRanking, rankingMonth } from '../lib/monthly-ranking.js';
+import {
+  buildDailyRanking,
+  buildMonthlyRanking,
+  rankingMonth,
+  rankingWeekStart,
+} from '../lib/monthly-ranking.js';
 
 const querySchema = z.object({
   month: z
@@ -30,7 +35,10 @@ export default async function rankingRoutes(app: FastifyInstance) {
       }),
       prisma.wodResult.findMany({
         where: {
-          createdAt: { gte: start, lt: end },
+          OR: [
+            { createdAt: { gte: start, lt: end } },
+            { createdAt: { gte: new Date(`${rankingWeekStart(now)}T03:00:00Z`), lte: now } },
+          ],
           wod: { discipline: 'CROSSFIT', user: { athleteProfile: { is: { rankingOptIn: true } } } },
         },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],

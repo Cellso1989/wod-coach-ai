@@ -51,15 +51,11 @@ function AthleteRow({ athlete }: { athlete: RankedAthlete }) {
               )}
             </span>
             <span className="mt-1 block text-xs text-neutral-500">
-              {athlete.comparedWorkouts
-                ? `${athlete.comparedWorkouts} ${athlete.comparedWorkouts === 1 ? 'dia pontuado' : 'dias pontuados'}`
-                : 'Sem classificação'}
+              Resultados da semana ({athlete.weekResults.length})
             </span>
           </span>
           <span className="text-right">
-            <span className="text-lg font-bold">
-              {athlete.points == null ? '—' : number.format(athlete.points)}
-            </span>
+            <span className="text-lg font-bold">{number.format(athlete.points ?? 0)}</span>
             <span className="block text-[10px] uppercase tracking-wide text-neutral-500">
               pontos
             </span>
@@ -71,33 +67,40 @@ function AthleteRow({ athlete }: { athlete: RankedAthlete }) {
           />
         </summary>
         <div className="space-y-2 border-t border-neutral-800 p-4">
-          <p className="text-xs font-semibold text-neutral-300">Colocação no resultado de hoje</p>
-          {athlete.todayPerformances.length ? (
-            athlete.todayPerformances.map((performance, index) => (
+          <p className="text-xs font-semibold text-neutral-300">
+            Resultados da semana · segunda a domingo
+          </p>
+          {athlete.weekResults.length ? (
+            athlete.weekResults.map((performance) => (
               <div
-                key={index}
+                key={performance.id}
                 className="flex items-start justify-between gap-3 rounded-lg bg-neutral-950 p-3 text-xs"
               >
                 <div className="min-w-0">
                   <p className="break-words font-semibold text-neutral-200">
-                    {performance.workout}
+                    {new Date(`${performance.date}T12:00:00Z`).toLocaleDateString('pt-BR', {
+                      weekday: 'short',
+                      day: '2-digit',
+                      month: '2-digit',
+                      timeZone: 'America/Sao_Paulo',
+                    })}
                   </p>
                   <p className="mt-1 text-neutral-400">
-                    {performance.score} ·{' '}
-                    {performance.status === 'cap'
-                      ? `Faltaram ${performance.remainingReps} reps · ${performance.position}º de ${performance.athletes} atletas`
-                      : `${performance.position}º de ${performance.athletes} atletas`}
+                    {performance.score}
+                    {performance.position != null && ` · ${performance.position}º no dia`}
                   </p>
                 </div>
-                <span className="shrink-0 font-semibold text-orange-400">
-                  {number.format(performance.points)} pts
+                <span className="max-w-[45%] shrink-0 text-right font-semibold text-orange-400">
+                  {performance.points != null
+                    ? `${number.format(performance.points)} pts`
+                    : performance.beforeScoringStart
+                      ? 'Antes do início da pontuação'
+                      : 'Não pontuou'}
                 </span>
               </div>
             ))
           ) : (
-            <p className="text-sm text-neutral-400">
-              Nenhum resultado comparável deste atleta hoje.
-            </p>
+            <p className="text-sm text-neutral-400">Nenhum resultado registrado nesta semana.</p>
           )}
         </div>
       </details>
@@ -177,6 +180,11 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
               <p className="mt-2 text-sm text-neutral-400">
                 Acumulado do mês. Uma única pontuação por dia.
               </p>
+              {data && (
+                <p className="mt-1 text-xs text-orange-400">
+                  Pontuação a partir de {dateLabel(data.scoringStartsOn)}.
+                </p>
+              )}
             </div>
             <p aria-label="Data da classificação" className="text-xs text-neutral-400">
               Hoje · {dateLabel(today)}
@@ -298,7 +306,7 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                 <div>
                   <h2 className="text-lg font-bold">Classificação geral</h2>
                   <p className="mt-1 text-xs text-neutral-500">
-                    Acumulado do mês · abra um atleta para ver o resultado de hoje
+                    Acumulado do mês · abra um atleta para ver os resultados da semana
                   </p>
                 </div>
                 <label className="relative sm:w-64">
@@ -380,14 +388,19 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                   Cada atleta recebe uma única pontuação por dia, de até 100 pontos. O total do mês
                   soma essas pontuações diárias e reinicia a cada mês. Por exemplo: 100 hoje, 75
                   amanhã e 50 depois totalizam 225 pontos. Resultados adicionais no mesmo dia não
-                  somam pontos extras. Ao abrir um atleta, aparecem somente seu resultado e sua
-                  colocação de hoje. CAP também pontua pela colocação. Quando novos atletas enviam
-                  resultados válidos do mesmo tipo, as posições e os pontos do dia são recalculados.
+                  somam pontos extras. Ao abrir um atleta, aparecem todos os resultados da semana,
+                  de segunda a domingo, inclusive os que não pontuaram. CAP também pontua pela
+                  colocação. Quando novos atletas enviam resultados válidos do mesmo tipo, as
+                  posições e os pontos do dia são recalculados.
                 </p>
                 <p>
                   O dia considera a data do primeiro registro do resultado, no horário de São Paulo.
                   Editar um resultado recalcula a classificação. Os resultados são informados pelos
                   atletas.
+                </p>
+                <p>
+                  A pontuação começou em {dateLabel(data.scoringStartsOn)}. Resultados anteriores
+                  continuam no histórico, mas não somam pontos. O acumulado reinicia a cada mês.
                 </p>
                 <p>
                   Quem não tem outro atleta com resultado do mesmo tipo no dia aparece sem

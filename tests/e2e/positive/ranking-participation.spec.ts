@@ -7,7 +7,7 @@ for (const width of [390, 1280]) {
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.clock.setFixedTime(new Date('2026-10-16T15:00:00Z'));
+    await page.clock.setFixedTime(new Date('2026-11-16T15:00:00Z'));
     let optedIn = false;
     let saves = 0;
     await page.route('**/api/**', async (route) => {
@@ -36,9 +36,9 @@ for (const width of [390, 1280]) {
           json: buildMonthlyRanking(
             rankingUsers.filter((user) => user.id === 'a' || (user.id === 'b' && optedIn)),
             [rankingResult('a', '05:00'), rankingResult('b', '06:00')],
-            '2026-10',
+            '2026-11',
             'b',
-            new Date('2026-10-16T15:00:00Z'),
+            new Date('2026-11-16T15:00:00Z'),
           ),
         });
       return route.fulfill({ status: 404, json: {} });

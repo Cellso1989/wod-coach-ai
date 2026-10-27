@@ -2,6 +2,7 @@ import { ClipboardPaste, Image as ImageIcon, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api.js';
+import { defaultWorkoutName } from '../lib/workout-name.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
 import { PageHeader } from '../components/PageHeader.js';
@@ -13,7 +14,7 @@ export function SubmitWodPage() {
   const pasteAreaRef = useRef<HTMLDivElement>(null);
 
   const [rawText, setRawText] = useState('');
-  const [name, setName] = useState('');
+  const [name, setName] = useState(defaultWorkoutName);
   const [image, setImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [pasteAreaFocused, setPasteAreaFocused] = useState(false);

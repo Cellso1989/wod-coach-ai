@@ -12,9 +12,14 @@ export function createRankingDemo(date: string): MonthlyRanking {
     'Luiza Santos',
     'Pedro Rocha',
   ];
+  const scoringStartsOn = '2026-10-26';
+  const weekStart = new Date(`${date}T12:00:00Z`);
+  weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7));
+  const weekStartDate = weekStart.toISOString().slice(0, 10);
   const scores = ['05:10', '05:30', 'CAP 5', 'CAP 15'];
   const data: MonthlyRanking = {
     month: date.slice(0, 7),
+    scoringStartsOn,
     summary: {
       users: 8,
       rankedAthletes: 4,
@@ -27,8 +32,9 @@ export function createRankingDemo(date: string): MonthlyRanking {
       const performance: RankingPerformance[] = score
         ? [
             {
+              resultId: `demo-${index}-${date}`,
               date,
-              workout: 'Wod de hoje - Fran',
+              workout: 'Tempo / CAP',
               score,
               position: index + 1,
               athletes: 4,
@@ -48,6 +54,7 @@ export function createRankingDemo(date: string): MonthlyRanking {
             ? [
                 {
                   ...performance[0]!,
+                  resultId: `demo-${index}-previous-${day.offset}`,
                   date: new Date(new Date(`${date}T12:00:00Z`).getTime() - day.offset * 86400000)
                     .toISOString()
                     .slice(0, 10),
@@ -57,20 +64,41 @@ export function createRankingDemo(date: string): MonthlyRanking {
               ]
             : [],
         );
+      const all = [...history, ...performance];
+      const counted = all.filter(
+        (item) => item.date >= scoringStartsOn && item.date.slice(0, 7) === date.slice(0, 7),
+      );
       return {
         userId: `demo-${index}`,
         name,
         position: score ? index + 1 : null,
-        points: score
-          ? history.reduce((sum, p) => sum + p.points, 0) + performance[0]!.points
-          : null,
-        comparedWorkouts: score ? history.length + 1 : 0,
+        points: counted.length ? counted.reduce((sum, p) => sum + p.points, 0) : null,
+        comparedWorkouts: counted.length,
         isCurrentUser: index === 2,
-        performances: [...history, ...performance],
-        todayPerformances: performance,
+        performances: counted,
+        todayPerformances: performance.filter((item) => item.date >= scoringStartsOn),
+        weekResults: all
+          .filter((item) => item.date >= weekStartDate)
+          .reverse()
+          .map((item) => ({
+            id: item.resultId,
+            date: item.date,
+            score: item.score,
+            points: item.date >= scoringStartsOn ? item.points : null,
+            position: item.date >= scoringStartsOn ? item.position : null,
+            beforeScoringStart: item.date < scoringStartsOn,
+          })),
       };
     }),
   };
+  data.summary.rankedAthletes = data.athletes.filter((athlete) => athlete.points != null).length;
+  data.summary.comparableWorkouts = new Set(
+    data.athletes.flatMap((athlete) => athlete.performances.map((item) => item.date)),
+  ).size;
+  data.summary.recordedResults = data.athletes.reduce(
+    (sum, athlete) => sum + athlete.performances.length,
+    0,
+  );
   data.athletes.sort(
     (a, b) => (b.points ?? -1) - (a.points ?? -1) || a.name.localeCompare(b.name, 'pt-BR'),
   );

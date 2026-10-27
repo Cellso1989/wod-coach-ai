@@ -53,7 +53,7 @@ describe('monthly ranking API', () => {
   });
 
   it('requires authentication before any cross-user query', async () => {
-    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-10' });
+    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-11' });
     expect(response.statusCode).toBe(401);
     expect(mocks.users).not.toHaveBeenCalled();
     expect(mocks.results).not.toHaveBeenCalled();
@@ -64,17 +64,17 @@ describe('monthly ranking API', () => {
       {
         id: 'a1',
         score: '11:36',
-        createdAt: new Date('2026-10-26T22:00:00Z'),
+        createdAt: new Date('2026-11-26T22:00:00Z'),
         wod: { userId: 'a' },
       },
       {
         id: 'b1',
         score: '12:10',
-        createdAt: new Date('2026-10-26T22:00:00Z'),
+        createdAt: new Date('2026-11-26T22:00:00Z'),
         wod: { userId: 'b' },
       },
     ]);
-    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-11', headers });
     expect(response.statusCode).toBe(200);
     expect(response.json().athletes.slice(0, 2)).toMatchObject([
       { userId: 'a', points: 100 },
@@ -94,15 +94,37 @@ describe('monthly ranking API', () => {
     expect(mocks.results).not.toHaveBeenCalled();
   });
 
+  it('resets totals on October 26 without deleting results from earlier days', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-26T23:00:00Z'));
+    try {
+      mocks.results.mockResolvedValue([
+        rankingResult('a', '05:00', { id: 'old-a', createdAt: new Date('2026-10-25T12:00:00Z') }),
+        rankingResult('b', '06:00', { id: 'old-b', createdAt: new Date('2026-10-25T12:00:00Z') }),
+        rankingResult('a', '11:36', { id: 'today-a', createdAt: new Date('2026-10-26T22:00:00Z') }),
+        rankingResult('b', '12:30', { id: 'today-b', createdAt: new Date('2026-10-26T22:00:00Z') }),
+      ]);
+      const response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().scoringStartsOn).toBe('2026-10-26');
+      expect(response.json().athletes.slice(0, 2)).toMatchObject([
+        { userId: 'a', points: 100, weekResults: [{ id: 'today-a', score: '11:36', points: 100 }] },
+        { userId: 'b', points: 75, weekResults: [{ id: 'today-b', score: '12:30', points: 75 }] },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('returns whole daily points and sums those integers into the monthly total', async () => {
     mocks.results.mockResolvedValue([
       rankingResult('a', '08:05'),
       rankingResult('b', '09:15'),
       rankingResult('c', '09:50'),
-      rankingResult('a', '05:00', { createdAt: new Date('2026-10-15T15:00:00Z') }),
-      rankingResult('b', '06:00', { createdAt: new Date('2026-10-15T15:00:00Z') }),
+      rankingResult('a', '05:00', { createdAt: new Date('2026-11-15T15:00:00Z') }),
+      rankingResult('b', '06:00', { createdAt: new Date('2026-11-15T15:00:00Z') }),
     ]);
-    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-11', headers });
     expect(response.statusCode).toBe(200);
     const data = response.json();
     expect(data.athletes.slice(0, 3)).toMatchObject([
@@ -119,17 +141,17 @@ describe('monthly ranking API', () => {
 
   it('serves only one score per athlete for today instead of accumulated monthly points', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-10-16T23:00:00Z'));
+    vi.setSystemTime(new Date('2026-11-16T23:00:00Z'));
     try {
       const results = ['09:30', '10:30', '11:10', '11:58'].map((score, index) =>
         calorieBikeRankingResult(['a', 'b', 'c', 'd'][index]!, score),
       );
-      const old = rankingResult('a', '12:05', { createdAt: new Date('2026-10-16T10:00:00Z') });
-      const oldPeer = rankingResult('c', '13:15', { createdAt: new Date('2026-10-16T10:00:00Z') });
+      const old = rankingResult('a', '12:05', { createdAt: new Date('2026-11-16T10:00:00Z') });
+      const oldPeer = rankingResult('c', '13:15', { createdAt: new Date('2026-11-16T10:00:00Z') });
       mocks.results.mockResolvedValue([old, oldPeer, ...results]);
       const response = await app.inject({ url: '/api/ranking/daily', headers });
       expect(response.statusCode).toBe(200);
-      expect(response.json().date).toBe('2026-10-16');
+      expect(response.json().date).toBe('2026-11-16');
       expect(response.json().athletes.slice(0, 4)).toMatchObject([
         { userId: 'a', points: 100, comparedWorkouts: 1 },
         { userId: 'b', points: 75, comparedWorkouts: 1 },
@@ -144,12 +166,12 @@ describe('monthly ranking API', () => {
 
   it('includes an existing Bike score in the monthly standings alongside Bike calories', async () => {
     mocks.results.mockResolvedValue([
-      rankingResult('a', '09:39', { createdAt: new Date('2026-10-15T15:00:00Z') }),
-      rankingResult('b', '10:05', { createdAt: new Date('2026-10-15T15:00:00Z') }),
+      rankingResult('a', '09:39', { createdAt: new Date('2026-11-15T15:00:00Z') }),
+      rankingResult('b', '10:05', { createdAt: new Date('2026-11-15T15:00:00Z') }),
       calorieBikeRankingResult('a', '11:10 min', 'Bike calories'),
       calorieBikeRankingResult('b', '11:58'),
     ]);
-    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-11', headers });
     expect(response.statusCode).toBe(200);
     const athlete = response
       .json()
@@ -171,7 +193,7 @@ describe('monthly ranking API', () => {
   );
 
   it('lets any authenticated athlete see the ranking with only the intended fields', async () => {
-    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-11', headers });
     expect(response.statusCode).toBe(200);
     const data = response.json();
     expect(data.summary.users).toBe(5);
@@ -192,10 +214,15 @@ describe('monthly ranking API', () => {
     expect(mocks.results).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          createdAt: {
-            gte: new Date('2026-10-01T00:00:00Z'),
-            lt: new Date('2026-11-02T00:00:00Z'),
-          },
+          OR: [
+            {
+              createdAt: {
+                gte: new Date('2026-11-01T00:00:00Z'),
+                lt: new Date('2026-12-02T00:00:00Z'),
+              },
+            },
+            { createdAt: { gte: expect.any(Date), lte: expect.any(Date) } },
+          ],
           wod: { discipline: 'CROSSFIT', user: { athleteProfile: { is: { rankingOptIn: true } } } },
         },
       }),
@@ -209,7 +236,7 @@ describe('monthly ranking API', () => {
     b.wod.rawText = 'Outro texto descrevendo a mesma prescrição';
     b.wod.notes = 'Observação pessoal';
     mocks.results.mockResolvedValue([a, b]);
-    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-11', headers });
     expect(response.statusCode).toBe(200);
     expect(response.json().summary).toMatchObject({ rankedAthletes: 2, comparableWorkouts: 1 });
     expect(response.json().athletes.slice(0, 2)).toMatchObject([
@@ -230,14 +257,14 @@ describe('monthly ranking API', () => {
 
   it('returns cumulative monthly standings with all submitters in each WOD', async () => {
     const first = rankingUsers.map((user, index) => rankingResult(user.id, `0${index + 5}:00`));
-    for (const result of first) result.createdAt = new Date('2026-10-15T15:00:00Z');
+    for (const result of first) result.createdAt = new Date('2026-11-15T15:00:00Z');
     const second = ['b', 'c', 'd', 'e'].map((userId, index) => {
       const result = rankingResult(userId, `0${index + 5}:00`);
       result.wod.analysis!.movements[0]!.reps = 30;
       return result;
     });
     mocks.results.mockResolvedValue([...first, ...second]);
-    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-11', headers });
     expect(response.statusCode).toBe(200);
     const data = response.json();
     expect(data.summary).toMatchObject({ comparableWorkouts: 2, rankedAthletes: 5 });
@@ -258,7 +285,7 @@ describe('monthly ranking API', () => {
       rankingResult('c', 'CAP 10'),
       rankingResult('d', 'CAP 5'),
     ]);
-    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-11', headers });
     expect(response.statusCode).toBe(200);
     expect(
       response
@@ -288,7 +315,7 @@ describe('monthly ranking API', () => {
       optedIn = update.rankingOptIn;
       return { userId: 'b', rankingOptIn: optedIn };
     });
-    let response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+    let response = await app.inject({ url: '/api/ranking/monthly?month=2026-11', headers });
     expect(response.json().summary.rankedAthletes).toBe(2);
     expect(
       (
@@ -300,7 +327,7 @@ describe('monthly ranking API', () => {
         })
       ).statusCode,
     ).toBe(200);
-    for (const month of ['2026-10', '2026-09']) {
+    for (const month of ['2026-11', '2026-09']) {
       response = await app.inject({ url: `/api/ranking/monthly?month=${month}`, headers });
       expect(
         response.json().athletes.some((athlete: { userId: string }) => athlete.userId === 'b'),
@@ -314,7 +341,7 @@ describe('monthly ranking API', () => {
       headers,
       payload: { rankingOptIn: true },
     });
-    response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+    response = await app.inject({ url: '/api/ranking/monthly?month=2026-11', headers });
     expect(
       response.json().athletes.find((athlete: { userId: string }) => athlete.userId === 'b'),
     ).toMatchObject({ position: 2, points: 75 });
