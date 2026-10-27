@@ -109,9 +109,6 @@ export function StrategySection({
   }
 
   const reviewWarnings = strategy.warnings.filter(isAnalysisReviewWarning);
-  const executionWarnings = strategy.warnings.filter(
-    (warning) => !isAnalysisReviewWarning(warning),
-  );
   const timeCap =
     analysis?.durationMinutes != null &&
     ['FOR_TIME', 'ROUNDS_FOR_TIME', 'CHIPPER'].includes(analysis.format ?? '')
@@ -131,11 +128,6 @@ export function StrategySection({
           {timeCap != null && <p className="mt-1 text-xs text-neutral-400">Cap: {timeCap} min</p>}
         </div>
 
-        <div className="space-y-1">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Ritmo</h3>
-          <p className="text-sm text-neutral-200">{formatStrategyRoundLabels(strategy.pacing)}</p>
-        </div>
-
         {strategy.loadRecommendation && <Alert variant="info">{strategy.loadRecommendation}</Alert>}
         <StrategyNoteList title="Quebras" notes={strategy.breakStrategy} analysis={analysis} />
 
@@ -143,22 +135,6 @@ export function StrategySection({
           <span className="font-semibold text-neutral-200">Descanso: </span>
           {formatStrategyRoundLabels(strategy.restStrategy)}
         </p>
-
-        {executionWarnings.length > 0 && (
-          <section
-            aria-label="Pontos de atencao"
-            className="rounded-lg border border-yellow-600/30 bg-yellow-500/5 p-3"
-          >
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-yellow-400">
-              Atenção
-            </h3>
-            <ul className="mt-2 space-y-2 text-sm text-yellow-300">
-              {executionWarnings.map((warning, index) => (
-                <li key={index}>{readableStrategyText(warning)}</li>
-              ))}
-            </ul>
-          </section>
-        )}
 
         {reviewWarnings.length > 0 && (
           <details className="rounded-lg border border-neutral-800 px-3 py-2">
