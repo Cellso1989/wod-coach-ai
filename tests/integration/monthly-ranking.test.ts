@@ -59,6 +59,35 @@ describe('monthly ranking API', () => {
     expect(mocks.results).not.toHaveBeenCalled();
   });
 
+  it('ranks results with only athlete identity and never selects workout analysis', async () => {
+    mocks.results.mockResolvedValue([
+      {
+        id: 'a1',
+        score: '11:36',
+        createdAt: new Date('2026-10-26T22:00:00Z'),
+        wod: { userId: 'a' },
+      },
+      {
+        id: 'b1',
+        score: '12:10',
+        createdAt: new Date('2026-10-26T22:00:00Z'),
+        wod: { userId: 'b' },
+      },
+    ]);
+    const response = await app.inject({ url: '/api/ranking/monthly?month=2026-10', headers });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().athletes.slice(0, 2)).toMatchObject([
+      { userId: 'a', points: 100 },
+      { userId: 'b', points: 75 },
+    ]);
+    expect(mocks.results.mock.calls[0]![0].select).toEqual({
+      id: true,
+      score: true,
+      createdAt: true,
+      wod: { select: { userId: true } },
+    });
+  });
+
   it('requires authentication on the daily ranking too', async () => {
     const response = await app.inject({ url: '/api/ranking/daily' });
     expect(response.statusCode).toBe(401);
@@ -95,8 +124,8 @@ describe('monthly ranking API', () => {
       const results = ['09:30', '10:30', '11:10', '11:58'].map((score, index) =>
         calorieBikeRankingResult(['a', 'b', 'c', 'd'][index]!, score),
       );
-      const old = rankingResult('a', '08:05', { createdAt: new Date('2026-10-16T10:00:00Z') });
-      const oldPeer = rankingResult('c', '09:15', { createdAt: new Date('2026-10-16T10:00:00Z') });
+      const old = rankingResult('a', '12:05', { createdAt: new Date('2026-10-16T10:00:00Z') });
+      const oldPeer = rankingResult('c', '13:15', { createdAt: new Date('2026-10-16T10:00:00Z') });
       mocks.results.mockResolvedValue([old, oldPeer, ...results]);
       const response = await app.inject({ url: '/api/ranking/daily', headers });
       expect(response.statusCode).toBe(200);

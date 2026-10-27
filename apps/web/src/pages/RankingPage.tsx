@@ -71,7 +71,7 @@ function AthleteRow({ athlete }: { athlete: RankedAthlete }) {
           />
         </summary>
         <div className="space-y-2 border-t border-neutral-800 p-4">
-          <p className="text-xs font-semibold text-neutral-300">Colocação no Wod de hoje</p>
+          <p className="text-xs font-semibold text-neutral-300">Colocação no resultado de hoje</p>
           {athlete.todayPerformances.length ? (
             athlete.todayPerformances.map((performance, index) => (
               <div
@@ -220,7 +220,7 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
               {[
                 { label: 'Atletas participantes', value: data.summary.users, icon: Users },
                 { label: 'Atletas classificados', value: data.summary.rankedAthletes, icon: Medal },
-                { label: "Wod's comparáveis", value: data.summary.comparableWorkouts, icon: Zap },
+                { label: 'Comparações no mês', value: data.summary.comparableWorkouts, icon: Zap },
                 {
                   label: 'Sua posição',
                   value: own?.position ? `${own.position}º` : '—',
@@ -286,8 +286,8 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                   <Trophy className="mx-auto mb-3 text-neutral-600" size={30} aria-hidden="true" />
                   <p className="font-semibold">O próximo destaque pode ser você.</p>
                   <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
-                    O ranking começa quando dois atletas registram resultados válidos para o mesmo
-                    WOD e prescrição no mesmo dia deste mês.
+                    O ranking começa quando dois atletas registram resultados válidos do mesmo tipo
+                    no mesmo dia deste mês. O treino realizado não interfere na comparação.
                   </p>
                 </div>
               )}
@@ -298,7 +298,7 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                 <div>
                   <h2 className="text-lg font-bold">Classificação geral</h2>
                   <p className="mt-1 text-xs text-neutral-500">
-                    Acumulado do mês · abra um atleta para ver o Wod de hoje
+                    Acumulado do mês · abra um atleta para ver o resultado de hoje
                   </p>
                 </div>
                 <label className="relative sm:w-64">
@@ -356,21 +356,21 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
               </summary>
               <div className="mt-4 space-y-3 leading-relaxed">
                 <p>
-                  Comparamos o mesmo treino e a mesma prescrição registrada: formato, movimentos,
-                  ordem, rounds, repetições, cargas, distâncias, calorias e tempo. O título, o texto
-                  original e as observações pessoais não definem o Wod: vale a prescrição salva na
-                  análise. Adaptações precisam estar refletidas nessa prescrição. Cada Wod reúne
-                  todos os atletas participantes do ranking que enviaram um resultado válido para a
-                  mesma prescrição hoje, sem limite de participantes. É preciso ter pelo menos dois
-                  atletas para haver comparação. Vale apenas o melhor resultado de cada atleta no
-                  Wod do dia. Se enviar Wod's diferentes hoje, vale a prescrição do último resultado
-                  válido enviado. Repetir essa prescrição mantém apenas a melhor tentativa.
+                  O ranking usa somente o campo Resultado. Não conferimos o treino, movimentos,
+                  cargas, prescrição, análise ou time cap. Resultados do mesmo tipo são comparados
+                  no mesmo dia, mesmo que os atletas tenham feito treinos diferentes. É preciso ter
+                  pelo menos dois atletas participantes com resultados válidos do mesmo tipo. Se
+                  registrar tipos diferentes no dia, vale o tipo do último resultado válido. Dentro
+                  desse tipo, conta somente seu melhor resultado do dia.
                 </p>
                 <p>
-                  Nos WODs por tempo, vence o menor tempo. Nos AMRAPs de repetições, vence o maior
-                  total de reps. Nos WODs por tempo, CAP 10 significa que faltaram 10 repetições.
-                  Quem finalizou fica acima de quem bateu o CAP. Entre os CAPs, menos repetições
-                  faltando significa melhor posição e a mesma quantidade gera empate.
+                  Tempos como 11:36 ou 12 min são comparados pelo menor tempo. CAP 10 significa que
+                  faltaram 10 repetições e participa da mesma comparação dos tempos. Quem finalizou
+                  fica acima de quem bateu o CAP. Entre os CAPs, menos repetições faltando significa
+                  melhor posição e a mesma quantidade gera empate. Resultados em rounds são
+                  comparados pelo maior número de rounds e, em caso de empate, pelas reps extras.
+                  Resultados como 150 reps são comparados pelo maior total de reps, separadamente
+                  dos rounds e dos tempos. Não convertemos rounds em reps.
                 </p>
                 <p>
                   A pontuação por colocação é fixa: 1º recebe 100 pontos, 2º recebe 75, 3º recebe 50
@@ -379,10 +379,10 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                   75, 50, 25, 10 e 10 pontos. Empates na mesma colocação recebem os mesmos pontos.
                   Cada atleta recebe uma única pontuação por dia, de até 100 pontos. O total do mês
                   soma essas pontuações diárias e reinicia a cada mês. Por exemplo: 100 hoje, 75
-                  amanhã e 50 depois totalizam 225 pontos. Wod's adicionais no mesmo dia não somam
-                  pontos extras. Ao abrir um atleta, aparecem somente seu Wod e sua colocação de
-                  hoje. CAP também pontua pela colocação. Quando novos atletas enviam resultados
-                  válidos para o mesmo WOD, as posições e os pontos desse Wod são recalculados.
+                  amanhã e 50 depois totalizam 225 pontos. Resultados adicionais no mesmo dia não
+                  somam pontos extras. Ao abrir um atleta, aparecem somente seu resultado e sua
+                  colocação de hoje. CAP também pontua pela colocação. Quando novos atletas enviam
+                  resultados válidos do mesmo tipo, as posições e os pontos do dia são recalculados.
                 </p>
                 <p>
                   O dia considera a data do primeiro registro do resultado, no horário de São Paulo.
@@ -390,13 +390,12 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                   atletas.
                 </p>
                 <p>
-                  Quem não tem Wod comparável aparece sem classificação. WODs sem prescrição
-                  suficiente, formatos ainda não suportados e resultados não reconhecidos ficam fora
-                  do cálculo. Um tempo acima do limite ou CAP sem quantidade precisa ser informado
-                  como CAP e repetições faltantes para entrar no ranking. Em AMRAP, registre as reps
-                  ou rounds completados.{' '}
+                  Quem não tem outro atleta com resultado do mesmo tipo no dia aparece sem
+                  classificação. Resultados não reconhecidos ficam fora do cálculo. Informe o tempo
+                  como 11:36 ou 12 min, o CAP como CAP 10, ou o trabalho concluído como 8 rounds +
+                  12 reps ou 150 reps. O tempo informado não é validado contra o time cap do treino.{' '}
                   {data.summary.uncomparedResults > 0
-                    ? `${data.summary.uncomparedResults} de ${data.summary.recordedResults} registros ficaram fora do cálculo neste mês, incluindo tentativas repetidas e Wod's adicionais.`
+                    ? `${data.summary.uncomparedResults} de ${data.summary.recordedResults} registros ficaram fora do cálculo neste mês, incluindo tentativas repetidas, tipos substituídos e resultados sem outro participante do mesmo tipo no dia.`
                     : ''}
                 </p>
               </div>

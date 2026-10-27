@@ -38,33 +38,7 @@ export default async function rankingRoutes(app: FastifyInstance) {
           id: true,
           score: true,
           createdAt: true,
-          wod: {
-            select: {
-              userId: true,
-              name: true,
-              rawText: true,
-              notes: true,
-              analysis: {
-                select: {
-                  format: true,
-                  durationMinutes: true,
-                  roundBreakdown: true,
-                  rawResponse: true,
-                  movements: {
-                    orderBy: { order: 'asc' },
-                    select: {
-                      name: true,
-                      category: true,
-                      reps: true,
-                      distanceMeters: true,
-                      calories: true,
-                      loadDescription: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
+          wod: { select: { userId: true } },
         },
       }),
     ]);
