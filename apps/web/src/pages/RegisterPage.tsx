@@ -1,12 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context.js';
 import { ApiError } from '../lib/api.js';
 import { Alert, Button, CenteredState, TextInput } from '../components/ui.js';
 
 export function RegisterPage() {
   const { register } = useAuth();
-  const navigate = useNavigate();
+  const [submitted, setSubmitted] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,7 +19,7 @@ export function RegisterPage() {
     setSubmitting(true);
     try {
       await register(name, email, password);
-      navigate('/profile');
+      setSubmitted(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Não foi possível criar a conta.');
     } finally {
@@ -27,12 +27,27 @@ export function RegisterPage() {
     }
   }
 
+  if (submitted)
+    return (
+      <CenteredState>
+        <div className="w-full max-w-sm space-y-4 text-center" role="status">
+          <h1 className="text-2xl font-bold">Cadastro recebido</h1>
+          <p>Aguarde a aprovação do administrador para entrar no WOD Coach AI.</p>
+          <Link to="/login" className="text-orange-500">
+            Voltar para entrar
+          </Link>
+        </div>
+      </CenteredState>
+    );
+
   return (
     <CenteredState>
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
         <div className="space-y-1 text-center">
           <h1 className="text-2xl font-bold">Criar conta</h1>
-          <p className="text-sm text-neutral-500">Configure seu perfil e acompanhe sua evolução.</p>
+          <p className="text-sm text-neutral-500">
+            Solicite acesso. Seu cadastro precisa ser aprovado pelo administrador.
+          </p>
         </div>
 
         {error && <Alert>{error}</Alert>}

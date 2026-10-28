@@ -10,13 +10,10 @@ import {
   resetPasswordSchema,
 } from '@wod-coach-ai/validation';
 import { AUTH_COOKIE_NAME } from '../plugins/auth.js';
+import { accessDenied, publicUser } from '../services/user-access.js';
 
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
-
-function publicUser(user: { id: string; email: string; name: string }) {
-  return { id: user.id, email: user.email, name: user.name };
-}
 
 // Login/registro são o alvo mais óbvio de força bruta — limite bem mais
 // apertado que o resto da API (que já tem um limite global mais generoso).
@@ -91,16 +88,10 @@ export default async function authRoutes(app: FastifyInstance) {
       const passwordHash = await bcrypt.hash(password, 12);
       const user = await prisma.user.create({ data: { name, email, passwordHash } });
 
-      const token = app.jwt.sign({ sub: user.id });
-      reply.setCookie(AUTH_COOKIE_NAME, token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: COOKIE_MAX_AGE_SECONDS,
+      return reply.code(201).send({
+        user: publicUser(user),
+        message: 'Cadastro recebido. Aguarde a aprovação do administrador para entrar.',
       });
-
-      return reply.code(201).send({ user: publicUser(user) });
     },
   );
 
@@ -119,6 +110,9 @@ export default async function authRoutes(app: FastifyInstance) {
       if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
         return reply.code(401).send({ error: 'E-mail ou senha inválidos' });
       }
+
+      const denied = accessDenied(user);
+      if (denied) return reply.code(403).send({ error: denied, code: 'ACCESS_DENIED' });
 
       const token = app.jwt.sign({ sub: user.id });
       reply.setCookie(AUTH_COOKIE_NAME, token, {

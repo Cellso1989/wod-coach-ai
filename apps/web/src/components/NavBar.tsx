@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { AuthContext } from '../lib/auth-context.js';
 import { NotificationCenter } from './NotificationCenter.js';
 
 interface NavItem {
@@ -23,6 +24,10 @@ function isActiveNavItem(pathname: string, item: NavItem) {
 }
 
 export function NavBar() {
+  const auth = useContext(AuthContext);
+  const items = auth?.user?.isAdmin
+    ? [...NAV_ITEMS, { to: '/admin', label: 'Usuários' }]
+    : NAV_ITEMS;
   const { pathname } = useLocation();
   const navigationPath =
     import.meta.env.DEV && pathname.startsWith('/preview/')
@@ -30,7 +35,7 @@ export function NavBar() {
       : pathname;
   const navRef = useRef<HTMLElement | null>(null);
   const itemRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
-  const activeItem = NAV_ITEMS.find((item) => isActiveNavItem(navigationPath, item));
+  const activeItem = items.find((item) => isActiveNavItem(navigationPath, item));
 
   useEffect(() => {
     const nav = navRef.current;
@@ -59,7 +64,7 @@ export function NavBar() {
         ref={navRef}
         className="flex min-w-0 max-w-full flex-1 gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {NAV_ITEMS.map((item) => {
+        {items.map((item) => {
           const active = isActiveNavItem(navigationPath, item);
           return (
             <Link

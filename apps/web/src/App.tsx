@@ -2,7 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './lib/auth-provider.js';
 import { ThemeProvider } from './lib/theme-provider.js';
 import { AppIntro } from './components/AppIntro.js';
-import { ProtectedRoute } from './components/ProtectedRoute.js';
+import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage.js';
 import { RegisterPage } from './pages/RegisterPage.js';
@@ -52,7 +52,9 @@ function App() {
                 <Route path="/hyrox/new" element={<SubmitHyroxPage />} />
                 <Route path="/hyrox/:id" element={<HyroxDetailPage />} />
                 <Route path="/hyrox" element={<HyroxPage />} />
-                <Route path="/admin" element={<AdminPage />} />
+                <Route element={<AdminRoute />}>
+                  <Route path="/admin" element={<AdminPage />} />
+                </Route>
               </Route>
             </Routes>
           </AppIntro>

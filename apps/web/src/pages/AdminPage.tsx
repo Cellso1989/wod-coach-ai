@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError, type AdminActivityType, type AdminUsersResponse } from '../lib/api.js';
 import { PageHeader } from '../components/PageHeader.js';
-import { Alert, Card, LoadingState } from '../components/ui.js';
+import { Alert, Button, Card, LoadingState } from '../components/ui.js';
+import { NavBar } from '../components/NavBar.js';
+
+const STATUS_LABEL = {
+  PENDING: 'Aguardando aprovação',
+  APPROVED: 'Aprovado',
+  BLOCKED: 'Bloqueado',
+};
 
 function formatDate(value: string | null): string {
   if (!value) return 'Sem atividade';
@@ -48,6 +55,29 @@ export function AdminPage() {
   const [data, setData] = useState<AdminUsersResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function changeAccess(id: string, status: 'APPROVED' | 'BLOCKED') {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await api.setUserAccess(id, status);
+      setData(await api.getAdminUsers());
+      setMessage(status === 'APPROVED' ? 'Acesso aprovado.' : 'Acesso bloqueado.');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Não foi possível atualizar o acesso.');
+      // Refresh after conflicts so the next action uses the current state.
+      await api
+        .getAdminUsers()
+        .then(setData)
+        .catch(() => {});
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     api
@@ -75,12 +105,19 @@ export function AdminPage() {
             <Link to="/" className="text-sm text-orange-500">
               Voltar
             </Link>
-            <h1 className="mt-2 text-2xl font-bold">Admin</h1>
+            <h1 className="mt-2 text-2xl font-bold">Usuários</h1>
             <p className="text-sm text-neutral-500">Usuarios e uso geral do app</p>
           </div>
         </PageHeader>
 
+        <NavBar />
+
         {error && <Alert>{error}</Alert>}
+        {message && (
+          <p role="status" className="text-sm text-emerald-400">
+            {message}
+          </p>
+        )}
 
         {data && (
           <>
@@ -92,12 +129,16 @@ export function AdminPage() {
               <StatCard label="Resultados" value={data.totals.results} />
             </section>
 
-            <section className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+            <section className="grid gap-6">
               <div className="space-y-3">
                 <div>
                   <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
                     Usuarios cadastrados
                   </h2>
+                  <p className="text-sm text-orange-400">
+                    {data.users.filter((user) => user.accessStatus === 'PENDING').length} aguardando
+                    aprovação
+                  </p>
                 </div>
 
                 {data.users.length === 0 ? (
@@ -106,7 +147,7 @@ export function AdminPage() {
                   </Card>
                 ) : (
                   <div className="overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900">
-                    <div className="hidden grid-cols-[minmax(220px,1.4fr)_150px_repeat(4,88px)] gap-3 border-b border-neutral-800 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-500 md:grid">
+                    <div className="hidden grid-cols-[minmax(220px,1.4fr)_150px_repeat(4,88px)] gap-3 border-b border-neutral-800 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-500 lg:grid">
                       <span>Usuario</span>
                       <span>Ultima atividade</span>
                       <span>WODs</span>
@@ -119,11 +160,14 @@ export function AdminPage() {
                       {data.users.map((user) => (
                         <li
                           key={user.id}
-                          className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(220px,1.4fr)_150px_repeat(4,88px)] md:items-center"
+                          className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(220px,1.4fr)_150px_repeat(4,88px)] lg:items-center"
                         >
                           <div className="min-w-0">
                             <p className="truncate font-semibold text-neutral-100">{user.name}</p>
                             <p className="truncate text-sm text-neutral-500">{user.email}</p>
+                            <p className="mt-1 text-sm text-orange-400">
+                              {user.isAdmin ? 'Administrador' : STATUS_LABEL[user.accessStatus]}
+                            </p>
                             <p className="mt-1 text-xs text-neutral-600">
                               Cadastro: {formatDate(user.createdAt)}
                             </p>
@@ -133,28 +177,48 @@ export function AdminPage() {
                             {formatDate(user.lastActivityAt)}
                           </p>
 
-                          <div className="grid grid-cols-4 gap-2 text-sm md:contents">
+                          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:contents">
                             <p>
-                              <span className="text-neutral-500 md:hidden">WODs: </span>
+                              <span className="text-neutral-500 lg:hidden">WODs: </span>
                               {user.wodCount}
                             </p>
                             <p>
-                              <span className="text-neutral-500 md:hidden">Analises: </span>
+                              <span className="text-neutral-500 lg:hidden">Analises: </span>
                               {user.analysisCount}
                             </p>
                             <p>
-                              <span className="text-neutral-500 md:hidden">Estrategias: </span>
+                              <span className="text-neutral-500 lg:hidden">Estrategias: </span>
                               {user.strategyCount}
                             </p>
                             <p>
-                              <span className="text-neutral-500 md:hidden">Check-ins: </span>
+                              <span className="text-neutral-500 lg:hidden">Check-ins: </span>
                               {user.checkinCount}
                             </p>
                           </div>
 
-                          <div className="text-xs text-neutral-500 md:col-span-6">
+                          <div className="text-xs text-neutral-500 lg:col-span-6">
                             Resultados: {user.resultCount} · PRs: {user.personalRecordCount}
                           </div>
+                          {!user.isAdmin && (
+                            <div className="flex flex-wrap gap-2 lg:col-span-6">
+                              <Button
+                                variant="secondary"
+                                disabled={busy || user.accessStatus === 'APPROVED'}
+                                aria-label={`Aprovar acesso de ${user.email}`}
+                                onClick={() => void changeAccess(user.id, 'APPROVED')}
+                              >
+                                Aprovar acesso
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                disabled={busy || user.accessStatus === 'BLOCKED'}
+                                aria-label={`Bloquear acesso de ${user.email}`}
+                                onClick={() => void changeAccess(user.id, 'BLOCKED')}
+                              >
+                                Bloquear acesso
+                              </Button>
+                            </div>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -211,6 +275,35 @@ export function AdminPage() {
                   </ol>
                 )}
               </aside>
+            </section>
+            <section className="space-y-3" aria-labelledby="access-history-title">
+              <h2
+                id="access-history-title"
+                className="text-sm font-semibold uppercase tracking-wide text-neutral-500"
+              >
+                Histórico de aprovações e bloqueios
+              </h2>
+              <p className="text-sm text-neutral-500">Últimas 50 alterações de acesso.</p>
+              {data.accessHistory.length === 0 ? (
+                <Card>Nenhuma alteração de acesso registrada.</Card>
+              ) : (
+                <ol className="space-y-2">
+                  {data.accessHistory.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="rounded-lg border border-neutral-800 p-3 text-sm break-words"
+                    >
+                      <p>
+                        {entry.targetEmail}: {STATUS_LABEL[entry.fromStatus]} →{' '}
+                        {STATUS_LABEL[entry.toStatus]}
+                      </p>
+                      <p className="text-neutral-500">
+                        Por {entry.actorEmail} em {formatDate(entry.createdAt)}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              )}
             </section>
           </>
         )}

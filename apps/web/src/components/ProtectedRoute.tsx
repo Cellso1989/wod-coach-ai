@@ -15,3 +15,8 @@ export function ProtectedRoute() {
 
   return <Outlet />;
 }
+
+export function AdminRoute() {
+  const { user } = useAuth();
+  return user?.isAdmin ? <Outlet /> : <Navigate to="/" replace />;
+}

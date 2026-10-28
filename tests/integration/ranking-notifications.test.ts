@@ -5,6 +5,7 @@ import { buildApp } from '../../apps/api/src/app.js';
 const mocks = vi.hoisted(() => ({
   profile: vi.fn(),
   users: vi.fn(),
+  authUser: vi.fn(),
   wod: vi.fn(),
   previous: vi.fn(),
   save: vi.fn(),
@@ -25,7 +26,7 @@ vi.mock('../../packages/database/dist/index.js', async (original) => {
   const tx = {
     wodResult: { findUnique: mocks.previous, upsert: mocks.save },
     athleteProfile: { findUnique: mocks.profile, upsert: mocks.profileSave },
-    user: { findMany: mocks.users },
+    user: { findMany: mocks.users, findUnique: mocks.authUser },
     resultAnnouncement: { createMany: mocks.announcement, deleteMany: mocks.deleteAnnouncements },
     rankingNotification: {
       createMany: mocks.notifications,
@@ -58,6 +59,7 @@ describe('ranking result notifications', () => {
   const id = '11111111-1111-4111-8111-111111111111';
   beforeEach(async () => {
     vi.resetAllMocks();
+    mocks.authUser.mockResolvedValue({ id: 'actor', accessStatus: 'APPROVED', isAdmin: false });
     app = buildApp();
     await app.ready();
     const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { sub: 'actor' }]

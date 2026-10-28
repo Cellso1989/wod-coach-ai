@@ -31,6 +31,7 @@ describe.skipIf(!process.env.WOD_LOAD_TEST_DATABASE_URL)(
           email: `load-test-${Date.now()}@example.com`,
           name: 'Load QA',
           passwordHash: 'test-only',
+          accessStatus: 'APPROVED',
         },
       });
       userId = user.id;

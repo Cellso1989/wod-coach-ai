@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth-context.js';
 import { ApiError } from '../lib/api.js';
@@ -9,8 +9,12 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => sessionStorage.getItem('access-message'));
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    sessionStorage.removeItem('access-message');
+  }, []);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   context: vi.fn(),
   prisma: {
+    user: { findUnique: vi.fn() },
     wod: { findFirst: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn() },
     wodAnalysis: {
       upsert: vi.fn(),
@@ -281,6 +282,7 @@ function databaseClient(current: () => Store) {
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  mocks.prisma.user.findUnique.mockResolvedValue({ accessStatus: 'APPROVED', isAdmin: false });
   lease = null;
   mocks.prisma.$queryRaw.mockImplementation(leaseQuery);
   failWrite = null;

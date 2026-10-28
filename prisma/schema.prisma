@@ -15,6 +15,8 @@ model User {
   email        String   @unique
   passwordHash String
   name         String
+  accessStatus AccessStatus @default(PENDING)
+  isAdmin      Boolean @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -29,6 +31,27 @@ model User {
   pushSubscriptions    PushSubscription[]
 
   @@map("users")
+}
+
+enum AccessStatus {
+  PENDING
+  APPROVED
+  BLOCKED
+}
+
+// Immutable identity snapshots keep the audit readable even after account changes.
+model UserAccessAudit {
+  id           String @id @default(uuid())
+  actorId      String
+  actorEmail   String
+  targetId     String
+  targetEmail  String
+  fromStatus   AccessStatus
+  toStatus     AccessStatus
+  createdAt    DateTime @default(now())
+
+  @@index([targetId, createdAt])
+  @@map("user_access_audits")
 }
 
 enum WorkoutDiscipline {
