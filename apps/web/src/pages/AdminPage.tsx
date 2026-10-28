@@ -76,7 +76,7 @@ export function AdminPage() {
             <Link to="/" className="text-sm text-orange-500">
               Voltar
             </Link>
-            <h1 className="mt-2 text-2xl font-bold">Administrador</h1>
+            <h1 className="mt-2 text-2xl font-bold">Admin</h1>
             <p className="text-sm text-neutral-500">
               Gerencie a aprovação e o acesso ao aplicativo.
             </p>
@@ -94,6 +94,10 @@ export function AdminPage() {
 
         {data && (
           <>
+            <Card className="space-y-1" aria-label="Quantidade de usuários">
+              <p className="text-sm text-neutral-500">Usuários cadastrados</p>
+              <p className="text-2xl font-bold text-neutral-100">{data.users.length}</p>
+            </Card>
             <section className="grid gap-6">
               <div className="space-y-3">
                 <div>
