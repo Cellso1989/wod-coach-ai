@@ -26,7 +26,7 @@ function isActiveNavItem(pathname: string, item: NavItem) {
 export function NavBar() {
   const auth = useContext(AuthContext);
   const items = auth?.user?.isAdmin
-    ? [...NAV_ITEMS, { to: '/admin', icon: '🛡️', label: 'Administrador' }]
+    ? [...NAV_ITEMS, { to: '/admin', icon: '🛡️', label: 'Admin' }]
     : NAV_ITEMS;
   const { pathname } = useLocation();
   const navigationPath =
