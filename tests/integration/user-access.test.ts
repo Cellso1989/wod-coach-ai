@@ -266,7 +266,7 @@ describe('user approval and administrator authorization', () => {
     db.users.get(adminId)!.email = 'renamed-owner@example.test';
     const response = await app.inject({ url: '/api/admin/users', headers: headers(adminId) });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toHaveProperty('accessHistory');
+    expect(response.json()).toEqual({ users: [], accessHistory: [] });
     expect((await change(adminId, 'BLOCKED')).statusCode).toBe(403);
     expect((await change(adminId, 'APPROVED')).statusCode).toBe(403);
   });

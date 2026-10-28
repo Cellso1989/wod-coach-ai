@@ -363,27 +363,6 @@ export interface AdminUserSummary {
   name: string;
   email: string;
   createdAt: string;
-  lastActivityAt: string | null;
-  wodCount: number;
-  analysisCount: number;
-  strategyCount: number;
-  resultCount: number;
-  checkinCount: number;
-  personalRecordCount: number;
-}
-
-export type AdminActivityType =
-  'WOD' | 'ANALYSIS' | 'STRATEGY' | 'HYROX_STRATEGY' | 'RESULT' | 'CHECKIN' | 'PERSONAL_RECORD';
-
-export interface AdminActivity {
-  id: string;
-  type: AdminActivityType;
-  userId: string;
-  userName: string;
-  userEmail: string;
-  title: string;
-  detail: string | null;
-  occurredAt: string;
 }
 
 export interface AccessAudit {
@@ -397,15 +376,7 @@ export interface AccessAudit {
 
 export interface AdminUsersResponse {
   accessHistory: AccessAudit[];
-  totals: {
-    users: number;
-    wods: number;
-    analyses: number;
-    strategies: number;
-    results: number;
-  };
   users: AdminUserSummary[];
-  activities: AdminActivity[];
 }
 
 export const api = {
