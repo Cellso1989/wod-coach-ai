@@ -44,6 +44,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
+    if (body.code === 'ACCESS_DENIED' && path !== '/auth/login')
+      window.dispatchEvent(new CustomEvent('access-denied', { detail: body.error }));
     throw new ApiError(response.status, body.error ?? 'Erro inesperado');
   }
 
@@ -63,13 +65,19 @@ async function requestForm<T>(path: string, formData: FormData): Promise<T> {
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
+    if (body.code === 'ACCESS_DENIED')
+      window.dispatchEvent(new CustomEvent('access-denied', { detail: body.error }));
     throw new ApiError(response.status, body.error ?? 'Erro inesperado');
   }
 
   return response.json() as Promise<T>;
 }
 
+export type AccessStatus = 'PENDING' | 'APPROVED' | 'BLOCKED';
+
 export interface PublicUser {
+  accessStatus: AccessStatus;
+  isAdmin: boolean;
   id: string;
   email: string;
   name: string;
@@ -349,6 +357,8 @@ export interface TrainingCalendarEntry {
 }
 
 export interface AdminUserSummary {
+  accessStatus: AccessStatus;
+  isAdmin: boolean;
   id: string;
   name: string;
   email: string;
@@ -376,7 +386,17 @@ export interface AdminActivity {
   occurredAt: string;
 }
 
+export interface AccessAudit {
+  id: string;
+  actorEmail: string;
+  targetEmail: string;
+  fromStatus: AccessStatus;
+  toStatus: AccessStatus;
+  createdAt: string;
+}
+
 export interface AdminUsersResponse {
+  accessHistory: AccessAudit[];
   totals: {
     users: number;
     wods: number;
@@ -390,7 +410,7 @@ export interface AdminUsersResponse {
 
 export const api = {
   register: (input: { name: string; email: string; password: string }) =>
-    request<{ user: PublicUser }>('/auth/register', {
+    request<{ user: PublicUser; message: string }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(input),
     }),
@@ -591,6 +611,12 @@ export const api = {
       `/stats/training-calendar?${new URLSearchParams({ start, end })}`,
       { signal },
     ),
+
+  setUserAccess: (id: string, status: 'APPROVED' | 'BLOCKED') =>
+    request(`/admin/users/${encodeURIComponent(id)}/access`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
 
   getAdminUsers: () => request<AdminUsersResponse>('/admin/users'),
 

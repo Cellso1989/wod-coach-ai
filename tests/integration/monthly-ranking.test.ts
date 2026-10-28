@@ -16,7 +16,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../packages/database/dist/index.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@wod-coach-ai/database')>()),
   prisma: {
-    user: { findMany: mocks.users },
+    user: {
+      findMany: mocks.users,
+      findUnique: async () => ({ id: 'b', accessStatus: 'APPROVED', isAdmin: false }),
+    },
     wodResult: { findMany: mocks.results },
     athleteProfile: { findUnique: mocks.profile, upsert: mocks.saveProfile },
     $transaction: async (work: (tx: unknown) => Promise<unknown>) =>

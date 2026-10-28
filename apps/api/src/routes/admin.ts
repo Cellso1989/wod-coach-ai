@@ -1,17 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '@wod-coach-ai/database';
 
-const DEFAULT_ADMIN_EMAILS = ['celso.sabino1989@gmail.com'];
+import { z } from 'zod';
 const RECENT_ACTIVITY_LIMIT = 30;
 
 type AdminActivityType =
-  | 'WOD'
-  | 'ANALYSIS'
-  | 'STRATEGY'
-  | 'HYROX_STRATEGY'
-  | 'RESULT'
-  | 'CHECKIN'
-  | 'PERSONAL_RECORD';
+  'WOD' | 'ANALYSIS' | 'STRATEGY' | 'HYROX_STRATEGY' | 'RESULT' | 'CHECKIN' | 'PERSONAL_RECORD';
 
 interface AdminActivity {
   id: string;
@@ -22,15 +16,6 @@ interface AdminActivity {
   title: string;
   detail: string | null;
   occurredAt: Date;
-}
-
-function adminEmails(): Set<string> {
-  const configured = process.env.ADMIN_EMAILS?.split(',') ?? [];
-  const emails = configured
-    .map((email) => email.trim().toLowerCase())
-    .filter((email) => email.length > 0);
-
-  return new Set(emails.length > 0 ? emails : DEFAULT_ADMIN_EMAILS);
 }
 
 function latestDate(dates: Array<Date | null | undefined>): Date | null {
@@ -79,118 +64,111 @@ function summarizeCheckin(checkin: {
 }
 
 async function recentActivities(): Promise<AdminActivity[]> {
-  const [
-    wods,
-    analyses,
-    strategies,
-    hyroxStrategies,
-    results,
-    checkins,
-    personalRecords,
-  ] = await Promise.all([
-    prisma.wod.findMany({
-      orderBy: { updatedAt: 'desc' },
-      take: RECENT_ACTIVITY_LIMIT,
-      select: {
-        id: true,
-        name: true,
-        rawText: true,
-        discipline: true,
-        updatedAt: true,
-        user: { select: { id: true, name: true, email: true } },
-      },
-    }),
-    prisma.wodAnalysis.findMany({
-      orderBy: { updatedAt: 'desc' },
-      take: RECENT_ACTIVITY_LIMIT,
-      select: {
-        id: true,
-        stimulus: true,
-        updatedAt: true,
-        wod: {
-          select: {
-            name: true,
-            rawText: true,
-            user: { select: { id: true, name: true, email: true } },
+  const [wods, analyses, strategies, hyroxStrategies, results, checkins, personalRecords] =
+    await Promise.all([
+      prisma.wod.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: RECENT_ACTIVITY_LIMIT,
+        select: {
+          id: true,
+          name: true,
+          rawText: true,
+          discipline: true,
+          updatedAt: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+      }),
+      prisma.wodAnalysis.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: RECENT_ACTIVITY_LIMIT,
+        select: {
+          id: true,
+          stimulus: true,
+          updatedAt: true,
+          wod: {
+            select: {
+              name: true,
+              rawText: true,
+              user: { select: { id: true, name: true, email: true } },
+            },
           },
         },
-      },
-    }),
-    prisma.wodStrategy.findMany({
-      orderBy: { updatedAt: 'desc' },
-      take: RECENT_ACTIVITY_LIMIT,
-      select: {
-        id: true,
-        goal: true,
-        updatedAt: true,
-        wod: {
-          select: {
-            name: true,
-            rawText: true,
-            user: { select: { id: true, name: true, email: true } },
+      }),
+      prisma.wodStrategy.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: RECENT_ACTIVITY_LIMIT,
+        select: {
+          id: true,
+          goal: true,
+          updatedAt: true,
+          wod: {
+            select: {
+              name: true,
+              rawText: true,
+              user: { select: { id: true, name: true, email: true } },
+            },
           },
         },
-      },
-    }),
-    prisma.hyroxStrategy.findMany({
-      orderBy: { updatedAt: 'desc' },
-      take: RECENT_ACTIVITY_LIMIT,
-      select: {
-        id: true,
-        workoutSummary: true,
-        updatedAt: true,
-        wod: {
-          select: {
-            name: true,
-            rawText: true,
-            user: { select: { id: true, name: true, email: true } },
+      }),
+      prisma.hyroxStrategy.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: RECENT_ACTIVITY_LIMIT,
+        select: {
+          id: true,
+          workoutSummary: true,
+          updatedAt: true,
+          wod: {
+            select: {
+              name: true,
+              rawText: true,
+              user: { select: { id: true, name: true, email: true } },
+            },
           },
         },
-      },
-    }),
-    prisma.wodResult.findMany({
-      orderBy: { updatedAt: 'desc' },
-      take: RECENT_ACTIVITY_LIMIT,
-      select: {
-        id: true,
-        score: true,
-        updatedAt: true,
-        wod: {
-          select: {
-            name: true,
-            rawText: true,
-            user: { select: { id: true, name: true, email: true } },
+      }),
+      prisma.wodResult.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: RECENT_ACTIVITY_LIMIT,
+        select: {
+          id: true,
+          score: true,
+          updatedAt: true,
+          wod: {
+            select: {
+              name: true,
+              rawText: true,
+              user: { select: { id: true, name: true, email: true } },
+            },
           },
         },
-      },
-    }),
-    prisma.dailyCheckin.findMany({
-      orderBy: { updatedAt: 'desc' },
-      take: RECENT_ACTIVITY_LIMIT,
-      select: {
-        id: true,
-        timeSeconds: true,
-        rounds: true,
-        reps: true,
-        weightKg: true,
-        notes: true,
-        updatedAt: true,
-        user: { select: { id: true, name: true, email: true } },
-      },
-    }),
-    prisma.personalRecord.findMany({
-      orderBy: { updatedAt: 'desc' },
-      take: RECENT_ACTIVITY_LIMIT,
-      select: {
-        id: true,
-        movementName: true,
-        value: true,
-        unit: true,
-        updatedAt: true,
-        user: { select: { id: true, name: true, email: true } },
-      },
-    }),
-  ]);
+      }),
+      prisma.dailyCheckin.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: RECENT_ACTIVITY_LIMIT,
+        select: {
+          id: true,
+          timeSeconds: true,
+          rounds: true,
+          reps: true,
+          weightKg: true,
+          notes: true,
+          updatedAt: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+      }),
+      prisma.personalRecord.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: RECENT_ACTIVITY_LIMIT,
+        select: {
+          id: true,
+          movementName: true,
+          value: true,
+          unit: true,
+          updatedAt: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+      }),
+    ]);
 
   const activities: AdminActivity[] = [
     ...wods.map((wod) => ({
@@ -259,10 +237,10 @@ async function recentActivities(): Promise<AdminActivity[]> {
 async function requireAdmin(request: FastifyRequest, reply: FastifyReply) {
   const user = await prisma.user.findUnique({
     where: { id: request.user.sub },
-    select: { email: true },
+    select: { isAdmin: true },
   });
 
-  if (!user || !adminEmails().has(user.email.toLowerCase())) {
+  if (!user || !user.isAdmin) {
     return reply.code(403).send({ error: 'Acesso restrito ao administrador' });
   }
 }
@@ -271,6 +249,59 @@ export default async function adminRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
   app.addHook('preHandler', requireAdmin);
 
+  app.patch('/admin/users/:id/access', async (request, reply) => {
+    const params = z.object({ id: z.string().uuid() }).safeParse(request.params);
+    const body = z
+      .object({ status: z.enum(['APPROVED', 'BLOCKED']) })
+      .strict()
+      .safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ error: 'Dados inválidos' });
+    const actor = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub } });
+    // Serializable transaction makes state changes and their audit atomic, including concurrent requests.
+    try {
+      const result = await prisma.$transaction(
+        async (tx) => {
+          const target = await tx.user.findUnique({ where: { id: params.data.id } });
+          if (!target) return { error: 'Usuário não encontrado', status: 404 } as const;
+          if (target.isAdmin || target.id === actor.id) {
+            return {
+              error: 'O acesso do administrador não pode ser alterado.',
+              status: 403,
+            } as const;
+          }
+          if (target.accessStatus === body.data.status) return { user: target };
+          const user = await tx.user.update({
+            where: { id: target.id },
+            data: { accessStatus: body.data.status },
+          });
+          await tx.userAccessAudit.create({
+            data: {
+              actorId: actor.id,
+              actorEmail: actor.email,
+              targetId: target.id,
+              targetEmail: target.email,
+              fromStatus: target.accessStatus,
+              toStatus: body.data.status,
+            },
+          });
+          return { user };
+        },
+        { isolationLevel: 'Serializable' },
+      );
+      if (result.error) return reply.code(result.status).send({ error: result.error });
+      return reply.send({ user: { id: result.user.id, accessStatus: result.user.accessStatus } });
+    } catch (error) {
+      if (typeof error === 'object' && error && 'code' in error && error.code === 'P2034') {
+        return reply
+          .code(409)
+          .send({
+            error: 'O acesso foi alterado por outra solicitação. Recarregue e tente novamente.',
+          });
+      }
+      throw error;
+    }
+  });
+
   app.get('/admin/users', async (_request, reply) => {
     const users = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
@@ -278,6 +309,8 @@ export default async function adminRoutes(app: FastifyInstance) {
         id: true,
         name: true,
         email: true,
+        accessStatus: true,
+        isAdmin: true,
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -325,6 +358,8 @@ export default async function adminRoutes(app: FastifyInstance) {
           id: user.id,
           name: user.name,
           email: user.email,
+          accessStatus: user.accessStatus,
+          isAdmin: user.isAdmin,
           createdAt: user.createdAt.toISOString(),
           lastActivityAt: lastActivityAt?.toISOString() ?? null,
           wodCount: user._count.wods,
@@ -349,7 +384,12 @@ export default async function adminRoutes(app: FastifyInstance) {
     );
     const activities = await recentActivities();
 
+    const accessHistory = await prisma.userAccessAudit.findMany({
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 50,
+    });
     return reply.send({
+      accessHistory,
       totals,
       users: rows,
       activities: activities.map((activity) => ({
