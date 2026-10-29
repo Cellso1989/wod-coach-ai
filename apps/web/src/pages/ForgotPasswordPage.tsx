@@ -21,7 +21,11 @@ export function ForgotPasswordPage() {
       setSuccess(true);
       setDevResetUrl(response.devResetUrl ?? null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Nao foi possivel solicitar a redefinicao.');
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Não foi possível solicitar a redefinição. Tente novamente.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -35,12 +39,15 @@ export function ForgotPasswordPage() {
           <p className="text-sm text-neutral-500">Informe seu e-mail para receber o link.</p>
         </div>
 
-        {error && <Alert>{error}</Alert>}
-        {success && (
-          <Alert variant="success">
-            Se este e-mail estiver cadastrado, enviaremos um link para redefinir sua senha.
-          </Alert>
-        )}
+        <div role={error ? 'alert' : 'status'} aria-live="polite">
+          {error && <Alert>{error}</Alert>}
+          {success && (
+            <Alert variant="info">
+              Se este e-mail estiver cadastrado, você receberá as instruções de recuperação. O link
+              é de uso único e expira em 1 hora.
+            </Alert>
+          )}
+        </div>
         {devResetUrl && (
           <Alert variant="info">
             Ambiente local:{' '}
@@ -50,8 +57,15 @@ export function ForgotPasswordPage() {
           </Alert>
         )}
 
+        <label htmlFor="recovery-email" className="block text-sm text-neutral-300">
+          E-mail cadastrado
+        </label>
         <TextInput
+          id="recovery-email"
           type="email"
+          autoComplete="email"
+          maxLength={254}
+          disabled={submitting}
           required
           placeholder="Email"
           value={email}
@@ -61,6 +75,13 @@ export function ForgotPasswordPage() {
         <Button type="submit" disabled={submitting} fullWidth>
           {submitting ? 'Enviando...' : 'Enviar link'}
         </Button>
+
+        {success && (
+          <p className="text-sm text-neutral-400">
+            Não recebeu? Confira o endereço e a pasta de spam. Se continuar sem receber, peça um
+            link de recuperação ao administrador.
+          </p>
+        )}
 
         <p className="text-center text-sm text-neutral-400">
           Lembrou a senha?{' '}

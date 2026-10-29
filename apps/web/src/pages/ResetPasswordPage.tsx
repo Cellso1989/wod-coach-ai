@@ -1,39 +1,84 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api.js';
-import { Alert, Button, CenteredState, TextInput } from '../components/ui.js';
+import { Alert, Button, ButtonLink, CenteredState, TextInput } from '../components/ui.js';
 
 export function ResetPasswordPage() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = useMemo(() => searchParams.get('token') ?? '', [searchParams]);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [invalidLink, setInvalidLink] = useState(false);
+  const validToken = /^[A-Za-z0-9_-]{20,300}$/.test(token);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
 
-    if (!token) {
-      setError('Link de redefinicao invalido.');
+    if (!validToken) {
+      setError('Link de redefinição inválido. Solicite um novo link.');
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError('As senhas nao conferem.');
+      setError('As senhas não conferem.');
       return;
     }
 
     setSubmitting(true);
     try {
       await api.resetPassword({ token, newPassword });
-      navigate('/login', { replace: true });
+      setNewPassword('');
+      setConfirmPassword('');
+      setSuccess(true);
+      window.history.replaceState(window.history.state, '', '/reset-password');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Nao foi possivel redefinir a senha.');
+      if (err instanceof ApiError && err.status === 400) setInvalidLink(true);
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Não foi possível redefinir a senha. Tente novamente.',
+      );
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (success) {
+    return (
+      <CenteredState>
+        <div className="w-full max-w-sm space-y-4 text-center" role="status">
+          <h1 className="text-2xl font-bold">Senha redefinida</h1>
+          <p className="text-sm text-neutral-400">
+            Sua nova senha foi salva. Entre com o seu e-mail e a nova senha.
+          </p>
+          <ButtonLink to="/login" fullWidth>
+            Ir para o login
+          </ButtonLink>
+        </div>
+      </CenteredState>
+    );
+  }
+
+  if (!validToken || invalidLink) {
+    return (
+      <CenteredState>
+        <div className="w-full max-w-sm space-y-4 text-center">
+          <h1 className="text-2xl font-bold">Link inválido ou expirado</h1>
+          <p className="text-sm text-neutral-400">
+            O link pode já ter sido usado ou ter expirado. Solicite outro para recuperar seu acesso.
+          </p>
+          <ButtonLink to="/forgot-password" fullWidth>
+            Solicitar novo link
+          </ButtonLink>
+          <Link to="/login" className="block text-sm text-orange-500">
+            Voltar para o login
+          </Link>
+        </div>
+      </CenteredState>
+    );
   }
 
   return (
@@ -44,18 +89,36 @@ export function ResetPasswordPage() {
           <p className="text-sm text-neutral-500">Escolha uma senha com pelo menos 8 caracteres.</p>
         </div>
 
-        {error && <Alert>{error}</Alert>}
+        {error && (
+          <div role="alert">
+            <Alert>{error}</Alert>
+          </div>
+        )}
 
+        <label htmlFor="new-password" className="block text-sm text-neutral-300">
+          Nova senha
+        </label>
         <TextInput
+          id="new-password"
           type="password"
+          autoComplete="new-password"
+          maxLength={128}
+          disabled={submitting}
           required
           minLength={8}
           placeholder="Nova senha"
           value={newPassword}
           onChange={(event) => setNewPassword(event.target.value)}
         />
+        <label htmlFor="confirm-password" className="block text-sm text-neutral-300">
+          Confirmar nova senha
+        </label>
         <TextInput
+          id="confirm-password"
           type="password"
+          autoComplete="new-password"
+          maxLength={128}
+          disabled={submitting}
           required
           minLength={8}
           placeholder="Confirmar nova senha"

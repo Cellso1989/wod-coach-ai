@@ -63,6 +63,9 @@ pnpm dev                       # roda web + api em paralelo
 
 ## Scripts
 
+Para recuperar acesso por e-mail ou gerar links pelo painel Admin, veja
+[Recuperação de senha](docs/password-recovery.md).
+
 | Script             | Descrição                               |
 | ------------------ | --------------------------------------- |
 | `pnpm dev`         | Roda todos os apps em modo dev          |
