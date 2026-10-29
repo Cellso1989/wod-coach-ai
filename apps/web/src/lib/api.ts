@@ -379,6 +379,12 @@ export interface AdminUsersResponse {
   users: AdminUserSummary[];
 }
 
+export interface PasswordRecoveryLink {
+  email: string;
+  resetUrl: string;
+  expiresAt: string;
+}
+
 export const api = {
   register: (input: { name: string; email: string; password: string }) =>
     request<{ user: PublicUser; message: string }>('/auth/register', {
@@ -590,6 +596,11 @@ export const api = {
     }),
 
   getAdminUsers: () => request<AdminUsersResponse>('/admin/users'),
+
+  createUserPasswordReset: (id: string) =>
+    request<PasswordRecoveryLink>(`/admin/users/${encodeURIComponent(id)}/password-reset`, {
+      method: 'POST',
+    }),
 
   getNotifications: (signal?: AbortSignal) =>
     request<NotificationFeed>('/notifications', { signal }),

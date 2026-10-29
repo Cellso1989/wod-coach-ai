@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '@wod-coach-ai/database';
+import { createPasswordReset, passwordResetBaseUrl } from '../services/password-reset.js';
 
 import { z } from 'zod';
 async function requireAdmin(request: FastifyRequest, reply: FastifyReply) {
@@ -16,6 +17,44 @@ async function requireAdmin(request: FastifyRequest, reply: FastifyReply) {
 export default async function adminRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
   app.addHook('preHandler', requireAdmin);
+
+  app.post(
+    '/admin/users/:id/password-reset',
+    { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } },
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      const params = z.object({ id: z.string().uuid() }).safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ error: 'Usuário inválido' });
+      const target = await prisma.user.findUnique({ where: { id: params.data.id } });
+      if (!target) return reply.code(404).send({ error: 'Usuário não encontrado' });
+      if (target.isAdmin) {
+        return reply
+          .code(403)
+          .send({ error: 'Use a recuperação por e-mail para contas administrativas.' });
+      }
+      const baseUrl = passwordResetBaseUrl();
+      if (!baseUrl) {
+        return reply
+          .code(503)
+          .send({ error: 'O endereço do aplicativo para recuperação não está configurado.' });
+      }
+      const reset = await createPasswordReset(target.id, baseUrl);
+      request.log.info(
+        {
+          event: 'password_reset.admin_link_created',
+          actorId: request.user.sub,
+          targetId: target.id,
+          resetId: reset.id,
+        },
+        'Administrator generated a password recovery link',
+      );
+      return reply.send({
+        email: target.email,
+        resetUrl: reset.resetUrl,
+        expiresAt: reset.expiresAt,
+      });
+    },
+  );
 
   app.patch('/admin/users/:id/access', async (request, reply) => {
     const params = z.object({ id: z.string().uuid() }).safeParse(request.params);

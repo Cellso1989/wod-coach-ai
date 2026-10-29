@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@wod-coach-ai/database';
 import {
@@ -11,9 +10,18 @@ import {
 } from '@wod-coach-ai/validation';
 import { AUTH_COOKIE_NAME } from '../plugins/auth.js';
 import { accessDenied, publicUser } from '../services/user-access.js';
+import {
+  PASSWORD_RESET_UNAVAILABLE,
+  consumePasswordReset,
+  createPasswordReset,
+  hashResetToken,
+  InvalidPasswordResetError,
+  passwordResetBaseUrl,
+  passwordResetEmailConfiguration,
+  sendPasswordResetEmail,
+} from '../services/password-reset.js';
 
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
-const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 // Login/registro são o alvo mais óbvio de força bruta — limite bem mais
 // apertado que o resto da API (que já tem um limite global mais generoso).
@@ -28,45 +36,6 @@ const PASSWORD_RESET_RATE_LIMIT = {
   max: Number(process.env.PASSWORD_RESET_RATE_LIMIT_MAX ?? 10),
   timeWindow: '15 minutes',
 };
-
-function hashResetToken(token: string) {
-  return createHash('sha256').update(token).digest('hex');
-}
-
-function buildResetUrl(token: string, fallbackBaseUrl?: string) {
-  const configuredBaseUrl = process.env.PASSWORD_RESET_BASE_URL ?? process.env.PUBLIC_APP_URL;
-  const fallback =
-    process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test'
-      ? undefined
-      : fallbackBaseUrl;
-  const baseFromEnvOrDev = configuredBaseUrl ?? fallback;
-  const baseUrl = baseFromEnvOrDev?.replace(/\/$/, '');
-  if (!baseUrl) return null;
-  return `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
-}
-
-async function sendPasswordResetEmail(to: string, resetUrl: string) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.PASSWORD_RESET_FROM;
-  if (!apiKey || !from) return false;
-
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to,
-      subject: 'Redefinir senha do WOD Coach AI',
-      text: `Use este link para redefinir sua senha: ${resetUrl}\n\nEste link expira em 1 hora.`,
-      html: `<p>Use este link para redefinir sua senha:</p><p><a href="${resetUrl}">Redefinir senha</a></p><p>Este link expira em 1 hora.</p>`,
-    }),
-  });
-
-  return response.ok;
-}
 
 export default async function authRoutes(app: FastifyInstance) {
   app.post(
@@ -138,41 +107,62 @@ export default async function authRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const parsed = forgotPasswordSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.code(400).send({ error: 'Dados invÃ¡lidos', details: parsed.error.flatten() });
+        return reply.code(400).send({ error: 'Dados inválidos', details: parsed.error.flatten() });
       }
 
-      const { email } = parsed.data;
-      const user = await prisma.user.findUnique({ where: { email } });
-      let devResetUrl: string | undefined;
-
-      if (user) {
-        const token = randomBytes(32).toString('base64url');
-        const origin =
-          typeof request.headers.origin === 'string' ? request.headers.origin : undefined;
-        const resetUrl = buildResetUrl(token, origin);
-
-        await prisma.passwordResetToken.create({
-          data: {
-            userId: user.id,
-            tokenHash: hashResetToken(token),
-            expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
+      reply.header('Cache-Control', 'no-store');
+      const baseUrl = passwordResetBaseUrl();
+      const emailConfiguration = passwordResetEmailConfiguration();
+      const localPreview = process.env.NODE_ENV === 'development' && !emailConfiguration;
+      // Check global configuration before looking up a user: the 503 must not reveal accounts.
+      if (!baseUrl || (!emailConfiguration && !localPreview)) {
+        request.log.error(
+          {
+            event: 'password_reset.unavailable',
+            baseUrlConfigured: Boolean(baseUrl),
+            emailConfigured: Boolean(emailConfiguration),
           },
-        });
+          'Password reset configuration is missing or invalid',
+        );
+        return reply.code(503).send({ error: PASSWORD_RESET_UNAVAILABLE });
+      }
 
-        if (resetUrl) {
-          const sent = await sendPasswordResetEmail(user.email, resetUrl);
-          if (!sent && process.env.NODE_ENV !== 'production') {
-            devResetUrl = resetUrl;
-          }
-          if (!sent && process.env.NODE_ENV === 'production') {
-            app.log.warn(
-              'Password reset email was not sent because email env is missing or failed',
-            );
-          }
+      const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+      if (user) {
+        const reset = await createPasswordReset(user.id, baseUrl);
+        if (localPreview) return reply.send({ ok: true, devResetUrl: reset.resetUrl });
+        const delivery = await sendPasswordResetEmail(
+          emailConfiguration!,
+          user.email,
+          reset.resetUrl,
+        );
+        if (delivery.ok) {
+          request.log.info(
+            {
+              event: 'password_reset.email_accepted',
+              resetId: reset.id,
+              messageId: delivery.messageId,
+            },
+            'Password reset email accepted by provider',
+          );
+        } else {
+          await prisma.passwordResetToken.updateMany({
+            where: { id: reset.id, usedAt: null },
+            data: { usedAt: new Date() },
+          });
+          request.log.error(
+            {
+              event: 'password_reset.email_failed',
+              resetId: reset.id,
+              reason: delivery.reason,
+              status: delivery.status,
+            },
+            'Password reset email failed; check the email provider',
+          );
         }
       }
-
-      return reply.send({ ok: true, devResetUrl });
+      // Keep the same response for unknown accounts and provider failures.
+      return reply.send({ ok: true });
     },
   );
 
@@ -182,7 +172,7 @@ export default async function authRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const parsed = resetPasswordSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.code(400).send({ error: 'Dados invÃ¡lidos', details: parsed.error.flatten() });
+        return reply.code(400).send({ error: 'Dados inválidos', details: parsed.error.flatten() });
       }
 
       const { token, newPassword } = parsed.data;
@@ -196,21 +186,19 @@ export default async function authRoutes(app: FastifyInstance) {
       });
 
       if (!resetToken) {
-        return reply.code(400).send({ error: 'Link invÃ¡lido ou expirado' });
+        return reply.code(400).send({ error: 'Link inválido ou expirado' });
       }
 
       const passwordHash = await bcrypt.hash(newPassword, 12);
-      await prisma.$transaction([
-        prisma.user.update({
-          where: { id: resetToken.userId },
-          data: { passwordHash },
-        }),
-        prisma.passwordResetToken.update({
-          where: { id: resetToken.id },
-          data: { usedAt: new Date() },
-        }),
-      ]);
-
+      try {
+        await consumePasswordReset(resetToken, passwordHash);
+      } catch (error) {
+        if (error instanceof InvalidPasswordResetError) {
+          return reply.code(400).send({ error: 'Link inválido ou expirado' });
+        }
+        throw error;
+      }
+      reply.header('Cache-Control', 'no-store');
       return reply.send({ ok: true });
     },
   );

@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, ApiError, type AdminUsersResponse } from '../lib/api.js';
+import { api, ApiError, type AdminUsersResponse, type PasswordRecoveryLink } from '../lib/api.js';
 import { PageHeader } from '../components/PageHeader.js';
-import { Alert, Button, Card, LoadingState } from '../components/ui.js';
+import { Alert, Button, Card, LoadingState, TextInput } from '../components/ui.js';
 import { NavBar } from '../components/NavBar.js';
 
 const STATUS_LABEL = {
@@ -28,6 +28,39 @@ export function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [recovery, setRecovery] = useState<PasswordRecoveryLink | null>(null);
+  const [copyMessage, setCopyMessage] = useState('');
+  const recoverySection = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (recovery) recoverySection.current?.focus();
+  }, [recovery]);
+
+  async function createRecoveryLink(id: string) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    setRecovery(null);
+    setCopyMessage('');
+    try {
+      setRecovery(await api.createUserPasswordReset(id));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Não foi possível gerar o link.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyRecoveryLink() {
+    if (!recovery) return;
+    try {
+      await navigator.clipboard.writeText(recovery.resetUrl);
+      setCopyMessage('Link copiado.');
+    } catch {
+      setCopyMessage('Selecione o endereço abaixo e copie o link manualmente.');
+    }
+  }
 
   async function changeAccess(id: string, status: 'APPROVED' | 'BLOCKED') {
     if (busy) return;
@@ -92,6 +125,42 @@ export function AdminPage() {
           </p>
         )}
 
+        {recovery && (
+          <section
+            ref={recoverySection}
+            tabIndex={-1}
+            aria-labelledby="recovery-link-title"
+            className="rounded-lg border border-orange-900/60 bg-neutral-900 p-4 space-y-3"
+          >
+            <h2 id="recovery-link-title" className="font-semibold">
+              Link de recuperação
+            </h2>
+            <p className="text-sm text-neutral-300 break-words">
+              Encaminhe para {recovery.email} para que o atleta crie uma nova senha.
+            </p>
+            <p className="text-sm text-neutral-400">
+              Uso único. Válido até {formatDate(recovery.expiresAt)}. Nenhum e-mail foi enviado.
+            </p>
+            <TextInput
+              aria-label="Link de recuperação"
+              readOnly
+              value={recovery.resetUrl}
+              onFocus={(event) => event.currentTarget.select()}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => void copyRecoveryLink()}>Copiar link</Button>
+              <Button variant="secondary" onClick={() => setRecovery(null)}>
+                Fechar
+              </Button>
+            </div>
+            {copyMessage && (
+              <p role="status" className="text-sm text-neutral-300">
+                {copyMessage}
+              </p>
+            )}
+          </section>
+        )}
+
         {data && (
           <>
             <Card className="space-y-1" aria-label="Quantidade de usuários">
@@ -150,6 +219,14 @@ export function AdminPage() {
                                 onClick={() => void changeAccess(user.id, 'BLOCKED')}
                               >
                                 Bloquear acesso
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                disabled={busy}
+                                aria-label={`Gerar link de recuperação para ${user.email}`}
+                                onClick={() => void createRecoveryLink(user.id)}
+                              >
+                                Recuperar senha
                               </Button>
                             </div>
                           )}
