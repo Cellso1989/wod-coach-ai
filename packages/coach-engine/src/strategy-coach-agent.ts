@@ -286,6 +286,8 @@ function buildUserContent(input: StrategyCoachInput): string {
 
 export interface GenerateStrategyOptions {
   maxAttempts?: number;
+  /** For offline comparisons; production keeps the validated medium default. */
+  effort?: 'low' | 'medium';
 }
 
 /**
@@ -315,7 +317,7 @@ export async function generateStrategy(
       model: 'gpt-5-mini',
       // Responses budgets include reasoning as well as the final strategy JSON.
       maxTokens: 8000,
-      effort: 'medium',
+      effort: options.effort ?? 'medium',
     });
     // Clamp defensivo: recommendedIntensity deve SEMPRE ser 9 ou 10, e targetRpe
     // deve SEMPRE ser 10, mesmo que a IA não siga a instrução do prompt à risca

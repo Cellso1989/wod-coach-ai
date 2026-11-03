@@ -3,6 +3,7 @@ import type { AiTextMessage, AiTokenUsage, SendMessageParams } from '@wod-coach-
 
 interface AiGenerationAttempt {
   attempt: number;
+  durationMs: number;
   requestedModel: string;
   model: string | null;
   responseId: string | null;
@@ -23,13 +24,23 @@ export interface AiGenerationMetadata {
 export function captureAiGeneration(
   sendMessage: (params: SendMessageParams) => Promise<AiTextMessage>,
   agent: AiGenerationMetadata['agent'],
+  onAttempt?: (attempt: { durationMs: number; status: 'received' | 'failed' }) => void,
 ) {
   const attempts: AiGenerationAttempt[] = [];
   return {
     async sendMessage(params: SendMessageParams): Promise<AiTextMessage> {
-      const message = await sendMessage(params);
+      const started = performance.now();
+      let message: AiTextMessage;
+      try {
+        message = await sendMessage(params);
+      } catch (error) {
+        onAttempt?.({ durationMs: performance.now() - started, status: 'failed' });
+        throw error;
+      }
+      const durationMs = performance.now() - started;
       attempts.push({
         attempt: attempts.length + 1,
+        durationMs,
         requestedModel: params.model,
         model: message.metadata?.model ?? null,
         responseId: message.metadata?.responseId ?? null,
@@ -39,6 +50,7 @@ export function captureAiGeneration(
         maxOutputTokens: params.maxTokens,
         usage: message.metadata?.usage ? { ...message.metadata.usage } : null,
       });
+      onAttempt?.({ durationMs, status: 'received' });
       return message;
     },
     metadata(): AiGenerationMetadata {

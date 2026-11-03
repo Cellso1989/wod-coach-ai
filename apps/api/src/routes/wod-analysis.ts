@@ -21,225 +21,249 @@ import {
 } from '../services/wod-version-service.js';
 import { captureAiGeneration } from '../services/ai-generation-metadata.js';
 import { runWodGeneration } from '../services/wod-generation-lease.js';
+import { observeWodGeneration } from '../services/wod-generation-timing.js';
 
 export default async function wodAnalysisRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
 
   app.post('/wods/:id/analyze', async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const timing = observeWodGeneration(request, reply, 'ANALYSIS');
+    return timing.run(async () => {
+      const { id } = request.params as { id: string };
 
-    const wod = await prisma.wod.findFirst({
-      where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
-    });
-    if (!wod) {
-      return reply.code(404).send({ error: 'WOD não encontrado' });
-    }
+      const wod = await timing.measure('sourceRead', () =>
+        prisma.wod.findFirst({
+          where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
+        }),
+      );
+      if (!wod) {
+        return reply.code(404).send({ error: 'WOD não encontrado' });
+      }
 
-    return runWodGeneration(
-      {
-        wodId: wod.id,
-        userId: request.user.sub,
-        operation: 'ANALYSIS',
-        onCleanupError: (err) => request.log.error({ err }, 'WOD generation lease cleanup failed'),
-      },
-      async (lease) => {
-        const previousAnalysis = await prisma.wodAnalysis.findUnique({ where: { wodId: wod.id } });
-        const previousVersionId = previousAnalysis?.versionId ?? null;
-        const override = z
-          .object({
-            durationOverrideMinutes: z.number().int().min(0).max(180).nullable().optional(),
-          })
-          .safeParse(previousAnalysis?.rawResponse);
-        let durationOverrideMinutes = override.success
-          ? override.data.durationOverrideMinutes
-          : undefined;
-        if (durationOverrideMinutes === undefined && previousVersionId) {
-          const version = await prisma.wodAnalysisVersion.findFirst({
-            where: { id: previousVersionId, wodId: wod.id },
-            select: { reason: true },
-          });
-          if (version?.reason === 'DURATION_EDIT')
-            durationOverrideMinutes = previousAnalysis!.durationMinutes;
-        }
-        const savedLoads = z
-          .object({ loadOverrides: z.array(wodLoadOverrideSchema).max(30) })
-          .safeParse(previousAnalysis?.rawResponse);
-        const loadOverrides = savedLoads.success ? savedLoads.data.loadOverrides : [];
-        let sendMessage;
-        try {
-          sendMessage = createOpenAiMessageSender();
-        } catch {
-          reply.code(503);
-          return { error: 'A análise por IA ainda não foi configurada' };
-        }
+      timing.setSourceType(wod.sourceType);
+      return runWodGeneration(
+        {
+          wodId: wod.id,
+          userId: request.user.sub,
+          operation: 'ANALYSIS',
+          onCleanupError: (err) =>
+            request.log.error({ err }, 'WOD generation lease cleanup failed'),
+        },
+        async (lease) => {
+          const previousAnalysis = await timing.measure('analysisRead', () =>
+            prisma.wodAnalysis.findUnique({ where: { wodId: wod.id } }),
+          );
+          const previousVersionId = previousAnalysis?.versionId ?? null;
+          const override = z
+            .object({
+              durationOverrideMinutes: z.number().int().min(0).max(180).nullable().optional(),
+            })
+            .safeParse(previousAnalysis?.rawResponse);
+          let durationOverrideMinutes = override.success
+            ? override.data.durationOverrideMinutes
+            : undefined;
+          if (durationOverrideMinutes === undefined && previousVersionId) {
+            const version = await prisma.wodAnalysisVersion.findFirst({
+              where: { id: previousVersionId, wodId: wod.id },
+              select: { reason: true },
+            });
+            if (version?.reason === 'DURATION_EDIT')
+              durationOverrideMinutes = previousAnalysis!.durationMinutes;
+          }
+          const savedLoads = z
+            .object({ loadOverrides: z.array(wodLoadOverrideSchema).max(30) })
+            .safeParse(previousAnalysis?.rawResponse);
+          const loadOverrides = savedLoads.success ? savedLoads.data.loadOverrides : [];
+          let sendMessage;
+          try {
+            sendMessage = createOpenAiMessageSender();
+          } catch {
+            reply.code(503);
+            return { error: 'A análise por IA ainda não foi configurada' };
+          }
 
-        const generation = captureAiGeneration(async (params) => {
-          await lease.assertOwned();
-          return sendMessage(params);
-        }, 'WodAnalyzerAgent');
-        let output;
-        try {
-          output = await analyzeWod(
-            {
-              rawText: wod.rawText,
-              imageBase64: wod.imageData,
-              imageMimeType: wod.imageMimeType,
-              durationOverrideMinutes,
+          const generation = captureAiGeneration(
+            async (params) => {
+              await lease.assertOwned();
+              return sendMessage(params);
             },
-            generation.sendMessage,
+            'WodAnalyzerAgent',
+            timing.recordAttempt,
           );
-          const loaded = applyLoadOverrides(
-            output.movements,
-            output.rounds,
-            loadOverrides,
-            output.warnings,
-          );
-          output = {
-            ...output,
-            movements: loaded.movements,
-            rounds: loaded.rounds,
-            warnings: loaded.warnings,
-          };
-        } catch (err) {
-          if (err instanceof WodAnalysisError) {
-            request.log.warn(
-              { err: err.message, rawResponse: err.rawResponse },
-              'WOD analysis failed',
+          let output;
+          try {
+            output = await timing.measure('ai', () =>
+              analyzeWod(
+                {
+                  rawText: wod.rawText,
+                  imageBase64: wod.imageData,
+                  imageMimeType: wod.imageMimeType,
+                  durationOverrideMinutes,
+                },
+                generation.sendMessage,
+              ),
             );
-            reply.code(502);
+            const loaded = applyLoadOverrides(
+              output.movements,
+              output.rounds,
+              loadOverrides,
+              output.warnings,
+            );
+            output = {
+              ...output,
+              movements: loaded.movements,
+              rounds: loaded.rounds,
+              warnings: loaded.warnings,
+            };
+          } catch (err) {
+            if (err instanceof WodAnalysisError) {
+              request.log.warn(
+                { err: err.message, rawResponse: err.rawResponse },
+                'WOD analysis failed',
+              );
+              reply.code(502);
+              return {
+                error:
+                  'Nao foi possivel confirmar os movimentos ou a estrutura deste WOD. Confira a nitidez da foto ou corrija o texto e tente novamente. Tempo, Target e carga sao opcionais; nenhuma analise anterior foi substituida.',
+                code: 'WOD_ANALYSIS_INVALID_RESPONSE',
+              };
+            }
+            const apiError = describeOpenAiApiError(err);
+            if (apiError) {
+              request.log.error({ err }, 'OpenAI API error during WOD analysis');
+              reply.code(apiError.status);
+              return { error: apiError.message };
+            }
+            throw err;
+          }
+
+          const persisted = await timing.measure('persistence', () =>
+            prisma.$transaction(async (tx) => {
+              await lockWodVersions(tx, wod.id);
+              await lease.assertOwned(tx);
+              const currentWod = await tx.wod.findFirst({
+                where: { id: wod.id, userId: request.user.sub, discipline: 'CROSSFIT' },
+              });
+              const currentAnalysis = await tx.wodAnalysis.findUnique({
+                where: { wodId: wod.id },
+                select: { versionId: true },
+              });
+              if (
+                !currentWod ||
+                currentWod.rawText !== wod.rawText ||
+                currentWod.imageData !== wod.imageData ||
+                currentWod.imageMimeType !== wod.imageMimeType ||
+                (currentAnalysis?.versionId ?? null) !== previousVersionId
+              ) {
+                return null;
+              }
+              let analysis = await tx.wodAnalysis.upsert({
+                where: { wodId: wod.id },
+                create: {
+                  wodId: wod.id,
+                  format: output.format,
+                  durationMinutes: output.durationMinutes,
+                  stimulus: output.stimulus,
+                  estimatedIntensity: output.estimatedIntensity,
+                  engineDemand: output.estimatedDemand.engine,
+                  gripDemand: output.estimatedDemand.grip,
+                  legDemand: output.estimatedDemand.legs,
+                  gymnasticsDemand: output.estimatedDemand.gymnastics,
+                  technicalDemand: output.estimatedDemand.technical,
+                  confidence: output.confidence,
+                  warnings: output.warnings,
+                  roundBreakdown: output.rounds ?? Prisma.JsonNull,
+                  rawResponse: {
+                    ...output,
+                    ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
+                    ...(loadOverrides.length ? { loadOverrides } : {}),
+                  },
+                  movements: {
+                    create: output.movements.map((movement, index) => ({
+                      order: index,
+                      name: movement.name,
+                      category: movement.category,
+                      reps: movement.reps ?? undefined,
+                      distanceMeters: movement.distanceMeters ?? undefined,
+                      loadDescription: movement.loadDescription ?? undefined,
+                      calories: movement.calories ?? undefined,
+                    })),
+                  },
+                },
+                update: {
+                  format: output.format,
+                  durationMinutes: output.durationMinutes,
+                  stimulus: output.stimulus,
+                  estimatedIntensity: output.estimatedIntensity,
+                  engineDemand: output.estimatedDemand.engine,
+                  gripDemand: output.estimatedDemand.grip,
+                  legDemand: output.estimatedDemand.legs,
+                  gymnasticsDemand: output.estimatedDemand.gymnastics,
+                  technicalDemand: output.estimatedDemand.technical,
+                  confidence: output.confidence,
+                  warnings: output.warnings,
+                  roundBreakdown: output.rounds ?? Prisma.JsonNull,
+                  rawResponse: {
+                    ...output,
+                    ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
+                    ...(loadOverrides.length ? { loadOverrides } : {}),
+                  },
+                  movements: {
+                    deleteMany: {},
+                    create: output.movements.map((movement, index) => ({
+                      order: index,
+                      name: movement.name,
+                      category: movement.category,
+                      reps: movement.reps ?? undefined,
+                      distanceMeters: movement.distanceMeters ?? undefined,
+                      loadDescription: movement.loadDescription ?? undefined,
+                      calories: movement.calories ?? undefined,
+                    })),
+                  },
+                },
+                include: { movements: { orderBy: { order: 'asc' } } },
+              });
+
+              analysis = await recordAnalysisVersion(
+                tx,
+                wod,
+                analysis,
+                'AI',
+                generation.metadata(),
+              );
+
+              // A strategy based on the previous analysis must not survive its replacement.
+              await tx.wodStrategy.deleteMany({ where: { wodId: wod.id } });
+
+              const extractedText = output.extractedText?.trim();
+              const updatedWod =
+                extractedText && !wod.rawText?.trim()
+                  ? await tx.wod.update({
+                      where: { id: wod.id },
+                      data: {
+                        rawText: extractedText,
+                        sourceType: wod.imageData ? 'TEXT_AND_IMAGE' : 'TEXT',
+                      },
+                      include: { result: true },
+                    })
+                  : null;
+
+              return { analysis, wod: updatedWod };
+            }, WOD_VERSION_TRANSACTION_OPTIONS),
+          );
+
+          if (!persisted) {
+            reply.code(409);
             return {
               error:
-                'Nao foi possivel confirmar os movimentos ou a estrutura deste WOD. Confira a nitidez da foto ou corrija o texto e tente novamente. Tempo, Target e carga sao opcionais; nenhuma analise anterior foi substituida.',
-              code: 'WOD_ANALYSIS_INVALID_RESPONSE',
+                'O WOD ou a analise mudou durante a analise. Atualize o treino e analise novamente.',
             };
           }
-          const apiError = describeOpenAiApiError(err);
-          if (apiError) {
-            request.log.error({ err }, 'OpenAI API error during WOD analysis');
-            reply.code(apiError.status);
-            return { error: apiError.message };
-          }
-          throw err;
-        }
-
-        const persisted = await prisma.$transaction(async (tx) => {
-          await lockWodVersions(tx, wod.id);
-          await lease.assertOwned(tx);
-          const currentWod = await tx.wod.findFirst({
-            where: { id: wod.id, userId: request.user.sub, discipline: 'CROSSFIT' },
-          });
-          const currentAnalysis = await tx.wodAnalysis.findUnique({
-            where: { wodId: wod.id },
-            select: { versionId: true },
-          });
-          if (
-            !currentWod ||
-            currentWod.rawText !== wod.rawText ||
-            currentWod.imageData !== wod.imageData ||
-            currentWod.imageMimeType !== wod.imageMimeType ||
-            (currentAnalysis?.versionId ?? null) !== previousVersionId
-          ) {
-            return null;
-          }
-          let analysis = await tx.wodAnalysis.upsert({
-            where: { wodId: wod.id },
-            create: {
-              wodId: wod.id,
-              format: output.format,
-              durationMinutes: output.durationMinutes,
-              stimulus: output.stimulus,
-              estimatedIntensity: output.estimatedIntensity,
-              engineDemand: output.estimatedDemand.engine,
-              gripDemand: output.estimatedDemand.grip,
-              legDemand: output.estimatedDemand.legs,
-              gymnasticsDemand: output.estimatedDemand.gymnastics,
-              technicalDemand: output.estimatedDemand.technical,
-              confidence: output.confidence,
-              warnings: output.warnings,
-              roundBreakdown: output.rounds ?? Prisma.JsonNull,
-              rawResponse: {
-                ...output,
-                ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
-                ...(loadOverrides.length ? { loadOverrides } : {}),
-              },
-              movements: {
-                create: output.movements.map((movement, index) => ({
-                  order: index,
-                  name: movement.name,
-                  category: movement.category,
-                  reps: movement.reps ?? undefined,
-                  distanceMeters: movement.distanceMeters ?? undefined,
-                  loadDescription: movement.loadDescription ?? undefined,
-                  calories: movement.calories ?? undefined,
-                })),
-              },
-            },
-            update: {
-              format: output.format,
-              durationMinutes: output.durationMinutes,
-              stimulus: output.stimulus,
-              estimatedIntensity: output.estimatedIntensity,
-              engineDemand: output.estimatedDemand.engine,
-              gripDemand: output.estimatedDemand.grip,
-              legDemand: output.estimatedDemand.legs,
-              gymnasticsDemand: output.estimatedDemand.gymnastics,
-              technicalDemand: output.estimatedDemand.technical,
-              confidence: output.confidence,
-              warnings: output.warnings,
-              roundBreakdown: output.rounds ?? Prisma.JsonNull,
-              rawResponse: {
-                ...output,
-                ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
-                ...(loadOverrides.length ? { loadOverrides } : {}),
-              },
-              movements: {
-                deleteMany: {},
-                create: output.movements.map((movement, index) => ({
-                  order: index,
-                  name: movement.name,
-                  category: movement.category,
-                  reps: movement.reps ?? undefined,
-                  distanceMeters: movement.distanceMeters ?? undefined,
-                  loadDescription: movement.loadDescription ?? undefined,
-                  calories: movement.calories ?? undefined,
-                })),
-              },
-            },
-            include: { movements: { orderBy: { order: 'asc' } } },
-          });
-
-          analysis = await recordAnalysisVersion(tx, wod, analysis, 'AI', generation.metadata());
-
-          // A strategy based on the previous analysis must not survive its replacement.
-          await tx.wodStrategy.deleteMany({ where: { wodId: wod.id } });
-
-          const extractedText = output.extractedText?.trim();
-          const updatedWod =
-            extractedText && !wod.rawText?.trim()
-              ? await tx.wod.update({
-                  where: { id: wod.id },
-                  data: {
-                    rawText: extractedText,
-                    sourceType: wod.imageData ? 'TEXT_AND_IMAGE' : 'TEXT',
-                  },
-                  include: { result: true },
-                })
-              : null;
-
+          const { analysis, wod: updatedWod } = persisted;
           return { analysis, wod: updatedWod };
-        }, WOD_VERSION_TRANSACTION_OPTIONS);
-
-        if (!persisted) {
-          reply.code(409);
-          return {
-            error:
-              'O WOD ou a analise mudou durante a analise. Atualize o treino e analise novamente.',
-          };
-        }
-        const { analysis, wod: updatedWod } = persisted;
-        return { analysis, wod: updatedWod };
-      },
-    );
+        },
+      );
+    });
   });
 
   app.patch('/wods/:id/analysis', async (request, reply) => {
@@ -444,6 +468,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
 
     const wod = await prisma.wod.findFirst({
       where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
+      select: { id: true },
     });
     if (!wod) {
       return reply.code(404).send({ error: 'WOD não encontrado' });

@@ -6,6 +6,7 @@ import {
   WOD_IMAGE_ALLOWED_MIME_TYPES,
 } from '@wod-coach-ai/validation';
 import { lockWodVersions } from '../services/wod-version-service.js';
+import { optimizeWodImage } from '../services/wod-image.js';
 
 interface ParsedSubmission {
   fields: Record<string, string>;
@@ -80,6 +81,23 @@ export default async function wodRoutes(app: FastifyInstance) {
 
     const sourceType = rawText && hasImage ? 'TEXT_AND_IMAGE' : hasImage ? 'IMAGE' : 'TEXT';
 
+    const image =
+      parsed.imageBuffer && parsed.imageMimeType
+        ? await optimizeWodImage(parsed.imageBuffer, parsed.imageMimeType)
+        : null;
+    if (image) {
+      request.log.info(
+        {
+          event: 'wod_image_optimization',
+          originalBytes: image.originalBytes,
+          storedBytes: image.storedBytes,
+          durationMs: image.durationMs,
+          optimized: image.optimized,
+        },
+        'WOD image optimization',
+      );
+    }
+
     const wod = await prisma.wod.create({
       data: {
         userId: request.user.sub,
@@ -87,8 +105,8 @@ export default async function wodRoutes(app: FastifyInstance) {
         sourceType,
         discipline: 'CROSSFIT',
         rawText,
-        imageData: parsed.imageBuffer?.toString('base64'),
-        imageMimeType: parsed.imageMimeType ?? undefined,
+        imageData: image?.buffer.toString('base64'),
+        imageMimeType: image?.mimeType,
         name,
         notes,
       },
