@@ -176,6 +176,39 @@ test('daily ranking recovers after an API failure', async ({ page }) => {
   ).toHaveCount(5);
 });
 
+for (const width of [390, 1280]) {
+  test(`all athletes score without another result of the same type at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const now = new Date('2026-11-03T18:00:00Z');
+    await page.clock.setFixedTime(now);
+    const users = rankingUsers.slice(0, 3);
+    const records = ['11:36', '8 rounds + 12 reps', '150 reps'].map((score, index) =>
+      rankingResult(users[index]!.id, score, { createdAt: new Date('2026-11-03T15:00:00Z') }),
+    );
+    await page.route('**/api/**', (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path.endsWith('/auth/me')) return route.fulfill({ json: { user: users[1] } });
+      if (path === '/api/ranking/monthly')
+        return route.fulfill({ json: buildTestRanking(users, records, 'b', now) });
+      return route.fulfill({ status: 404, json: {} });
+    });
+    await page.goto('/ranking');
+    const rows = page.getByRole('list', { name: 'Classificação mensal' });
+    await expect(rows.getByRole('listitem')).toHaveCount(3);
+    for (const user of users) {
+      const row = rows.getByRole('listitem').filter({ hasText: user.name });
+      await row.locator('summary').click();
+      await expect(row.getByText('100 pts', { exact: true })).toBeVisible();
+      await expect(row).toContainText('1º no dia');
+    }
+    await expect(rows.getByText('Não pontuou', { exact: true })).toHaveCount(0);
+    await page.getByText('Como o ranking é calculado', { exact: true }).click();
+    await expect(page.getByText(/você pontua mesmo sem outro atleta/i)).toBeVisible();
+  });
+}
+
 test('weekly dropdown shows previous days even without a result today', async ({ page }) => {
   await page.clock.setFixedTime(dailyNow);
   await page.route('**/api/**', (route) => {

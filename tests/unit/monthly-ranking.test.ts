@@ -14,6 +14,48 @@ const rank = (results: ReturnType<typeof rankingResult>[]) =>
   buildMonthlyRanking(rankingUsers, results, '2026-11', 'b');
 
 describe('monthly performance ranking', () => {
+  it.each(['11:36', 'CAP 10', '8 rounds + 12 reps', '150 reps'])(
+    'awards 100 daily, weekly and monthly points to a solo athlete with %s',
+    (score) => {
+      const now = new Date('2026-11-03T18:00:00Z');
+      const results = [
+        rankingResult('a', score, {
+          id: 'solo',
+          createdAt: new Date('2026-11-03T15:00:00Z'),
+        }),
+      ];
+      const users = [{ id: 'a', name: 'Athlete A' }];
+      const daily = buildDailyRanking(users, results, 'a', now);
+      const monthly = buildMonthlyRanking(users, results, '2026-11', 'a', now);
+      for (const data of [daily, monthly]) {
+        expect(data.summary).toMatchObject({
+          rankedAthletes: 1,
+          recordedResults: 1,
+          uncomparedResults: 0,
+        });
+        expect(data.athletes[0]).toMatchObject({
+          position: 1,
+          points: 100,
+          comparedWorkouts: 1,
+          todayPerformances: [{ resultId: 'solo', score, points: 100, position: 1, athletes: 1 }],
+        });
+      }
+      expect(monthly.athletes[0]!.weekResults).toMatchObject([
+        { id: 'solo', score, points: 100, position: 1 },
+      ]);
+    },
+  );
+
+  it('recalculates a solo win when another athlete records a better result', () => {
+    const results = [rankingResult('a', '06:00')];
+    expect(rank(results).athletes.find((a) => a.userId === 'a')!.points).toBe(100);
+    results.push(rankingResult('b', '05:00'));
+    expect(rank(results).athletes.slice(0, 2)).toMatchObject([
+      { userId: 'b', points: 100 },
+      { userId: 'a', points: 75 },
+    ]);
+  });
+
   it('starts scoring at Sao Paulo midnight on October 26 and keeps earlier records intact', () => {
     const records = [
       rankingResult('a', '01:00', { id: 'old-a', createdAt: new Date('2026-10-26T02:59:59Z') }),
@@ -71,7 +113,7 @@ describe('monthly performance ranking', () => {
     const week = data.athletes.find((a) => a.userId === 'a')!.weekResults;
     expect(week.map((r) => [r.id, r.points])).toEqual([
       ['invalid', null],
-      ['alone', null],
+      ['alone', 100],
       ['repeat', null],
       ['best', 100],
     ]);
@@ -200,12 +242,15 @@ describe('monthly performance ranking', () => {
       rankingResult('c', '2 rounds + 5 reps'),
       rankingResult('d', '05:00'),
     ]);
-    expect(data.summary.comparableWorkouts).toBe(1);
-    expect(data.athletes.slice(0, 2)).toMatchObject([
-      { userId: 'b', points: 100 },
-      { userId: 'a', points: 75 },
-    ]);
-    expect(data.athletes.slice(2).every((a) => a.points == null)).toBe(true);
+    expect(data.summary.comparableWorkouts).toBe(3);
+    for (const [userId, points] of [
+      ['a', 75],
+      ['b', 100],
+      ['c', 100],
+      ['d', 100],
+    ] as const)
+      expect(data.athletes.find((a) => a.userId === userId)).toMatchObject({ points });
+    expect(data.athletes.find((a) => a.userId === 'e')!.points).toBeNull();
   });
 
   it('uses only the latest valid score type per athlete and its best attempt', () => {
@@ -223,8 +268,8 @@ describe('monthly performance ranking', () => {
       comparedWorkouts: 1,
       performances: [{ score: '8 rounds' }],
     });
-    expect(data.athletes.find((a) => a.userId === 'b')!.points).toBeNull();
-    expect(data.summary).toMatchObject({ recordedResults: 6, uncomparedResults: 4 });
+    expect(data.athletes.find((a) => a.userId === 'b')!.points).toBe(100);
+    expect(data.summary).toMatchObject({ recordedResults: 6, uncomparedResults: 3 });
     expect(rank([...records].reverse())).toEqual(data);
   });
 
@@ -240,9 +285,9 @@ describe('monthly performance ranking', () => {
     '8 rounds + 1000001 reps',
     '601 min',
   ])('keeps an unrecognized or out-of-range score %s out of the ranking', (score) => {
-    expect(
-      rank([rankingResult('a', '05:00'), rankingResult('b', score)]).summary.rankedAthletes,
-    ).toBe(0);
+    const data = rank([rankingResult('a', '05:00'), rankingResult('b', score)]);
+    expect(data.summary.rankedAthletes).toBe(1);
+    expect(data.athletes.find((a) => a.userId === 'b')!.points).toBeNull();
   });
 
   it('normalizes result notation and awards tied times the same points', () => {
@@ -259,6 +304,7 @@ describe('monthly performance ranking', () => {
   });
 
   it.each([
+    [1, [100]],
     [2, [100, 75]],
     [3, [100, 75, 50]],
     [4, [100, 75, 50, 25]],
@@ -398,8 +444,8 @@ describe('monthly performance ranking', () => {
     expect(data.athletes.every((a) => a.points == null || a.points <= 100)).toBe(true);
     expect(buildDailyRanking(rankingUsers, [...records].reverse(), 'a', now)).toEqual(data);
     const month = buildMonthlyRanking(rankingUsers, records, '2026-11', 'a', now);
-    expect(month.athletes.slice(0, 4).map((a) => a.points)).toEqual([100, 75, 50, 25]);
-    expect(month.athletes.find((a) => a.userId === 'a')?.comparedWorkouts).toBe(1);
+    expect(month.athletes.slice(0, 4).map((a) => a.points)).toEqual([200, 75, 50, 25]);
+    expect(month.athletes.find((a) => a.userId === 'a')?.comparedWorkouts).toBe(2);
   });
 
   it('uses the best repeated attempt only for the latest valid result type of today', () => {
@@ -439,7 +485,13 @@ describe('monthly performance ranking', () => {
       'a',
       new Date('2026-11-16T15:00:00Z'),
     );
-    expect(data.athletes.find((a) => a.userId === 'a')?.performances[0]?.score).toBe('11:10');
+    expect(data.athletes.find((a) => a.userId === 'a')).toMatchObject({
+      points: 150,
+      performances: [
+        { score: '08:00', points: 100 },
+        { score: '11:10', points: 50 },
+      ],
+    });
     for (const [id, position, points] of [
       ['b', 1, 100],
       ['c', 2, 75],
@@ -453,7 +505,7 @@ describe('monthly performance ranking', () => {
     expect(data.athletes.find((a) => a.userId === 'a')?.todayPerformances[0]?.score).toBe('11:10');
   });
 
-  it('does not use yesterday participants to manufacture a daily comparison', () => {
+  it('scores solo results on separate days without comparing yesterday with today', () => {
     const previous = rankingResult('a', '05:00');
     previous.createdAt = new Date('2026-11-15T15:00:00Z');
     const data = buildMonthlyRanking(
@@ -463,8 +515,15 @@ describe('monthly performance ranking', () => {
       'b',
       new Date('2026-11-16T15:00:00Z'),
     );
-    expect(data.summary.rankedAthletes).toBe(0);
-    expect(data.athletes.every((a) => a.todayPerformances.length === 0)).toBe(true);
+    expect(data.summary.rankedAthletes).toBe(2);
+    expect(data.athletes.find((a) => a.userId === 'a')).toMatchObject({
+      points: 100,
+      todayPerformances: [],
+    });
+    expect(data.athletes.find((a) => a.userId === 'b')).toMatchObject({
+      points: 100,
+      todayPerformances: [{ points: 100, position: 1, athletes: 1 }],
+    });
   });
 
   it('uses Sao Paulo day boundaries and shows no daily details for an older selected month', () => {
@@ -599,10 +658,14 @@ describe('monthly performance ranking', () => {
     expect(athlete.points).toBe(225);
   });
 
-  it('requires two distinct athletes rather than two attempts from one athlete', () => {
-    expect(
-      rank([rankingResult('a', '05:00'), rankingResult('a', '06:00')]).summary.rankedAthletes,
-    ).toBe(0);
+  it('scores only the best attempt once when one athlete submits twice without peers', () => {
+    const data = rank([rankingResult('a', '05:00'), rankingResult('a', '06:00')]);
+    expect(data.summary).toMatchObject({ rankedAthletes: 1, uncomparedResults: 1 });
+    expect(data.athletes.find((a) => a.userId === 'a')).toMatchObject({
+      points: 100,
+      comparedWorkouts: 1,
+      performances: [{ score: '05:00', athletes: 1 }],
+    });
   });
 
   it('gives a finisher priority over every CAP and uses the remaining rep count within CAP', () => {
@@ -644,9 +707,9 @@ describe('monthly performance ranking', () => {
   it.each(['CAP', 'CAP 0', 'CAP -1', 'CAP 1.5', 'CAP 1000001', 'CAP 10 min', 'CAP 10 + 5 reps'])(
     'requires an unambiguous positive remaining rep count for %s',
     (score) => {
-      expect(
-        rank([rankingResult('a', '05:00'), rankingResult('b', score)]).summary.rankedAthletes,
-      ).toBe(0);
+      const data = rank([rankingResult('a', '05:00'), rankingResult('b', score)]);
+      expect(data.summary.rankedAthletes).toBe(1);
+      expect(data.athletes.find((a) => a.userId === 'b')!.points).toBeNull();
     },
   );
 
@@ -658,7 +721,7 @@ describe('monthly performance ranking', () => {
       rankingResult('b', '06:00'),
     ]);
     expect(data.summary.recordedResults).toBe(1);
-    expect(data.summary.rankedAthletes).toBe(0);
+    expect(data.summary.rankedAthletes).toBe(1);
   });
 
   it('recalculates after editing a result', () => {

@@ -97,6 +97,43 @@ describe('monthly ranking API', () => {
     expect(mocks.results).not.toHaveBeenCalled();
   });
 
+  it('scores every valid result type without requiring a peer on daily and monthly endpoints', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-03T18:00:00Z'));
+    try {
+      const scores = ['11:36', '8 rounds + 12 reps', '150 reps'];
+      mocks.results.mockResolvedValue(
+        scores.map((score, index) =>
+          rankingResult(rankingUsers[index]!.id, score, {
+            createdAt: new Date('2026-11-03T15:00:00Z'),
+          }),
+        ),
+      );
+      for (const url of ['/api/ranking/daily', '/api/ranking/monthly?month=2026-11']) {
+        const response = await app.inject({ url, headers });
+        expect(response.statusCode).toBe(200);
+        const data = response.json();
+        expect(data.summary).toMatchObject({
+          rankedAthletes: 3,
+          recordedResults: 3,
+          uncomparedResults: 0,
+        });
+        for (const userId of ['a', 'b', 'c']) {
+          const athlete = data.athletes.find((a: { userId: string }) => a.userId === userId);
+          expect(athlete).toMatchObject({
+            points: 100,
+            position: 1,
+            todayPerformances: [{ points: 100, position: 1, athletes: 1 }],
+          });
+          if (url.includes('/monthly'))
+            expect(athlete.weekResults).toMatchObject([{ points: 100, position: 1 }]);
+        }
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('resets totals on October 26 without deleting results from earlier days', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-26T23:00:00Z'));
@@ -335,7 +372,11 @@ describe('monthly ranking API', () => {
       expect(
         response.json().athletes.some((athlete: { userId: string }) => athlete.userId === 'b'),
       ).toBe(false);
-      expect(response.json().summary.rankedAthletes).toBe(0);
+      expect(response.json().summary.rankedAthletes).toBe(month === '2026-11' ? 1 : 0);
+      if (month === '2026-11')
+        expect(
+          response.json().athletes.find((athlete: { userId: string }) => athlete.userId === 'a'),
+        ).toMatchObject({ position: 1, points: 100 });
       expect(response.json().summary.users).toBe(4);
     }
     await app.inject({
