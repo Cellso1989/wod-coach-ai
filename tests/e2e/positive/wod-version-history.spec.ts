@@ -144,7 +144,9 @@ for (const width of [390, 1280]) {
     await page.keyboard.press('Escape');
     await expect(dialog).not.toBeVisible();
     await expect(page.getByText('Fonte ativa', { exact: true })).toBeVisible();
-    await expect(page.getByText(MOCK_STRATEGY.strategy.pacing, { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(`Descanso: ${MOCK_STRATEGY.strategy.restStrategy}`, { exact: true }),
+    ).toBeVisible();
     expect(writes).toEqual([]);
   });
 }

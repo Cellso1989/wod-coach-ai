@@ -152,6 +152,70 @@ export interface Wod {
   result?: WodResult | { score: string } | null;
 }
 
+export interface WodDetail {
+  wod: Wod;
+  analysis: WodAnalysis | null;
+  strategy: WodStrategy | null;
+  readErrors: string[];
+}
+
+async function getWodDetail(
+  id: string,
+  signal?: AbortSignal,
+  onSource?: (wod: Wod) => void,
+): Promise<WodDetail> {
+  const path = `/wods/${encodeURIComponent(id)}`;
+  const response = await request<{
+    wod: Wod;
+    detailVersion?: number;
+    analysis?: WodAnalysis | null;
+    strategy?: WodStrategy | null;
+  }>(`${path}?view=detail`, { signal });
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  onSource?.(response.wod);
+  if (response.detailVersion !== undefined) {
+    if (
+      response.detailVersion !== 1 ||
+      response.analysis === undefined ||
+      response.strategy === undefined
+    ) {
+      throw new ApiError(502, 'Dados do treino incompletos. Tente carregar novamente.');
+    }
+    return {
+      wod: response.wod,
+      analysis: response.analysis,
+      strategy: response.strategy,
+      readErrors: [],
+    };
+  }
+
+  // Compatibility while a deployment/rollback still serves the older detail contract.
+  // A failed or incomplete modern response must never be treated as "not generated".
+  const results = await Promise.allSettled([
+    request<{ analysis: WodAnalysis }>(`${path}/analysis`, { signal }),
+    request<{ strategy: WodStrategy }>(`${path}/strategy`, { signal }),
+  ]);
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  const readErrors: string[] = [];
+  results.forEach((result, index) => {
+    if (
+      result.status === 'rejected' &&
+      !(result.reason instanceof ApiError && result.reason.status === 404)
+    ) {
+      readErrors.push(
+        `Erro ao carregar ${index === 0 ? 'analise' : 'estrategia'}: ${result.reason instanceof ApiError ? result.reason.message : 'Falha de conexao.'}`,
+      );
+    }
+  });
+  const [analysis, strategy] = results;
+  return {
+    wod: response.wod,
+    analysis: analysis.status === 'fulfilled' ? analysis.value.analysis : null,
+    strategy: strategy.status === 'fulfilled' ? strategy.value.strategy : null,
+    readErrors,
+  };
+}
+
 export interface WodSubmissionInput {
   rawText?: string;
   name?: string;
@@ -450,6 +514,9 @@ export const api = {
     request<{ wods: Wod[] }>(`/wods${limit ? `?limit=${limit}` : ''}`, { signal }),
 
   getWod: (id: string, signal?: AbortSignal) => request<{ wod: Wod }>(`/wods/${id}`, { signal }),
+
+  getWodDetail,
+  wodImageUrl: (id: string) => `${API_URL}/api/wods/${encodeURIComponent(id)}/image`,
 
   updateWod: (id: string, input: { rawText?: string; name?: string; notes?: string }) =>
     request<{ wod: Wod }>(`/wods/${id}`, {

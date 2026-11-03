@@ -15,6 +15,7 @@ import { StrategySection } from '../components/StrategySection.js';
 import { WorkoutDetails } from '../components/WorkoutDetails.js';
 import { WodGenerationProgress } from '../components/WodGenerationProgress.js';
 import { WodLoadEditor } from '../components/WodLoadEditor.js';
+import { WodPhoto } from '../components/WodPhoto.js';
 import { formatWodAnalysisWarnings } from '../lib/wod-analysis-warnings.js';
 import { WodVersionHistory } from '../components/WodVersionHistory.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
@@ -128,40 +129,28 @@ function WodDetailContent({ id }: { id: string | undefined }) {
     setLoading(true);
     setError(null);
     setReadErrors([]);
-    // No mutation is offered until all active projections have a known read state.
-    void Promise.allSettled([
-      api.getWod(id, controller.signal),
-      api.getWodAnalysis(id, controller.signal),
-      api.getStrategy(id, controller.signal),
-    ]).then(([source, analysisResult, strategyResult]) => {
-      if (controller.signal.aborted) return;
-      if (source.status === 'rejected') {
+    setWod(null);
+    // The fast detail endpoint resolves all projections together. The source can
+    // already be read during an older server's compatibility requests.
+    void api
+      .getWodDetail(id, controller.signal, (source) => {
+        if (!controller.signal.aborted) setWod(source);
+      })
+      .then((detail) => {
+        if (controller.signal.aborted) return;
+        setWod(detail.wod);
+        setAnalysis(detail.analysis);
+        setStrategy(detail.strategy);
+        setReadErrors(detail.readErrors);
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
         setWod(null);
-        setError(
-          source.reason instanceof ApiError ? source.reason.message : 'Erro ao carregar WOD.',
-        );
-      } else {
-        setWod(source.value.wod);
-      }
-      setAnalysis(analysisResult.status === 'fulfilled' ? analysisResult.value.analysis : null);
-      setStrategy(strategyResult.status === 'fulfilled' ? strategyResult.value.strategy : null);
-      const failures: string[] = [];
-      for (const [label, result] of [
-        ['analise', analysisResult],
-        ['estrategia', strategyResult],
-      ] as const) {
-        if (
-          result.status === 'rejected' &&
-          !(result.reason instanceof ApiError && result.reason.status === 404)
-        ) {
-          failures.push(
-            `Erro ao carregar ${label}: ${result.reason instanceof ApiError ? result.reason.message : 'Falha de conexao.'}`,
-          );
-        }
-      }
-      setReadErrors(failures);
-      setLoading(false);
-    });
+        setError(err instanceof ApiError ? err.message : 'Erro ao carregar WOD.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
     return () => controller.abort();
   }, [id, loadAttempt]);
 
@@ -292,6 +281,11 @@ function WodDetailContent({ id }: { id: string | undefined }) {
           Carregando...
         </p>
       )}
+      {loading && wod?.rawText && (
+        <pre className="whitespace-pre-wrap rounded-lg border border-neutral-800 bg-neutral-900 p-4 font-mono text-sm">
+          {wod.rawText}
+        </pre>
+      )}
       {(error || readErrors.length > 0) && (
         <div className="space-y-2">
           <div role="alert" className="space-y-2">
@@ -324,13 +318,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
             strategyVersionId={strategy?.versionId}
           />
 
-          {wod.imageData && wod.imageMimeType && (
-            <img
-              src={`data:${wod.imageMimeType};base64,${wod.imageData}`}
-              alt="Foto do treino"
-              className="w-full rounded-lg border border-neutral-800"
-            />
-          )}
+          <WodPhoto wod={wod} />
 
           {!editing && (
             <div className="space-y-2">

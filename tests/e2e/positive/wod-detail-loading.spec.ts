@@ -38,7 +38,7 @@ async function mock(
       });
     if (resource === 'strategy')
       return route.fulfill({
-        json: { strategy: { ...MOCK_STRATEGY.strategy, pacing: `Ritmo ${id}` } },
+        json: { strategy: { ...MOCK_STRATEGY.strategy, restStrategy: `Ritmo ${id}` } },
       });
     return route.fulfill({ status: 404, json: { error: 'Not found' } });
   });
@@ -91,7 +91,7 @@ for (const { resource, status } of [
     failed = false;
     await page.getByRole('button', { name: 'Tentar carregar novamente' }).click();
     await expect(page.getByText('Estimulo a', { exact: false })).toBeVisible();
-    await expect(page.getByText('Ritmo a', { exact: true })).toBeVisible();
+    await expect(page.getByText('Descanso: Ritmo a', { exact: true })).toBeVisible();
     await expect(page.getByRole('alert')).toHaveCount(0);
     expect(writes).toEqual([]);
   });
@@ -155,7 +155,7 @@ test('late reads from a previous route do not replace the current WOD', async ({
     );
     await expect(page.getByText('Estimulo b', { exact: false })).toBeVisible();
     await expect(page.getByText('Analise antiga atrasada', { exact: false })).toHaveCount(0);
-    await expect(page.getByText('Ritmo b', { exact: true })).toBeVisible();
+    await expect(page.getByText('Descanso: Ritmo b', { exact: true })).toBeVisible();
   } finally {
     pending.release();
   }
@@ -195,7 +195,7 @@ test('leaving during analysis does not start strategy generation for the old rou
     await expect(
       page.getByRole('button', { name: 'Reanalisar treino', exact: true }),
     ).toBeEnabled();
-    await expect(page.getByText('Ritmo b', { exact: true })).toBeVisible();
+    await expect(page.getByText('Descanso: Ritmo b', { exact: true })).toBeVisible();
     expect(strategyWrites).toBe(0);
   } finally {
     pending.release();
@@ -323,7 +323,7 @@ for (const operation of ['text', 'duration', 'delete']) {
       await expect(page).toHaveURL(/\/wods\/b$/);
       await expect(page.getByText('Fonte b', { exact: true })).toBeVisible();
       await expect(page.getByText('Estimulo b', { exact: false })).toBeVisible();
-      await expect(page.getByText('Ritmo b', { exact: true })).toBeVisible();
+      await expect(page.getByText('Descanso: Ritmo b', { exact: true })).toBeVisible();
       await expect(page.getByText('8 rounds', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: /15 min/ })).toBeVisible();
     } finally {
@@ -345,7 +345,7 @@ test('manual generation locks conflicting actions and cannot update another rout
       started.release();
       await pending.promise;
       await route.fulfill({
-        json: { strategy: { ...MOCK_STRATEGY.strategy, pacing: 'Geracao manual de A' } },
+        json: { strategy: { ...MOCK_STRATEGY.strategy, restStrategy: 'Geracao manual de A' } },
       });
     }
     return true;
@@ -372,8 +372,8 @@ test('manual generation locks conflicting actions and cannot update another rout
           requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
         ),
     );
-    await expect(page.getByText('Ritmo b', { exact: true })).toBeVisible();
-    await expect(page.getByText('Geracao manual de A', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Descanso: Ritmo b', { exact: true })).toBeVisible();
+    await expect(page.getByText('Descanso: Geracao manual de A', { exact: true })).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Reanalisar treino', exact: true }),
     ).toBeEnabled();

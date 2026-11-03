@@ -61,7 +61,9 @@ for (const reanalysis of [false, true]) {
     await expect(page.getByText('AMRAP 15: 10 Toes to Bar', { exact: true })).toBeVisible();
     await expect(page.getByText('8 rounds', { exact: true })).toBeVisible();
     if (reanalysis)
-      await expect(page.getByText(MOCK_STRATEGY.strategy.pacing, { exact: true })).toBeVisible();
+      await expect(
+        page.getByText(`Descanso: ${MOCK_STRATEGY.strategy.restStrategy}`, { exact: true }),
+      ).toBeVisible();
     expect(strategyPosts).toBe(0);
     busy = false;
     await button.click();
@@ -69,9 +71,13 @@ for (const reanalysis of [false, true]) {
       page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }),
     ).toBeEnabled();
     expect(strategyPosts).toBe(0);
-    await expect(page.getByText(MOCK_STRATEGY.strategy.pacing, { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByText(`Descanso: ${MOCK_STRATEGY.strategy.restStrategy}`, { exact: true }),
+    ).toHaveCount(0);
     await page.getByRole('button', { name: 'Gerar estrategia para hoje', exact: true }).click();
-    await expect(page.getByText(MOCK_STRATEGY.strategy.pacing, { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(`Descanso: ${MOCK_STRATEGY.strategy.restStrategy}`, { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole('button', { name: 'Reanalisar treino', exact: true }),
     ).toBeEnabled();
@@ -116,6 +122,8 @@ test('busy manual strategy leaves the analysis intact and permits explicit retry
   await expect(page.getByText('Fonte preservada', { exact: true })).toBeVisible();
   busy = false;
   await button.click();
-  await expect(page.getByText(MOCK_STRATEGY.strategy.pacing, { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(`Descanso: ${MOCK_STRATEGY.strategy.restStrategy}`, { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText(BUSY, { exact: true })).toHaveCount(0);
 });
