@@ -62,7 +62,9 @@ describe('generateStrategy', () => {
     await generateStrategy(MINIMAL_INPUT, send);
     expect(send.mock.calls[0][0].systemPrompt).toContain('Rounds 1 e 2');
     expect(send.mock.calls[0][0].systemPrompt).toContain('Rounds 1, 2 e 3');
-    expect(send.mock.calls[0][0].systemPrompt).toContain('Preserve a notacao das repeticoes (21-15-9)');
+    expect(send.mock.calls[0][0].systemPrompt).toContain(
+      'Preserve a notacao das repeticoes (21-15-9)',
+    );
     expect(send).toHaveBeenCalledTimes(1);
   });
   it('includes CrossFit definitions without assuming RX loads or personal records', async () => {
@@ -101,6 +103,18 @@ describe('generateStrategy', () => {
         effort: 'medium',
       }),
     );
+  });
+  it('allows an offline effort comparison without relaxing validation or retries', async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce(textMessage('not JSON'))
+      .mockResolvedValueOnce(textMessage(JSON.stringify(VALID_STRATEGY)));
+    const result = await generateStrategy(MINIMAL_INPUT, send, { effort: 'low' });
+    expect(result.targetRpe).toBe(10);
+    expect(send).toHaveBeenCalledTimes(2);
+    for (const [params] of send.mock.calls) {
+      expect(params).toMatchObject({ model: 'gpt-5-mini', maxTokens: 8000, effort: 'low' });
+    }
   });
   it.each([
     'pacing',

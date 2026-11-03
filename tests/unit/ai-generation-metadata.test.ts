@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { captureAiGeneration } from '../../apps/api/src/services/ai-generation-metadata.js';
 import type { SendMessageParams } from '@wod-coach-ai/ai';
 
@@ -17,8 +17,35 @@ const MESSAGE = {
     usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
   },
 };
+afterEach(() => vi.restoreAllMocks());
 
 describe('AI generation metadata collector', () => {
+  it('archives successful attempt durations and reports failed attempts without inventing usage', async () => {
+    let now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const observer = vi.fn();
+    const failure = new Error('provider timeout');
+    const send = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        now = 25;
+        return MESSAGE;
+      })
+      .mockImplementationOnce(async () => {
+        now = 75;
+        throw failure;
+      });
+    const generation = captureAiGeneration(send, 'StrategyCoachAgent', observer);
+    await generation.sendMessage(PARAMS);
+    await expect(generation.sendMessage(PARAMS)).rejects.toBe(failure);
+    expect(generation.metadata().attempts).toHaveLength(1);
+    expect(generation.metadata().attempts[0].durationMs).toBe(25);
+    expect(observer.mock.calls).toEqual([
+      [{ durationMs: 25, status: 'received' }],
+      [{ durationMs: 50, status: 'failed' }],
+    ]);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
   it('does not substitute the requested model or zero tokens for unknown provider data', async () => {
     const sender = vi.fn().mockResolvedValue({ text: '{}' });
     const generation = captureAiGeneration(sender, 'WodAnalyzerAgent');
@@ -89,19 +116,17 @@ describe('AI generation metadata collector', () => {
   });
 
   it('keeps a total that exceeds the safe integer range unknown', async () => {
-    const sender = vi
-      .fn()
-      .mockResolvedValue({
-        text: '{}',
-        metadata: {
-          ...MESSAGE.metadata,
-          usage: {
-            inputTokens: Number.MAX_SAFE_INTEGER,
-            outputTokens: 0,
-            totalTokens: Number.MAX_SAFE_INTEGER,
-          },
+    const sender = vi.fn().mockResolvedValue({
+      text: '{}',
+      metadata: {
+        ...MESSAGE.metadata,
+        usage: {
+          inputTokens: Number.MAX_SAFE_INTEGER,
+          outputTokens: 0,
+          totalTokens: Number.MAX_SAFE_INTEGER,
         },
-      });
+      },
+    });
     const generation = captureAiGeneration(sender, 'WodAnalyzerAgent');
     await generation.sendMessage(PARAMS);
     await generation.sendMessage(PARAMS);
