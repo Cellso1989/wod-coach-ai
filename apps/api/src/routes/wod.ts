@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { prisma, type Prisma } from '@wod-coach-ai/database';
+import { prisma, Prisma } from '@wod-coach-ai/database';
 import {
   wodSubmissionFieldsSchema,
   wodUpdateFieldsSchema,
@@ -133,6 +133,29 @@ export default async function wodRoutes(app: FastifyInstance) {
   app.get('/wods/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
 
+    if ((request.query as { view?: string }).view === 'detail') {
+      // One HTTP read, with all active projections from the same database snapshot.
+      // Keep image bytes out of the JSON needed to display the workout/strategy.
+      const detail = await prisma.$transaction(
+        (tx) =>
+          tx.wod.findFirst({
+            where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
+            select: {
+              ...wodListSelect,
+              result: true,
+              analysis: { include: { movements: { orderBy: { order: 'asc' } } } },
+              strategy: true,
+            },
+          }),
+        { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+      );
+      if (!detail) return reply.code(404).send({ error: 'WOD não encontrado' });
+      const { analysis, strategy, ...wod } = detail;
+      return reply
+        .header('Cache-Control', 'no-store')
+        .send({ detailVersion: 1, wod, analysis, strategy });
+    }
+
     const wod = await prisma.wod.findFirst({
       where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
       include: {
@@ -145,6 +168,25 @@ export default async function wodRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ wod });
+  });
+
+  app.get('/wods/:id/image', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const wod = await prisma.wod.findFirst({
+      where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
+      select: { imageData: true, imageMimeType: true },
+    });
+    if (
+      !wod?.imageData ||
+      !wod.imageMimeType ||
+      !WOD_IMAGE_ALLOWED_MIME_TYPES.includes(wod.imageMimeType)
+    ) {
+      return reply.code(404).send({ error: 'Foto do treino não encontrada' });
+    }
+    return reply
+      .header('Cache-Control', 'private, no-store')
+      .type(wod.imageMimeType)
+      .send(Buffer.from(wod.imageData, 'base64'));
   });
 
   app.put('/wods/:id', async (request, reply) => {
