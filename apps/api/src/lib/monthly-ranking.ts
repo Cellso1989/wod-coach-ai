@@ -258,7 +258,7 @@ function buildResultRanking(
       if (!previous || compare(attempt.parsed, previous.parsed) < 0)
         best.set(attempt.result.wod.userId, attempt);
     }
-    if (best.size < 2) continue;
+    // A valid result scores even when there are no other athletes of its type that day.
     // Compare the same score unit regardless of which workout was performed.
     const sorted = [...best.values()].sort((a, b) => compare(a.parsed, b.parsed));
     comparableWorkouts++;

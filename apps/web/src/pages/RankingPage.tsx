@@ -294,8 +294,8 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                   <Trophy className="mx-auto mb-3 text-neutral-600" size={30} aria-hidden="true" />
                   <p className="font-semibold">O próximo destaque pode ser você.</p>
                   <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
-                    O ranking começa quando dois atletas registram resultados válidos do mesmo tipo
-                    no mesmo dia deste mês. O treino realizado não interfere na comparação.
+                    Registre um resultado válido para pontuar, mesmo sem outro atleta do mesmo tipo
+                    no dia. O treino realizado não interfere na comparação.
                   </p>
                 </div>
               )}
@@ -366,8 +366,8 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                 <p>
                   O ranking usa somente o campo Resultado. Não conferimos o treino, movimentos,
                   cargas, prescrição, análise ou time cap. Resultados do mesmo tipo são comparados
-                  no mesmo dia, mesmo que os atletas tenham feito treinos diferentes. É preciso ter
-                  pelo menos dois atletas participantes com resultados válidos do mesmo tipo. Se
+                  no mesmo dia, mesmo que os atletas tenham feito treinos diferentes. Você pontua
+                  mesmo sem outro atleta do mesmo tipo no dia: nesse caso, recebe 100 pontos. Se
                   registrar tipos diferentes no dia, vale o tipo do último resultado válido. Dentro
                   desse tipo, conta somente seu melhor resultado do dia.
                 </p>
@@ -403,12 +403,11 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                   continuam no histórico, mas não somam pontos. O acumulado reinicia a cada mês.
                 </p>
                 <p>
-                  Quem não tem outro atleta com resultado do mesmo tipo no dia aparece sem
-                  classificação. Resultados não reconhecidos ficam fora do cálculo. Informe o tempo
-                  como 11:36 ou 12 min, o CAP como CAP 10, ou o trabalho concluído como 8 rounds +
-                  12 reps ou 150 reps. O tempo informado não é validado contra o time cap do treino.{' '}
+                  Resultados não reconhecidos ficam fora do cálculo. Informe o tempo como 11:36 ou
+                  12 min, o CAP como CAP 10, ou o trabalho concluído como 8 rounds + 12 reps ou 150
+                  reps. O tempo informado não é validado contra o time cap do treino.{' '}
                   {data.summary.uncomparedResults > 0
-                    ? `${data.summary.uncomparedResults} de ${data.summary.recordedResults} registros ficaram fora do cálculo neste mês, incluindo tentativas repetidas, tipos substituídos e resultados sem outro participante do mesmo tipo no dia.`
+                    ? `${data.summary.uncomparedResults} de ${data.summary.recordedResults} registros ficaram fora do cálculo neste mês, incluindo tentativas repetidas, tipos substituídos e resultados não reconhecidos.`
                     : ''}
                 </p>
               </div>
