@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../lib/auth-context.js';
 import { NotificationCenter } from './NotificationCenter.js';
+import { preloadNavigation } from '../lib/navigation-prefetch.js';
 
 interface NavItem {
   to: string;
@@ -73,6 +74,15 @@ export function NavBar() {
                 itemRefs.current[item.to] = element;
               }}
               to={item.to}
+              onPointerEnter={() => {
+                if (auth?.user && !active) preloadNavigation(item.to);
+              }}
+              onFocus={() => {
+                if (auth?.user && !active) preloadNavigation(item.to);
+              }}
+              onPointerDown={() => {
+                if (auth?.user && !active) preloadNavigation(item.to);
+              }}
               className={`flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-sm font-medium transition-colors duration-150 ${
                 active
                   ? 'border-orange-600 bg-orange-600/10 text-orange-400'

@@ -12,6 +12,7 @@ import {
 
 export function NotificationCenter() {
   const { user } = useAuth();
+  const userId = user?.id;
   const [feed, setFeed] = useState<NotificationFeed | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
@@ -22,7 +23,7 @@ export function NotificationCenter() {
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
     const controller = new AbortController();
     let loading = false;
     const refresh = async () => {
@@ -67,7 +68,7 @@ export function NotificationCenter() {
       document.removeEventListener('visibilitychange', refresh);
       window.removeEventListener('ranking-participation-changed', refresh);
     };
-  }, [user, attempt]);
+  }, [userId, attempt]);
 
   useEffect(() => {
     if (!open) return;
