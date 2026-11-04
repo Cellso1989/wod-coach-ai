@@ -13,7 +13,8 @@ export function ProtectedRoute() {
     return <Navigate to="/login" replace />;
   }
 
-  return <Outlet />;
+  // A different account must get new page state as well as an empty read cache.
+  return <Outlet key={user.id} />;
 }
 
 export function AdminRoute() {

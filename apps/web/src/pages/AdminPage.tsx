@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError, type AdminUsersResponse, type PasswordRecoveryLink } from '../lib/api.js';
 import { PageHeader } from '../components/PageHeader.js';
-import { Alert, Button, Card, LoadingState, TextInput } from '../components/ui.js';
+import { Alert, Button, Card, TextInput } from '../components/ui.js';
 import { NavBar } from '../components/NavBar.js';
 
 const STATUS_LABEL = {
@@ -98,7 +98,19 @@ export function AdminPage() {
   }, []);
 
   if (loading) {
-    return <LoadingState message="Carregando painel admin..." />;
+    return (
+      <main className="min-h-screen bg-neutral-950 px-4 py-8 text-neutral-100">
+        <div className="mx-auto max-w-5xl space-y-6">
+          <PageHeader>
+            <h1 className="text-2xl font-bold">Admin</h1>
+          </PageHeader>
+          <NavBar />
+          <p role="status" className="text-sm text-neutral-400">
+            Carregando painel admin...
+          </p>
+        </div>
+      </main>
+    );
   }
 
   return (

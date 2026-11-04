@@ -10,7 +10,6 @@ import {
   Alert,
   Button,
   Field,
-  LoadingState,
   PageShell,
   SelectInput,
   TextArea,
@@ -189,7 +188,17 @@ export function ProfilePage() {
   }
 
   if (loading) {
-    return <LoadingState />;
+    return (
+      <PageShell>
+        <PageHeader>
+          <h1 className="text-xl font-bold">Meu perfil</h1>
+        </PageHeader>
+        <NavBar />
+        <p role="status" className="text-sm text-neutral-400">
+          Carregando perfil...
+        </p>
+      </PageShell>
+    );
   }
 
   if (profileLoadError) {

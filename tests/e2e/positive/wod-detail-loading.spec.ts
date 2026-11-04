@@ -233,6 +233,9 @@ test('strategy regeneration after editing duration uses the shared one-line prep
   });
   try {
     await page.goto('/wods/a');
+    await expect(
+      page.getByRole('status', { name: 'Abrindo WOD Coach AI', exact: true }),
+    ).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Estrategia de execucao' })).toBeVisible();
     await page.getByRole('button', { name: /15 min/ }).click();
     await page.getByRole('spinbutton').fill('20');

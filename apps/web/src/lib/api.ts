@@ -1,9 +1,37 @@
 import type { DailyRanking, MonthlyRanking } from '@wod-coach-ai/types';
+import { SessionReadCache } from './session-read-cache.js';
 
 // Em produção o frontend é servido pela própria API (mesma origem), então
 // o padrão é string vazia (caminho relativo). Em dev, aponta pro Fastify
 // rodando em outra porta via VITE_API_URL.
 const API_URL = import.meta.env.VITE_API_URL ?? '';
+const navigationReads = new SessionReadCache();
+let readUserId: string | null = null;
+export const setApiReadSession = (userId: string | null) => {
+  readUserId = userId;
+  navigationReads.setSession(userId);
+};
+export const clearApiReadCache = () => navigationReads.clear();
+
+function navigationReadAge(path: string): number | null {
+  const endpoint = path.split('?')[0];
+  if (endpoint === '/notifications/push-config') return 60_000;
+  if (endpoint === '/notifications' || endpoint === '/notifications/push-subscriptions/status')
+    return 10_000;
+  if (
+    [
+      '/wods',
+      '/hyrox-workouts',
+      '/personal-records',
+      '/athlete-profile',
+      '/checkins/today',
+      '/stats/training-calendar',
+    ].includes(endpoint!)
+  )
+    return 15_000;
+  // Rankings, administration, authentication and workout detail always use the network.
+  return null;
+}
 
 export interface WodVersion {
   id: string;
@@ -33,6 +61,30 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const method = (options.method ?? 'GET').toUpperCase();
+  const readOnlyStatus = path === '/notifications/push-subscriptions/status';
+  const mutation = method !== 'GET' && !readOnlyStatus;
+  const maxAge = method === 'GET' || readOnlyStatus ? navigationReadAge(path) : null;
+  if (mutation) navigationReads.clear();
+  try {
+    if (maxAge != null) {
+      const day = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+      return await navigationReads.read(
+        `${day}:${method}:${path}:${options.body ?? ''}`,
+        (signal) => sendRequest<T>(path, { ...options, signal }),
+        maxAge,
+        options.signal,
+      );
+    }
+    return await sendRequest<T>(path, options);
+  } finally {
+    // Also discard reads that began while a save (including a failed save) was pending.
+    if (mutation) navigationReads.clear();
+  }
+}
+
+async function sendRequest<T>(path: string, options: RequestInit): Promise<T> {
+  const requestUserId = readUserId;
   const response = await fetch(`${API_URL}/api${path}`, {
     ...options,
     credentials: 'include',
@@ -43,8 +95,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!response.ok) {
+    const currentSession = requestUserId === readUserId;
+    if (currentSession && (response.status === 401 || response.status === 403))
+      setApiReadSession(null);
     const body = await response.json().catch(() => ({ error: response.statusText }));
-    if (body.code === 'ACCESS_DENIED' && path !== '/auth/login')
+    if (currentSession && body.code === 'ACCESS_DENIED' && path !== '/auth/login')
       window.dispatchEvent(new CustomEvent('access-denied', { detail: body.error }));
     throw new ApiError(response.status, body.error ?? 'Erro inesperado');
   }
@@ -57,20 +112,29 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 async function requestForm<T>(path: string, formData: FormData): Promise<T> {
-  const response = await fetch(`${API_URL}/api${path}`, {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  });
+  const requestUserId = readUserId;
+  navigationReads.clear();
+  try {
+    const response = await fetch(`${API_URL}/api${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
 
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({ error: response.statusText }));
-    if (body.code === 'ACCESS_DENIED')
-      window.dispatchEvent(new CustomEvent('access-denied', { detail: body.error }));
-    throw new ApiError(response.status, body.error ?? 'Erro inesperado');
+    if (!response.ok) {
+      const currentSession = requestUserId === readUserId;
+      if (currentSession && (response.status === 401 || response.status === 403))
+        setApiReadSession(null);
+      const body = await response.json().catch(() => ({ error: response.statusText }));
+      if (currentSession && body.code === 'ACCESS_DENIED')
+        window.dispatchEvent(new CustomEvent('access-denied', { detail: body.error }));
+      throw new ApiError(response.status, body.error ?? 'Erro inesperado');
+    }
+
+    return response.json() as Promise<T>;
+  } finally {
+    navigationReads.clear();
   }
-
-  return response.json() as Promise<T>;
 }
 
 export type AccessStatus = 'PENDING' | 'APPROVED' | 'BLOCKED';
