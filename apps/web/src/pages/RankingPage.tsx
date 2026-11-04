@@ -373,7 +373,8 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                 </p>
                 <p>
                   Tempos como 11:36 ou 12 min são comparados pelo menor tempo. CAP 10 significa que
-                  faltaram 10 repetições e participa da mesma comparação dos tempos. Quem finalizou
+                  faltaram 10 repetições e participa da mesma comparação dos tempos. CAP 1 e CAP +1
+                  significam que o treino não foi finalizado e faltou uma repetição. Quem finalizou
                   fica acima de quem bateu o CAP. Entre os CAPs, menos repetições faltando significa
                   melhor posição e a mesma quantidade gera empate. Resultados em rounds são
                   comparados pelo maior número de rounds e, em caso de empate, pelas reps extras.

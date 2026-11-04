@@ -177,6 +177,35 @@ test('daily ranking recovers after an API failure', async ({ page }) => {
 });
 
 for (const width of [390, 1280]) {
+  test(`saved Cap +1 scores as an unfinished workout with one remaining rep at ${width}px`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    const now = new Date('2026-11-03T18:00:00Z');
+    await page.clock.setFixedTime(now);
+    const users = [rankingUsers[1]!];
+    const records = [
+      rankingResult('b', 'Cap +1', {
+        createdAt: new Date('2026-11-03T15:00:00Z'),
+      }),
+    ];
+    await page.route('**/api/**', (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path.endsWith('/auth/me')) return route.fulfill({ json: { user: users[0] } });
+      if (path === '/api/ranking/monthly')
+        return route.fulfill({ json: buildTestRanking(users, records, 'b', now) });
+      return route.fulfill({ status: 404, json: {} });
+    });
+    await page.goto('/ranking');
+    const row = page.getByRole('list', { name: 'Classificação mensal' }).getByRole('listitem');
+    await row.locator('summary').click();
+    await expect(row).toContainText('Cap +1');
+    await expect(row).toContainText('1º no dia');
+    await expect(row.getByText('100 pts', { exact: true })).toBeVisible();
+    await expect(row.getByText('Não pontuou', { exact: true })).toHaveCount(0);
+    await row.screenshot({ path: testInfo.outputPath('cap-plus-one-scored.png') });
+  });
+
   test(`all athletes score without another result of the same type at ${width}px`, async ({
     page,
   }) => {

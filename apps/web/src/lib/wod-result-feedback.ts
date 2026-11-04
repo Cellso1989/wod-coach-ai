@@ -4,8 +4,8 @@ export function getWodResultFeedback(
   score: string,
   analysis?: Pick<WodAnalysis, 'format' | 'durationMinutes'> | null,
 ): string {
-  const text = score.trim();
-  if (/^cap(?=\s|\d|$)/i.test(text)) return 'Hoje não rendeu, hein! 😂';
+  const text = score.normalize('NFKC').trim();
+  if (/^cap(?=\s|\d|\+|$)/i.test(text)) return 'Hoje não rendeu, hein! 😂';
 
   if (
     analysis?.durationMinutes != null &&

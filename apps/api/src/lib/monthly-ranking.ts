@@ -39,7 +39,8 @@ interface ParsedScore {
 // Ranking depends exclusively on the submitted score, never the workout analysis.
 function parseScore(result: RankingResult): ParsedScore | null {
   const score = normalize(result.score);
-  const cap = score.match(/^cap\s*(\d+)\s*(?:reps?|repetições|repeticoes)?$/);
+  // CAP +N and CAP N both mean an unfinished workout with N remaining reps.
+  const cap = score.match(/^cap\s*\+?\s*(\d+)\s*(?:reps?|repetições|repeticoes)?$/);
   if (cap) {
     const remainingReps = Number(cap[1]);
     if (!Number.isSafeInteger(remainingReps) || remainingReps < 1 || remainingReps > 1000000)

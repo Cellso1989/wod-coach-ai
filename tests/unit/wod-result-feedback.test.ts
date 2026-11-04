@@ -4,7 +4,7 @@ import { getWodResultFeedback } from '../../apps/web/src/lib/wod-result-feedback
 const timedWorkout = { format: 'FOR_TIME' as const, durationMinutes: 14 };
 
 describe('result feedback', () => {
-  it.each(['CAP 10', 'cap 25', ' CAP20 ', 'CaP 12 + 5 reps', 'CAP'])(
+  it.each(['CAP 10', 'cap 25', ' CAP20 ', 'CaP 12 + 5 reps', 'CAP', 'Cap +1', 'CAP+1', 'CAP ＋１'])(
     'treats %s as an unfinished workout',
     (score) => expect(getWodResultFeedback(score, timedWorkout)).toBe('Hoje não rendeu, hein! 😂'),
   );
