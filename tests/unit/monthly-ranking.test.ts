@@ -14,7 +14,7 @@ const rank = (results: ReturnType<typeof rankingResult>[]) =>
   buildMonthlyRanking(rankingUsers, results, '2026-11', 'b');
 
 describe('monthly performance ranking', () => {
-  it.each(['11:36', 'CAP 10', '8 rounds + 12 reps', '150 reps'])(
+  it.each(['11:36', 'CAP 10', 'Cap +1', '8 rounds + 12 reps', '150 reps'])(
     'awards 100 daily, weekly and monthly points to a solo athlete with %s',
     (score) => {
       const now = new Date('2026-11-03T18:00:00Z');
@@ -55,6 +55,25 @@ describe('monthly performance ranking', () => {
       { userId: 'a', points: 75 },
     ]);
   });
+
+  it.each(['CAP 1', 'Cap +1', 'CAP+1', ' cap + 1 rep ', 'CAP ＋１ repetições'])(
+    'reads %s as one remaining rep and ties it with CAP 1 behind finishers',
+    (score) => {
+      const data = rank([
+        rankingResult('a', '14:00'),
+        rankingResult('b', score),
+        rankingResult('c', 'CAP 2'),
+        rankingResult('d', 'CAP 1'),
+      ]);
+      expect(data.athletes.find((a) => a.userId === 'b')).toMatchObject({
+        points: 75,
+        performances: [{ score, status: 'cap', remainingReps: 1, position: 2 }],
+      });
+      expect(data.athletes.find((a) => a.userId === 'd')!.points).toBe(75);
+      expect(data.athletes.find((a) => a.userId === 'c')!.points).toBe(25);
+      expect(data.athletes.find((a) => a.userId === 'a')!.points).toBe(100);
+    },
+  );
 
   it('starts scoring at Sao Paulo midnight on October 26 and keeps earlier records intact', () => {
     const records = [
@@ -704,14 +723,23 @@ describe('monthly performance ranking', () => {
     expect(data.athletes.find((athlete) => athlete.userId === 'd')?.comparedWorkouts).toBe(1);
   });
 
-  it.each(['CAP', 'CAP 0', 'CAP -1', 'CAP 1.5', 'CAP 1000001', 'CAP 10 min', 'CAP 10 + 5 reps'])(
-    'requires an unambiguous positive remaining rep count for %s',
-    (score) => {
-      const data = rank([rankingResult('a', '05:00'), rankingResult('b', score)]);
-      expect(data.summary.rankedAthletes).toBe(1);
-      expect(data.athletes.find((a) => a.userId === 'b')!.points).toBeNull();
-    },
-  );
+  it.each([
+    'CAP',
+    'CAP 0',
+    'CAP -1',
+    'CAP 1.5',
+    'CAP 1000001',
+    'CAP 10 min',
+    'CAP 10 + 5 reps',
+    'CAP +0',
+    'CAP ++1',
+    'CAP +-1',
+    'CAP +1.5',
+  ])('requires an unambiguous positive remaining rep count for %s', (score) => {
+    const data = rank([rankingResult('a', '05:00'), rankingResult('b', score)]);
+    expect(data.summary.rankedAthletes).toBe(1);
+    expect(data.athletes.find((a) => a.userId === 'b')!.points).toBeNull();
+  });
 
   it('uses São Paulo month boundaries and the original result date', () => {
     expect(rankingMonth(new Date('2026-12-01T02:59:59Z'))).toBe('2026-11');

@@ -73,7 +73,7 @@ for (const width of [390, 1280]) {
     await expect(success).toHaveCount(0);
     await expect(page.getByText('12:34', { exact: true })).toBeVisible();
 
-    for (const score of ['CAP 10', 'cap25', '14:01', '14:00']) {
+    for (const score of ['CAP 10', 'cap25', 'Cap +1', 'CAP+1', '14:01', '14:00']) {
       await page.getByRole('button', { name: 'Editar resultado', exact: true }).click();
       await scoreInput.fill(score);
       await page.getByRole('button', { name: 'Atualizar resultado', exact: true }).click();

@@ -134,6 +134,34 @@ describe('monthly ranking API', () => {
     }
   });
 
+  it('scores the saved Cap +1 result as one remaining rep in daily, monthly and weekly views', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-03T18:00:00Z'));
+    try {
+      mocks.results.mockResolvedValue([
+        rankingResult('b', 'Cap +1', {
+          id: 'cap-plus-one',
+          createdAt: new Date('2026-11-03T15:00:00Z'),
+        }),
+      ]);
+      for (const url of ['/api/ranking/daily', '/api/ranking/monthly?month=2026-11']) {
+        const response = await app.inject({ url, headers });
+        expect(response.statusCode).toBe(200);
+        const athlete = response.json().athletes.find((a: { userId: string }) => a.userId === 'b');
+        expect(athlete).toMatchObject({
+          points: 100,
+          todayPerformances: [{ score: 'Cap +1', status: 'cap', remainingReps: 1, points: 100 }],
+        });
+        if (url.includes('/monthly'))
+          expect(athlete.weekResults).toMatchObject([
+            { id: 'cap-plus-one', score: 'Cap +1', points: 100, position: 1 },
+          ]);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('resets totals on October 26 without deleting results from earlier days', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-26T23:00:00Z'));
