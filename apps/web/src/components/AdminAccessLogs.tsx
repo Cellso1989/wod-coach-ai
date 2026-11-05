@@ -67,11 +67,6 @@ export function AdminAccessLogs({ users }: { users: AdminUserSummary[] }) {
       >
         Log de acessos
       </h2>
-      <p className="text-sm text-neutral-400">
-        Logins, retornos com sessão salva e análises de treino concluídas. Retornos são registrados
-        no máximo uma vez a cada 30 minutos por usuário. Cada análise concluída é registrada.
-        Horários de Brasília. Histórico disponível a partir da ativação deste recurso.
-      </p>
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-end">
         <label className="w-full min-w-0 flex-1 space-y-1 text-sm text-neutral-400">
           <span>Filtrar acessos por usuário</span>
