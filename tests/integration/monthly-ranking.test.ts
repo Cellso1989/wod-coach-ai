@@ -162,6 +162,56 @@ describe('monthly ranking API', () => {
     }
   });
 
+  it('recalculates the saved shorthand AMRAP from November 4 in its original day, week and month', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-04T18:00:00Z'));
+    try {
+      const records = [
+        rankingResult('a', '05:00', { id: 'old-a', createdAt: new Date('2026-11-03T15:00:00Z') }),
+        rankingResult('c', '06:00', { id: 'old-c', createdAt: new Date('2026-11-03T15:00:00Z') }),
+        rankingResult('b', '07:00', { id: 'old-b', createdAt: new Date('2026-11-03T15:00:00Z') }),
+        rankingResult('b', '3round + 12', {
+          id: 'saved-amrap',
+          createdAt: new Date('2026-11-04T15:00:00Z'),
+        }),
+      ];
+      const original = structuredClone(records);
+      mocks.results.mockResolvedValue(records);
+      const daily = await app.inject({ url: '/api/ranking/daily', headers });
+      expect(daily.statusCode).toBe(200);
+      expect(daily.json().athletes.find((a: { userId: string }) => a.userId === 'b')).toMatchObject(
+        {
+          points: 100,
+          performances: [
+            {
+              resultId: 'saved-amrap',
+              date: '2026-11-04',
+              score: '3round + 12',
+              workout: 'Rounds + reps',
+              position: 1,
+            },
+          ],
+        },
+      );
+      vi.setSystemTime(new Date('2026-11-05T18:00:00Z'));
+      const monthly = await app.inject({ url: '/api/ranking/monthly?month=2026-11', headers });
+      expect(monthly.statusCode).toBe(200);
+      expect(
+        monthly.json().athletes.find((a: { userId: string }) => a.userId === 'b'),
+      ).toMatchObject({
+        points: 150,
+        todayPerformances: [],
+        weekResults: [
+          { id: 'saved-amrap', date: '2026-11-04', score: '3round + 12', points: 100, position: 1 },
+          { id: 'old-b', points: 50 },
+        ],
+      });
+      expect(records).toEqual(original);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('resets totals on October 26 without deleting results from earlier days', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-26T23:00:00Z'));

@@ -14,37 +14,42 @@ const rank = (results: ReturnType<typeof rankingResult>[]) =>
   buildMonthlyRanking(rankingUsers, results, '2026-11', 'b');
 
 describe('monthly performance ranking', () => {
-  it.each(['11:36', 'CAP 10', 'Cap +1', '8 rounds + 12 reps', '150 reps'])(
-    'awards 100 daily, weekly and monthly points to a solo athlete with %s',
-    (score) => {
-      const now = new Date('2026-11-03T18:00:00Z');
-      const results = [
-        rankingResult('a', score, {
-          id: 'solo',
-          createdAt: new Date('2026-11-03T15:00:00Z'),
-        }),
-      ];
-      const users = [{ id: 'a', name: 'Athlete A' }];
-      const daily = buildDailyRanking(users, results, 'a', now);
-      const monthly = buildMonthlyRanking(users, results, '2026-11', 'a', now);
-      for (const data of [daily, monthly]) {
-        expect(data.summary).toMatchObject({
-          rankedAthletes: 1,
-          recordedResults: 1,
-          uncomparedResults: 0,
-        });
-        expect(data.athletes[0]).toMatchObject({
-          position: 1,
-          points: 100,
-          comparedWorkouts: 1,
-          todayPerformances: [{ resultId: 'solo', score, points: 100, position: 1, athletes: 1 }],
-        });
-      }
-      expect(monthly.athletes[0]!.weekResults).toMatchObject([
-        { id: 'solo', score, points: 100, position: 1 },
-      ]);
-    },
-  );
+  it.each([
+    '11:36',
+    'CAP 10',
+    'Cap +1',
+    '8 rounds + 12 reps',
+    '3round + 12',
+    '150 reps',
+    '150 repetições',
+  ])('awards 100 daily, weekly and monthly points to a solo athlete with %s', (score) => {
+    const now = new Date('2026-11-03T18:00:00Z');
+    const results = [
+      rankingResult('a', score, {
+        id: 'solo',
+        createdAt: new Date('2026-11-03T15:00:00Z'),
+      }),
+    ];
+    const users = [{ id: 'a', name: 'Athlete A' }];
+    const daily = buildDailyRanking(users, results, 'a', now);
+    const monthly = buildMonthlyRanking(users, results, '2026-11', 'a', now);
+    for (const data of [daily, monthly]) {
+      expect(data.summary).toMatchObject({
+        rankedAthletes: 1,
+        recordedResults: 1,
+        uncomparedResults: 0,
+      });
+      expect(data.athletes[0]).toMatchObject({
+        position: 1,
+        points: 100,
+        comparedWorkouts: 1,
+        todayPerformances: [{ resultId: 'solo', score, points: 100, position: 1, athletes: 1 }],
+      });
+    }
+    expect(monthly.athletes[0]!.weekResults).toMatchObject([
+      { id: 'solo', score, points: 100, position: 1 },
+    ]);
+  });
 
   it('recalculates a solo win when another athlete records a better result', () => {
     const results = [rankingResult('a', '06:00')];
@@ -254,6 +259,74 @@ describe('monthly performance ranking', () => {
     ]);
   });
 
+  it.each([
+    '3round + 12',
+    '3round+12',
+    '3 rounds + 12',
+    '3 rounds + 12 reps',
+    '3 rondas +12 repeticoes',
+    '3voltas+12 repetições',
+    ' ３ROUND ＋ １２ ',
+  ])('reads %s as three completed AMRAP rounds plus twelve extra completed reps', (score) => {
+    const data = rank([
+      rankingResult('a', '4 rounds'),
+      rankingResult('b', score),
+      rankingResult('c', '3 rounds + 13 reps'),
+      rankingResult('d', '3 rounds + 12 reps'),
+      rankingResult('e', '3 rounds + 11 reps'),
+    ]);
+    expect(data.athletes.find((a) => a.userId === 'b')).toMatchObject({
+      points: 50,
+      performances: [
+        { score, workout: 'Rounds + reps', position: 3, status: 'finished', remainingReps: null },
+      ],
+    });
+    expect(data.athletes.find((a) => a.userId === 'd')!.points).toBe(50);
+    expect(data.athletes.find((a) => a.userId === 'c')!.points).toBe(75);
+    expect(data.athletes.find((a) => a.userId === 'a')!.points).toBe(100);
+    expect(data.athletes.find((a) => a.userId === 'e')!.points).toBe(10);
+  });
+
+  it('counts only the best AMRAP attempt and keeps total reps separate from rounds and CAP', () => {
+    const data = rank([
+      rankingResult('a', '3round + 12'),
+      rankingResult('a', '3round + 13'),
+      rankingResult('b', '150 repetições'),
+      rankingResult('c', '149 reps'),
+      rankingResult('d', 'CAP+1'),
+    ]);
+    expect(data.athletes.find((a) => a.userId === 'a')).toMatchObject({
+      points: 100,
+      comparedWorkouts: 1,
+      performances: [{ score: '3round + 13', workout: 'Rounds + reps' }],
+    });
+    expect(data.athletes.find((a) => a.userId === 'b')).toMatchObject({
+      points: 100,
+      performances: [{ workout: 'Repetições' }],
+    });
+    expect(data.athletes.find((a) => a.userId === 'c')!.points).toBe(75);
+    expect(data.athletes.find((a) => a.userId === 'd')).toMatchObject({
+      points: 100,
+      performances: [{ status: 'cap', remainingReps: 1 }],
+    });
+  });
+
+  it('selects a later saved AMRAP shorthand as the active daily type instead of an earlier time', () => {
+    const data = rank([
+      rankingResult('b', '04:00', { createdAt: new Date('2026-11-04T12:00:00Z') }),
+      rankingResult('b', '3round + 12', { createdAt: new Date('2026-11-04T15:00:00Z') }),
+      rankingResult('a', '2 rounds + 99 reps', { createdAt: new Date('2026-11-04T15:00:00Z') }),
+      rankingResult('c', '05:00', { createdAt: new Date('2026-11-04T15:00:00Z') }),
+    ]);
+    expect(data.athletes.find((a) => a.userId === 'b')).toMatchObject({
+      points: 100,
+      comparedWorkouts: 1,
+      performances: [{ score: '3round + 12', workout: 'Rounds + reps' }],
+    });
+    expect(data.athletes.find((a) => a.userId === 'a')!.points).toBe(75);
+    expect(data.athletes.find((a) => a.userId === 'c')!.points).toBe(100);
+  });
+
   it('compares rep totals separately from rounds and times', () => {
     const data = rank([
       rankingResult('a', '185 reps'),
@@ -303,6 +376,14 @@ describe('monthly performance ranking', () => {
     '1000001 rounds',
     '8 rounds + 1000001 reps',
     '601 min',
+    '3 + 12',
+    '3 rounds +',
+    '3round + 12 min',
+    '3round + -12',
+    '3round + 1.5',
+    '3round ++ 12',
+    '3round + 1000001',
+    '3.5 rounds + 12',
   ])('keeps an unrecognized or out-of-range score %s out of the ranking', (score) => {
     const data = rank([rankingResult('a', '05:00'), rankingResult('b', score)]);
     expect(data.summary.rankedAthletes).toBe(1);

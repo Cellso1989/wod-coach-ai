@@ -47,13 +47,16 @@ function parseScore(result: RankingResult): ParsedScore | null {
       return null;
     return { kind: 'time', status: 'cap', values: [-remainingReps], remainingReps };
   }
-  const rounds = score.match(/^(\d+)\s*(?:rounds?|rondas?|voltas?)(?:\s*\+\s*(\d+)\s*reps?)?$/);
+  // After an explicit round count, +N means extra completed reps even without "reps".
+  const rounds = score.match(
+    /^(\d+)\s*(?:rounds?|rondas?|voltas?)(?:\s*\+\s*(\d+)(?:\s*(?:reps?|repetições|repeticoes))?)?$/,
+  );
   if (rounds) {
     const values = [Number(rounds[1]), Number(rounds[2] ?? 0)];
     if (values.some((value) => !Number.isSafeInteger(value) || value > 1000000)) return null;
     return { kind: 'rounds', status: 'finished', values };
   }
-  const reps = score.match(/^(\d+)\s*reps?$/);
+  const reps = score.match(/^(\d+)\s*(?:reps?|repetições|repeticoes)$/);
   if (reps) {
     const total = Number(reps[1]);
     if (!Number.isSafeInteger(total) || total > 1000000) return null;
