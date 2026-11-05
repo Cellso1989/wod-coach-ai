@@ -221,25 +221,28 @@ export function AdminPage() {
                           </div>
 
                           {!user.isAdmin && (
-                            <div className="flex shrink-0 flex-wrap gap-2">
+                            <div className="flex shrink-0 gap-1.5">
                               <Button
                                 variant="secondary"
+                                className="!min-h-9 whitespace-nowrap !px-2 !py-1.5 !text-xs"
                                 disabled={busy || user.accessStatus === 'APPROVED'}
                                 aria-label={`Aprovar acesso de ${user.email}`}
                                 onClick={() => void changeAccess(user.id, 'APPROVED')}
                               >
-                                Aprovar acesso
+                                Aprovar
                               </Button>
                               <Button
                                 variant="secondary"
+                                className="!min-h-9 whitespace-nowrap !px-2 !py-1.5 !text-xs"
                                 disabled={busy || user.accessStatus === 'BLOCKED'}
                                 aria-label={`Bloquear acesso de ${user.email}`}
                                 onClick={() => void changeAccess(user.id, 'BLOCKED')}
                               >
-                                Bloquear acesso
+                                Bloquear
                               </Button>
                               <Button
                                 variant="secondary"
+                                className="!min-h-9 whitespace-nowrap !px-2 !py-1.5 !text-xs"
                                 disabled={busy}
                                 aria-label={`Gerar link de recuperação para ${user.email}`}
                                 onClick={() => void createRecoveryLink(user.id)}
