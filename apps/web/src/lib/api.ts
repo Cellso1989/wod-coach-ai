@@ -491,6 +491,20 @@ export interface AdminUserSummary {
   name: string;
   email: string;
   createdAt: string;
+  lastAccessAt: string | null;
+}
+
+export interface UserAccessLog {
+  id: string;
+  userId: string;
+  kind: 'LOGIN' | 'SESSION_RETURN' | 'CROSSFIT_ANALYSIS' | 'HYROX_ANALYSIS';
+  createdAt: string;
+  user: { name: string; email: string };
+}
+
+export interface AccessLogsResponse {
+  logs: UserAccessLog[];
+  nextCursor: string | null;
 }
 
 export interface AccessAudit {
@@ -727,6 +741,13 @@ export const api = {
     }),
 
   getAdminUsers: () => request<AdminUsersResponse>('/admin/users'),
+
+  getAccessLogs: (userId: string, before?: string, signal?: AbortSignal) => {
+    const query = new URLSearchParams();
+    if (userId) query.set('userId', userId);
+    if (before) query.set('before', before);
+    return request<AccessLogsResponse>(`/admin/access-logs?${query}`, { signal });
+  },
 
   createUserPasswordReset: (id: string) =>
     request<PasswordRecoveryLink>(`/admin/users/${encodeURIComponent(id)}/password-reset`, {

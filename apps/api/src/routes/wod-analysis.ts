@@ -22,6 +22,7 @@ import {
 import { captureAiGeneration } from '../services/ai-generation-metadata.js';
 import { runWodGeneration } from '../services/wod-generation-lease.js';
 import { observeWodGeneration } from '../services/wod-generation-timing.js';
+import { recordWorkoutAnalysis } from '../services/access-log.js';
 
 export default async function wodAnalysisRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
@@ -260,6 +261,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
             };
           }
           const { analysis, wod: updatedWod } = persisted;
+          await recordWorkoutAnalysis(request.user.sub, 'CROSSFIT', request.log);
           return { analysis, wod: updatedWod };
         },
       );

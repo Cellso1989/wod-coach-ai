@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma, prisma, type Prisma as PrismaTypes } from '@wod-coach-ai/database';
 import { createOpenAiMessageSender, describeOpenAiApiError } from '@wod-coach-ai/ai';
 import { analyzeWod, WodAnalysisError } from '@wod-coach-ai/coach-engine';
+import { recordWorkoutAnalysis } from '../services/access-log.js';
 import {
   wodAnalysisUpdateSchema,
   wodSubmissionFieldsSchema,
@@ -287,6 +288,7 @@ export default async function hyroxWorkoutRoutes(app: FastifyInstance) {
           })
         : null;
 
+    await recordWorkoutAnalysis(request.user.sub, 'HYROX', request.log);
     return reply.send({ analysis, workout: updatedWorkout });
   });
 

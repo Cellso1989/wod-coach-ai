@@ -10,6 +10,7 @@ import {
 } from '@wod-coach-ai/validation';
 import { AUTH_COOKIE_NAME } from '../plugins/auth.js';
 import { accessDenied, publicUser } from '../services/user-access.js';
+import { recordUserAccess } from '../services/access-log.js';
 import {
   PASSWORD_RESET_UNAVAILABLE,
   consumePasswordReset,
@@ -83,6 +84,7 @@ export default async function authRoutes(app: FastifyInstance) {
       const denied = accessDenied(user);
       if (denied) return reply.code(403).send({ error: denied, code: 'ACCESS_DENIED' });
 
+      await recordUserAccess(user, 'LOGIN', request.log);
       const token = app.jwt.sign({ sub: user.id });
       reply.setCookie(AUTH_COOKIE_NAME, token, {
         httpOnly: true,
@@ -227,10 +229,12 @@ export default async function authRoutes(app: FastifyInstance) {
   });
 
   app.get('/auth/me', { onRequest: [app.authenticate] }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
     const user = await prisma.user.findUnique({ where: { id: request.user.sub } });
     if (!user) {
       return reply.code(404).send({ error: 'Usuário não encontrado' });
     }
+    await recordUserAccess(user, 'SESSION_RETURN', request.log);
     return reply.send({ user: publicUser(user) });
   });
 }

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   context: vi.fn(),
   prisma: {
     user: { findUnique: vi.fn() },
+    userAccessLog: { create: vi.fn() },
     wod: { findFirst: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn() },
     wodAnalysis: {
       upsert: vi.fn(),
@@ -366,6 +367,97 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  it.each(['CROSSFIT', 'HYROX'] as const)(
+    'records each completed %s analysis once, including reanalysis, without private workout content',
+    async (discipline) => {
+      const url =
+        discipline === 'CROSSFIT' ? '/api/wods/wod-1/analyze' : '/api/hyrox-workouts/wod-1/analyze';
+      mocks.prisma.userAccessLog.create.mockImplementation(async ({ data }) => {
+        expect(store.analysis).not.toBeNull();
+        return data;
+      });
+      for (let attempt = 0; attempt < 2; attempt++) {
+        expect((await app.inject({ method: 'POST', url, headers })).statusCode).toBe(200);
+      }
+      expect(mocks.prisma.userAccessLog.create).toHaveBeenCalledTimes(2);
+      expect(mocks.prisma.userAccessLog.create).toHaveBeenCalledWith({
+        data: { userId: 'athlete-1', kind: `${discipline}_ANALYSIS` },
+      });
+      const readUrl = url.replace(/analyze$/, 'analysis');
+      expect((await app.inject({ method: 'GET', url: readUrl, headers })).statusCode).toBe(200);
+      expect(mocks.prisma.userAccessLog.create).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each(['CROSSFIT', 'HYROX'] as const)(
+    'does not record a completed %s analysis for AI failure, persistence failure or a missing/foreign workout',
+    async (discipline) => {
+      const url =
+        discipline === 'CROSSFIT' ? '/api/wods/wod-1/analyze' : '/api/hyrox-workouts/wod-1/analyze';
+      mocks.sendMessage.mockRejectedValueOnce(new Error('provider unavailable'));
+      expect((await app.inject({ method: 'POST', url, headers })).statusCode).toBe(500);
+      failWrite = 'analysis';
+      expect((await app.inject({ method: 'POST', url, headers })).statusCode).toBe(500);
+      mocks.prisma.wod.findFirst.mockResolvedValueOnce(null);
+      expect((await app.inject({ method: 'POST', url, headers })).statusCode).toBe(404);
+      expect(mocks.prisma.wod.findFirst).toHaveBeenLastCalledWith({
+        where: { id: 'wod-1', userId: 'athlete-1', discipline },
+      });
+      expect(mocks.prisma.userAccessLog.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['CROSSFIT', 'HYROX'] as const)(
+    'preserves a completed %s analysis and its successful response if the activity log is unavailable',
+    async (discipline) => {
+      mocks.prisma.userAccessLog.create.mockRejectedValueOnce(new Error('log unavailable'));
+      const url =
+        discipline === 'CROSSFIT' ? '/api/wods/wod-1/analyze' : '/api/hyrox-workouts/wod-1/analyze';
+      const response = await app.inject({ method: 'POST', url, headers });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().analysis.id).toBe('analysis-1');
+      expect(store.analysis).not.toBeNull();
+      expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('does not record an analysis that lost a source/version race before persistence', async () => {
+    mocks.prisma.$transaction.mockResolvedValueOnce(null);
+    expect((await request('POST', 'analyze')).statusCode).toBe(409);
+    expect(mocks.prisma.userAccessLog.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['analysisVersion', 'strategy', 'wod'] as const)(
+    'does not record a CrossFit analysis rolled back by a late %s write failure',
+    async (failure) => {
+      store.wod.rawText = null;
+      store.wod.imageData = 'fixture-image';
+      store.wod.imageMimeType = 'image/png';
+      store.wod.sourceType = 'IMAGE';
+      mocks.sendMessage.mockResolvedValue({
+        text: JSON.stringify({ ...ANALYSIS, extractedText: RAW_WOD }),
+      });
+      failWrite = failure;
+      expect((await request('POST', 'analyze')).statusCode).toBe(500);
+      expect(store.analysis).toBeNull();
+      expect(mocks.prisma.userAccessLog.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not create analysis events for manual timing or load edits', async () => {
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    mocks.prisma.userAccessLog.create.mockClear();
+    expect((await request('PATCH', 'analysis', { durationMinutes: 18 })).statusCode).toBe(200);
+    expect(
+      (
+        await request('PATCH', 'analysis', {
+          movementLoads: [{ id: 'movement-0', loadDescription: '50 kg' }],
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(mocks.prisma.userAccessLog.create).not.toHaveBeenCalled();
+  });
+
   it('saves loads without AI, preserves timing/source/round volumes and snapshots, and sends loads to strategy', async () => {
     await seedAnalyzedWod();
     await request('PATCH', 'analysis', { durationMinutes: 16 });
