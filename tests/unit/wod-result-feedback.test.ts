@@ -31,6 +31,14 @@ describe('result feedback', () => {
     },
   );
 
+  it.each(['3round + 12', '3 rounds + 12 reps', '150 repetições'])(
+    'accepts AMRAP completed work %s without treating the partial final round as CAP',
+    (score) =>
+      expect(getWodResultFeedback(score, { format: 'AMRAP', durationMinutes: 15 })).toBe(
+        'Boa, meu atleta! Mais um WOD pra conta! 🔥💪😂',
+      ),
+  );
+
   it('supports results without a prescribed time or analysis', () => {
     expect(getWodResultFeedback('8 rounds + 12 reps')).toBe(
       'Boa, meu atleta! Mais um WOD pra conta! 🔥💪😂',

@@ -377,9 +377,11 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
                   significam que o treino não foi finalizado e faltou uma repetição. Quem finalizou
                   fica acima de quem bateu o CAP. Entre os CAPs, menos repetições faltando significa
                   melhor posição e a mesma quantidade gera empate. Resultados em rounds são
-                  comparados pelo maior número de rounds e, em caso de empate, pelas reps extras.
-                  Resultados como 150 reps são comparados pelo maior total de reps, separadamente
-                  dos rounds e dos tempos. Não convertemos rounds em reps.
+                  comparados pelo maior número de rounds e, em caso de empate, pelas reps extras. Em
+                  AMRAP, 3round + 12 equivale a 3 rounds + 12 reps: três rounds completos e mais 12
+                  repetições realizadas dentro do tempo. Essas reps extras não são reps faltantes de
+                  CAP. Resultados como 150 reps ou 150 repetições são comparados pelo maior total de
+                  reps, separadamente dos rounds e dos tempos. Não convertemos rounds em reps.
                 </p>
                 <p>
                   A pontuação por colocação é fixa: 1º recebe 100 pontos, 2º recebe 75, 3º recebe 50

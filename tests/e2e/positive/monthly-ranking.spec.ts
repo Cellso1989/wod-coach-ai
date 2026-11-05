@@ -177,6 +177,44 @@ test('daily ranking recovers after an API failure', async ({ page }) => {
 });
 
 for (const width of [390, 1280]) {
+  test(`saved AMRAP shorthand from the previous day scores in weekly and monthly results at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const now = new Date('2026-11-05T18:00:00Z');
+    await page.clock.setFixedTime(now);
+    const users = rankingUsers
+      .slice(0, 3)
+      .map((user) => (user.id === 'b' ? { ...user, name: 'Mateus' } : user));
+    const records = [
+      rankingResult('a', '05:00', { createdAt: new Date('2026-11-03T15:00:00Z') }),
+      rankingResult('c', '06:00', { createdAt: new Date('2026-11-03T15:00:00Z') }),
+      rankingResult('b', '07:00', { createdAt: new Date('2026-11-03T15:00:00Z') }),
+      rankingResult('b', '3round + 12', { createdAt: new Date('2026-11-04T15:00:00Z') }),
+    ];
+    await page.route('**/api/**', (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path.endsWith('/auth/me')) return route.fulfill({ json: { user: users[1] } });
+      if (path === '/api/ranking/monthly')
+        return route.fulfill({ json: buildTestRanking(users, records, 'b', now) });
+      return route.fulfill({ status: 404, json: {} });
+    });
+    await page.goto('/ranking');
+    await expect(
+      page.getByRole('status', { name: 'Abrindo WOD Coach AI', exact: true }),
+    ).toHaveCount(0);
+    const row = page
+      .getByRole('list', { name: 'Classificação mensal' })
+      .getByRole('listitem')
+      .filter({ hasText: 'Mateus' });
+    await expect(row.locator('summary')).toContainText('150');
+    await row.locator('summary').click();
+    await expect(row.getByText('3round + 12 · 1º no dia', { exact: true })).toBeVisible();
+    await expect(row.getByText('100 pts', { exact: true })).toBeVisible();
+    await expect(row.getByText('50 pts', { exact: true })).toBeVisible();
+    await expect(row.getByText('Não pontuou', { exact: true })).toHaveCount(0);
+  });
+
   test(`saved Cap +1 scores as an unfinished workout with one remaining rep at ${width}px`, async ({
     page,
   }, testInfo) => {
