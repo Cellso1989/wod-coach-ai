@@ -12,6 +12,8 @@ Nao incluir senhas, chaves de API, URLs secretas de banco ou dados sensiveis.
 
 ## Produto
 
+- Ajuste compacto do Admin publicado e verificado em 05/11/2026: commit local ebd904d enviado a origin/develop; producao em origin/main no commit 01166e00a9023abef41cc7a48554523066165ad7, com conteudo igual ao validado. Render dep-dbmem1eq1p3s73ecm8a0 (GitHub deployment 7584918275) success, verificacao as 17:47:29 de Sao Paulo. /health e /admin 200, endpoints administrativos 401 sem sessao. Bundle index-B7GNfW4X.js confirma botoes compactos e ausencia do paragrafo explicativo; CSS index-DI5fyAkU.css com hash identico ao build local conferido em 320/390/430/1280 px. Sem nova migracao nem teste autenticado em producao. Evidencia local: output/deploy/admin-compact-01166e0-verified.json.
+
 - Ajuste visual do Admin solicitado em 05/11/2026 apos captura de celular: botoes de cada usuario ficam menores, com textos Aprovar, Bloquear e Recuperar senha na mesma linha; nomes acessiveis completos e acoes mantidos. Removido o paragrafo explicativo abaixo de Log de acessos, deixando o filtro logo apos o titulo. Regras de coleta, horarios, permissao e API nao mudam; detalhes permanecem em docs/log-acessos.md. Usuario autorizou explicitamente commit, push e deploy deste ajuste em 05/11/2026, pelo fluxo origin/main do Render.
 - Validacao do ajuste visual: build web com TypeScript, ESLint dos dois componentes e formatacao aprovados. Previa com dados ficticios conferida em 320/390/430/1280 px, sem overflow nem quebra da linha dos tres botoes; fonte de 12 px e altura de 36 px confirmadas, texto explicativo ausente e nomes acessiveis preservados. Sem nova suite de negocio por ser alteracao apenas de apresentacao, sem migracao nem publicacao.
 
