@@ -4,6 +4,7 @@ import { api, ApiError, type AdminUsersResponse, type PasswordRecoveryLink } fro
 import { PageHeader } from '../components/PageHeader.js';
 import { Alert, Button, Card, TextInput } from '../components/ui.js';
 import { NavBar } from '../components/NavBar.js';
+import { AdminAccessLogs } from '../components/AdminAccessLogs.js';
 
 const STATUS_LABEL = {
   PENDING: 'Aguardando aprovação',
@@ -14,6 +15,7 @@ const STATUS_LABEL = {
 function formatDate(value: string | null): string {
   if (!value) return 'Sem atividade';
   return new Date(value).toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
     day: '2-digit',
     month: '2-digit',
     year: '2-digit',
@@ -212,6 +214,10 @@ export function AdminPage() {
                             <p className="mt-1 text-xs text-neutral-600">
                               Cadastro: {formatDate(user.createdAt)}
                             </p>
+                            <p className="mt-1 text-xs text-neutral-400">
+                              Último acesso registrado:{' '}
+                              {user.lastAccessAt ? formatDate(user.lastAccessAt) : 'Sem registro'}
+                            </p>
                           </div>
 
                           {!user.isAdmin && (
@@ -249,6 +255,7 @@ export function AdminPage() {
                 )}
               </div>
             </section>
+            <AdminAccessLogs users={data.users} />
             <section className="space-y-3" aria-labelledby="access-history-title">
               <h2
                 id="access-history-title"

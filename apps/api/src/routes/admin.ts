@@ -18,6 +18,31 @@ export default async function adminRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
   app.addHook('preHandler', requireAdmin);
 
+  app.get('/admin/access-logs', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const query = z
+      .object({ userId: z.string().uuid().optional(), before: z.string().uuid().optional() })
+      .strict()
+      .safeParse(request.query);
+    if (!query.success) return reply.code(400).send({ error: 'Filtro inválido' });
+    const { userId, before } = query.data;
+    const rows = await prisma.userAccessLog.findMany({
+      where: userId ? { userId } : {},
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 51,
+      ...(before ? { cursor: { id: before }, skip: 1 } : {}),
+      select: {
+        id: true,
+        userId: true,
+        kind: true,
+        createdAt: true,
+        user: { select: { name: true, email: true } },
+      },
+    });
+    const logs = rows.slice(0, 50);
+    return reply.send({ logs, nextCursor: rows.length > 50 ? logs.at(-1)!.id : null });
+  });
+
   app.post(
     '/admin/users/:id/password-reset',
     { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } },
@@ -108,6 +133,7 @@ export default async function adminRoutes(app: FastifyInstance) {
   });
 
   app.get('/admin/users', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
     const users = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
       select: {
@@ -117,6 +143,7 @@ export default async function adminRoutes(app: FastifyInstance) {
         accessStatus: true,
         isAdmin: true,
         createdAt: true,
+        lastAccessAt: true,
       },
     });
     const accessHistory = await prisma.userAccessAudit.findMany({

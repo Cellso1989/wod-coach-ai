@@ -17,6 +17,7 @@ model User {
   name         String
   accessStatus AccessStatus @default(PENDING)
   isAdmin      Boolean @default(false)
+  lastAccessAt DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -29,6 +30,7 @@ model User {
   resultAnnouncements  ResultAnnouncement[]
   rankingNotifications RankingNotification[]
   pushSubscriptions    PushSubscription[]
+  accessLogs           UserAccessLog[]
 
   @@map("users")
 }
@@ -37,6 +39,25 @@ enum AccessStatus {
   PENDING
   APPROVED
   BLOCKED
+}
+
+enum UserAccessKind {
+  LOGIN
+  SESSION_RETURN
+  CROSSFIT_ANALYSIS
+  HYROX_ANALYSIS
+}
+
+model UserAccessLog {
+  id        String @id @default(uuid())
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      UserAccessKind
+  createdAt DateTime @default(now())
+
+  @@index([createdAt, id])
+  @@index([userId, createdAt, id])
+  @@map("user_access_logs")
 }
 
 // Immutable identity snapshots keep the audit readable even after account changes.

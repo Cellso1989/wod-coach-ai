@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { buildApp } from '../../apps/api/src/app.js';
+import { recordUserAccess } from '../../apps/api/src/services/access-log.js';
 
 const db = vi.hoisted(() => {
   type User = {
@@ -10,12 +11,15 @@ const db = vi.hoisted(() => {
     passwordHash: string;
     accessStatus: 'PENDING' | 'APPROVED' | 'BLOCKED';
     isAdmin: boolean;
+    lastAccessAt?: Date | null;
   };
   const users = new Map<string, User>();
   const audits: Record<string, unknown>[] = [];
+  const logs: Record<string, unknown>[] = [];
   return {
     users,
     audits,
+    logs,
     user: {
       findUnique: vi.fn(async ({ where }: { where: { id?: string; email?: string } }) =>
         where.id
@@ -41,7 +45,20 @@ const db = vi.hoisted(() => {
         return user;
       }),
       findMany: vi.fn(async () => []),
+      updateMany: vi.fn(async ({ where, data }) => {
+        const user = users.get(where.id);
+        if (!user || user.accessStatus !== where.accessStatus) return { count: 0 };
+        if (where.OR && user.lastAccessAt && user.lastAccessAt > where.OR[1].lastAccessAt.lte)
+          return { count: 0 };
+        users.set(user.id, { ...user, ...data });
+        return { count: 1 };
+      }),
     },
+    logCreate: vi.fn(async ({ data }) => {
+      logs.push(data);
+      return data;
+    }),
+    logFindMany: vi.fn(async () => [] as Record<string, unknown>[]),
     auditCreate: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
       audits.push(data);
       return data;
@@ -50,7 +67,11 @@ const db = vi.hoisted(() => {
 });
 
 vi.mock('../../packages/database/dist/index.js', async (original) => {
-  const tx = { user: db.user, userAccessAudit: { create: db.auditCreate } };
+  const tx = {
+    user: db.user,
+    userAccessAudit: { create: db.auditCreate },
+    userAccessLog: { create: db.logCreate, findMany: db.logFindMany },
+  };
   const empty = { findMany: async () => [] };
   return {
     ...(await original<typeof import('@wod-coach-ai/database')>()),
@@ -67,12 +88,14 @@ vi.mock('../../packages/database/dist/index.js', async (original) => {
       $transaction: async (work: (client: typeof tx) => Promise<unknown>) => {
         const snapshot = new Map(db.users);
         const count = db.audits.length;
+        const logCount = db.logs.length;
         try {
           return await work(tx);
         } catch (error) {
           db.users.clear();
           for (const [id, user] of snapshot) db.users.set(id, user);
           db.audits.length = count;
+          db.logs.length = logCount;
           throw error;
         }
       },
@@ -106,6 +129,8 @@ describe('user approval and administrator authorization', () => {
     vi.clearAllMocks();
     db.users.clear();
     db.audits.length = 0;
+    db.logs.length = 0;
+    db.logFindMany.mockResolvedValue([]);
     // bcrypt hash of the public test password "correct-password" (cost 4).
     const passwordHash = '$2a$04$.7pz4BmlMXjq9ZnanWYM2e1RWTc7rqjfksptyeL9jJYIBJoz5dNRi';
     db.users.set(adminId, {
@@ -128,6 +153,7 @@ describe('user approval and administrator authorization', () => {
     await app.ready();
   });
   afterEach(async () => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
     await app.close();
   });
@@ -307,5 +333,170 @@ describe('user approval and administrator authorization', () => {
       payload: { status: 'APPROVED', isAdmin: true },
     });
     expect(response.statusCode).toBe(400);
+  });
+
+  it('records successful logins including repeated logins, but not invalid credentials or denied accounts', async () => {
+    for (const status of ['PENDING', 'BLOCKED', 'APPROVED'] as const) {
+      db.users.get(athleteId)!.accessStatus = status;
+      await app.inject({ method: 'POST', url: '/api/auth/login', payload: credentials });
+    }
+    await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { ...credentials, password: 'wrong' },
+    });
+    await app.inject({ method: 'POST', url: '/api/auth/login', payload: credentials });
+    expect(db.logs).toHaveLength(2);
+    expect(db.logs[0]).toEqual({ userId: athleteId, kind: 'LOGIN', createdAt: expect.any(Date) });
+    expect(db.users.get(athleteId)!.lastAccessAt).toBeInstanceOf(Date);
+  });
+
+  it('tracks existing sessions on reopening, skips reloads within 30 minutes, and keeps users independent', async () => {
+    db.users.get(athleteId)!.accessStatus = 'APPROVED';
+    await app.inject({ url: '/api/auth/me', headers: headers(athleteId) });
+    await app.inject({ url: '/api/auth/me', headers: headers(athleteId) });
+    expect(db.logs).toHaveLength(1);
+    db.users.get(athleteId)!.lastAccessAt = new Date(Date.now() - 31 * 60 * 1000);
+    await app.inject({ url: '/api/auth/me', headers: headers(athleteId) });
+    await app.inject({ url: '/api/auth/me', headers: headers(adminId) });
+    expect(db.logs.map((entry) => [entry.userId, entry.kind])).toEqual([
+      [athleteId, 'SESSION_RETURN'],
+      [athleteId, 'SESSION_RETURN'],
+      [adminId, 'SESSION_RETURN'],
+    ]);
+  });
+
+  it('does not record ordinary protected requests or a session check immediately after login', async () => {
+    db.users.get(athleteId)!.accessStatus = 'APPROVED';
+    await app.inject({ method: 'POST', url: '/api/auth/login', payload: credentials });
+    const response = await app.inject({ url: '/api/auth/me', headers: headers(athleteId) });
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.json().user).not.toHaveProperty('lastAccessAt');
+    await app.inject({ url: '/api/admin/users', headers: headers(adminId) });
+    expect(db.logs).toHaveLength(1);
+  });
+
+  it('rolls back the access timestamp if the log fails and still allows authentication and a later retry', async () => {
+    db.users.get(athleteId)!.accessStatus = 'APPROVED';
+    db.logCreate.mockRejectedValueOnce(new Error('storage unavailable'));
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: credentials,
+    });
+    expect(login.statusCode).toBe(200);
+    expect(login.headers['set-cookie']).toContain('HttpOnly');
+    expect(db.users.get(athleteId)!.lastAccessAt).toBeUndefined();
+    expect(db.logs).toHaveLength(0);
+    expect(
+      (await app.inject({ url: '/api/auth/me', headers: headers(athleteId) })).statusCode,
+    ).toBe(200);
+    expect(db.logs).toHaveLength(1);
+  });
+
+  it('protects the access log from anonymous, pending, blocked and non-admin users', async () => {
+    const url = '/api/admin/access-logs';
+    expect((await app.inject({ url })).statusCode).toBe(401);
+    for (const status of ['PENDING', 'BLOCKED', 'APPROVED'] as const) {
+      db.users.get(athleteId)!.accessStatus = status;
+      expect((await app.inject({ url, headers: headers(athleteId) })).statusCode).toBe(403);
+    }
+    expect(db.logFindMany).not.toHaveBeenCalled();
+    expect(db.logs).toHaveLength(0);
+  });
+
+  it('lists only the requested user with stable newest-first pagination and private cache headers', async () => {
+    const rows = Array.from({ length: 51 }, (_, i) => ({ id: `event-${i}` }));
+    db.logFindMany.mockResolvedValueOnce(rows);
+    const response = await app.inject({
+      url: `/api/admin/access-logs?userId=${athleteId}&before=${adminId}`,
+      headers: headers(adminId),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.json()).toEqual({ logs: rows.slice(0, 50), nextCursor: 'event-49' });
+    expect(db.logFindMany).toHaveBeenCalledWith({
+      where: { userId: athleteId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 51,
+      cursor: { id: adminId },
+      skip: 1,
+      select: {
+        id: true,
+        userId: true,
+        kind: true,
+        createdAt: true,
+        user: { select: { name: true, email: true } },
+      },
+    });
+    expect(
+      (await app.inject({ url: '/api/admin/access-logs', headers: headers(adminId) })).json(),
+    ).toEqual({ logs: [], nextCursor: null });
+    expect(db.user.findMany).not.toHaveBeenCalled();
+  });
+
+  it.each(['userId=bad', 'before=bad', 'limit=100000', 'userId[]=bad'])(
+    'rejects invalid access-log filters: %s',
+    async (query) => {
+      expect(
+        (await app.inject({ url: `/api/admin/access-logs?${query}`, headers: headers(adminId) }))
+          .statusCode,
+      ).toBe(400);
+      expect(db.logFindMany).not.toHaveBeenCalled();
+    },
+  );
+
+  it('selects last recorded access for the admin list without returning password hashes', async () => {
+    await app.inject({ url: '/api/admin/users', headers: headers(adminId) });
+    expect(db.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          accessStatus: true,
+          isAdmin: true,
+          createdAt: true,
+          lastAccessAt: true,
+        },
+      }),
+    );
+  });
+
+  it('enforces the exact 30-minute boundary and avoids writes while within the interval', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const start = new Date('2026-11-05T15:00:00Z');
+    vi.setSystemTime(start);
+    db.users.get(athleteId)!.accessStatus = 'APPROVED';
+    await app.inject({ url: '/api/auth/me', headers: headers(athleteId) });
+    expect(db.user.updateMany).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(new Date(start.getTime() + 30 * 60 * 1000 - 1));
+    await app.inject({ url: '/api/auth/me', headers: headers(athleteId) });
+    expect(db.user.updateMany).toHaveBeenCalledTimes(1);
+    expect(db.users.get(athleteId)!.lastAccessAt).toEqual(start);
+    vi.setSystemTime(new Date(start.getTime() + 30 * 60 * 1000));
+    await app.inject({ url: '/api/auth/me', headers: headers(athleteId) });
+    expect(db.logs).toHaveLength(2);
+  });
+
+  it('rechecks eligibility and deduplication in the database even when callers have stale user reads', async () => {
+    db.users.get(athleteId)!.accessStatus = 'APPROVED';
+    const stale = { id: athleteId, lastAccessAt: null };
+    await Promise.all(
+      Array.from({ length: 8 }, () => recordUserAccess(stale, 'SESSION_RETURN', app.log)),
+    );
+    expect(db.logs).toHaveLength(1);
+    expect(db.user.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: athleteId,
+          accessStatus: 'APPROVED',
+          OR: [{ lastAccessAt: null }, { lastAccessAt: { lte: expect.any(Date) } }],
+        },
+      }),
+    );
+    db.users.get(athleteId)!.accessStatus = 'BLOCKED';
+    await recordUserAccess(stale, 'LOGIN', app.log);
+    expect(db.logs).toHaveLength(1);
   });
 });
