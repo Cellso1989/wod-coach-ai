@@ -180,4 +180,79 @@ describe('compact WOD ladders retain execution order', () => {
       .mockResolvedValueOnce({ text: JSON.stringify(ladderStrategy) });
     expect(await generateStrategy(input, send)).toEqual(ladderStrategy);
   });
+
+  it.each([
+    'Round 1: 7/7/7; Round 2: 7/7/7; Round 3: 9 direto.',
+    'R1: 3x7; R2: 7 + 7; R3: 9 direto.',
+    'Bloco 1: 21; Bloco 2: 8/7; Bloco 3: 2x5.',
+    'Round 1: 15 direto; Round 2: 8/7; Round 3: 9 direto.',
+  ])('rejects an explicit round break that disagrees with its own volume: %s', async (strategy) => {
+    const output = structuredClone(ladderStrategy);
+    output.breakStrategy[0]!.strategy = strategy;
+    const send = vi.fn().mockResolvedValue({ text: JSON.stringify(output) });
+    await expect(generateStrategy(input, send)).rejects.toBeInstanceOf(StrategyGenerationError);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['breakStrategy', 'movementStrategy'] as const)(
+    'rejects incorrect sets in a separate round-labelled %s entry',
+    async (field) => {
+      const output = structuredClone(ladderStrategy);
+      output[field] = [
+        { movement: 'Thrusters (Round 1 - 21 reps)', strategy: '3x7.' },
+        { movement: 'Thrusters (Round 2 - 15 reps)', strategy: '3x7.' },
+        { movement: 'Thrusters (Round 3 - 9 reps)', strategy: '9 direto.' },
+        ...output[field].slice(1),
+      ];
+      const send = vi.fn().mockResolvedValue({ text: JSON.stringify(output) });
+      await expect(generateStrategy(input, send)).rejects.toBeInstanceOf(StrategyGenerationError);
+    },
+  );
+
+  it('retries incorrect per-round arithmetic and returns only the corrected plan', async () => {
+    const invalid = structuredClone(ladderStrategy);
+    invalid.breakStrategy[0]!.strategy = 'R1: 7/7/7; R2: 7/7/7; R3: 9 direto.';
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce({ text: JSON.stringify(invalid) })
+      .mockResolvedValueOnce({ text: JSON.stringify(ladderStrategy) });
+    expect(await generateStrategy(input, send)).toEqual(ladderStrategy);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses actual round numbers after a buy-in when checking explicit sets', async () => {
+    const analysis = structuredClone(ladderAnalysis);
+    for (const round of analysis.rounds!) round.roundNumber += 1;
+    const output = structuredClone(ladderStrategy);
+    for (const field of ['breakStrategy', 'movementStrategy'] as const) {
+      output[field] = analysis.rounds!.map((round) => ({
+        movement: `Thrusters (Round ${round.roundNumber} - ${round.movements[0]!.reps} reps)`,
+        strategy: round.roundNumber === 2 ? '3x7.' : round.roundNumber === 3 ? '8/7.' : '9 direto.',
+      }));
+    }
+    analysis.movements = [analysis.movements[0]!];
+    for (const round of analysis.rounds!) round.movements = [round.movements[0]!];
+    const send = vi.fn().mockResolvedValue({ text: JSON.stringify(output) });
+    expect(await generateStrategy({ ...input, wodAnalysis: analysis }, send)).toEqual(output);
+    output.breakStrategy[1]!.strategy = '3x7.';
+    send.mockResolvedValue({ text: JSON.stringify(output) });
+    await expect(
+      generateStrategy({ ...input, wodAnalysis: analysis }, send),
+    ).rejects.toBeInstanceOf(StrategyGenerationError);
+  });
+  it.each([
+    'R1: 3x7; R2: 8 + 7; R3: 9 reps direto.',
+    'Round 1: 21; Round 2: 8/7; Round 3: 9 unbroken.',
+    'Round 2: 20s/10s; respire e retome com tecnica.',
+    'Quebre antes da falha; ajuste as series conforme o grip.',
+  ])(
+    'preserves valid arithmetic or advice outside the supported count grammar: %s',
+    async (strategy) => {
+      const output = structuredClone(ladderStrategy);
+      output.breakStrategy[0]!.strategy = strategy;
+      const send = vi.fn().mockResolvedValue({ text: JSON.stringify(output) });
+      expect(await generateStrategy(input, send)).toEqual(output);
+      expect(send).toHaveBeenCalledTimes(1);
+    },
+  );
 });
