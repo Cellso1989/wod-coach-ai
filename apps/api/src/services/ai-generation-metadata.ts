@@ -13,6 +13,17 @@ interface AiGenerationAttempt {
   usage: AiTokenUsage | null;
 }
 
+export interface AiAttemptTiming {
+  durationMs: number;
+  status: 'received' | 'failed';
+  requestedModel: string;
+  requestedReasoningEffort: SendMessageParams['effort'];
+  maxOutputTokens: number;
+  promptVersion: string;
+  model: string | null;
+  usage: AiTokenUsage | null;
+}
+
 export interface AiGenerationMetadata {
   schemaVersion: 1;
   provider: 'openai';
@@ -24,33 +35,54 @@ export interface AiGenerationMetadata {
 export function captureAiGeneration(
   sendMessage: (params: SendMessageParams) => Promise<AiTextMessage>,
   agent: AiGenerationMetadata['agent'],
-  onAttempt?: (attempt: { durationMs: number; status: 'received' | 'failed' }) => void,
+  onAttempt?: (attempt: AiAttemptTiming) => void,
 ) {
   const attempts: AiGenerationAttempt[] = [];
+  function observe(attempt: AiAttemptTiming) {
+    try {
+      onAttempt?.(attempt);
+    } catch {
+      // Instrumentation cannot reject a valid response or mask a transport failure.
+    }
+  }
   return {
     async sendMessage(params: SendMessageParams): Promise<AiTextMessage> {
       const started = performance.now();
+      const details = {
+        requestedModel: params.model,
+        requestedReasoningEffort: params.effort,
+        maxOutputTokens: params.maxTokens,
+        promptVersion: `sha256:${createHash('sha256').update(params.systemPrompt).digest('hex')}`,
+      };
       let message: AiTextMessage;
       try {
         message = await sendMessage(params);
       } catch (error) {
-        onAttempt?.({ durationMs: performance.now() - started, status: 'failed' });
+        observe({
+          durationMs: performance.now() - started,
+          status: 'failed',
+          ...details,
+          model: null,
+          usage: null,
+        });
         throw error;
       }
       const durationMs = performance.now() - started;
       attempts.push({
         attempt: attempts.length + 1,
         durationMs,
-        requestedModel: params.model,
+        ...details,
         model: message.metadata?.model ?? null,
         responseId: message.metadata?.responseId ?? null,
-        // Content-addressed system prompt version, independent of athlete data.
-        promptVersion: `sha256:${createHash('sha256').update(params.systemPrompt).digest('hex')}`,
-        requestedReasoningEffort: params.effort,
-        maxOutputTokens: params.maxTokens,
         usage: message.metadata?.usage ? { ...message.metadata.usage } : null,
       });
-      onAttempt?.({ durationMs, status: 'received' });
+      observe({
+        durationMs,
+        status: 'received',
+        ...details,
+        model: message.metadata?.model ?? null,
+        usage: message.metadata?.usage ? { ...message.metadata.usage } : null,
+      });
       return message;
     },
     metadata(): AiGenerationMetadata {

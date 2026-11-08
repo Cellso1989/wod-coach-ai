@@ -1,4 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { AiValidationObservation } from '@wod-coach-ai/coach-engine';
+import type { AiAttemptTiming } from './ai-generation-metadata.js';
+import { wodMeasurementId, WOD_TELEMETRY_INSTANCE_ID } from './wod-generation-http-timing.js';
 
 type Stage = 'sourceRead' | 'context' | 'profile' | 'analysisRead' | 'ai' | 'persistence';
 
@@ -10,7 +13,9 @@ export function observeWodGeneration(
 ) {
   const started = performance.now();
   const stages: Partial<Record<Stage, number>> = {};
-  const attempts: Array<{ durationMs: number; status: 'received' | 'failed' }> = [];
+  const attempts: Array<Pick<AiAttemptTiming, 'durationMs' | 'status'> & Partial<AiAttemptTiming>> =
+    [];
+  const validations: AiValidationObservation[] = [];
   let sourceType: string | null = null;
   return {
     setSourceType(value: string) {
@@ -18,6 +23,9 @@ export function observeWodGeneration(
     },
     recordAttempt(attempt: (typeof attempts)[number]) {
       attempts.push({ ...attempt });
+    },
+    recordValidation(event: AiValidationObservation) {
+      validations.push(structuredClone(event));
     },
     async measure<T>(stage: Stage, work: () => Promise<T>): Promise<T> {
       const start = performance.now();
@@ -38,6 +46,10 @@ export function observeWodGeneration(
         request.log.info(
           {
             event: 'wod_generation_timing',
+            schemaVersion: 2,
+            instanceId: WOD_TELEMETRY_INSTANCE_ID,
+            requestId: request.id ?? null,
+            measurementId: wodMeasurementId(request),
             operation,
             sourceType,
             // Thrown errors are mapped to HTTP codes later by the error handler.
@@ -46,6 +58,17 @@ export function observeWodGeneration(
             durationMs: performance.now() - started,
             stages,
             attempts,
+            validations,
+            aiSummary: {
+              attemptCount: attempts.length,
+              correctionAttempted: attempts.length > 1,
+              correctionRequested: validations.some((item) => item.willRetry),
+              corrected:
+                validations.some((item) => item.status === 'rejected') &&
+                validations.some((item) => item.status === 'accepted'),
+              rejectedResponses: validations.filter((item) => item.status === 'rejected').length,
+              acceptedResponses: validations.filter((item) => item.status === 'accepted').length,
+            },
           },
           'WOD generation timing',
         );

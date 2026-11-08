@@ -3,7 +3,12 @@ import {
   type StrategyOutput,
   type WodAnalysisOutput,
 } from '@wod-coach-ai/validation';
-import { callAiForJson, AiJsonError, type SendMessage } from './ai-json-agent.js';
+import {
+  callAiForJson,
+  AiJsonError,
+  type SendMessage,
+  type AiValidationObserver,
+} from './ai-json-agent.js';
 import type { AthleteContext } from './athlete-performance-agent.js';
 import { z } from 'zod';
 import { loadCalculationSchema, validateLoadCalculations } from './strategy-load-evidence.js';
@@ -286,6 +291,7 @@ function buildUserContent(input: StrategyCoachInput): string {
 
 export interface GenerateStrategyOptions {
   maxAttempts?: number;
+  onValidation?: AiValidationObserver;
   /** For offline comparisons; production keeps the validated medium default. */
   effort?: 'low' | 'medium';
 }
@@ -314,6 +320,7 @@ export async function generateStrategy(
       userContent: [{ type: 'text', text: buildUserContent(input) }],
       sendMessage,
       maxAttempts: options.maxAttempts,
+      onValidation: options.onValidation,
       model: 'gpt-5-mini',
       // Responses budgets include reasoning as well as the final strategy JSON.
       maxTokens: 8000,

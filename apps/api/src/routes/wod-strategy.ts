@@ -178,22 +178,25 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
           };
 
           const generation = captureAiGeneration(
-            async (params) => {
-              await lease.assertOwned();
-              return sendMessage(params);
-            },
+            sendMessage,
             'StrategyCoachAgent',
             timing.recordAttempt,
           );
+          const guardedSendMessage: typeof generation.sendMessage = async (params) => {
+            await lease.assertOwned();
+            return generation.sendMessage(params);
+          };
           let output;
           try {
             output = await timing.measure('ai', () =>
-              generateStrategy(strategyInput, generation.sendMessage),
+              generateStrategy(strategyInput, guardedSendMessage, {
+                onValidation: timing.recordValidation,
+              }),
             );
           } catch (err) {
             if (err instanceof StrategyGenerationError) {
               request.log.warn(
-                { err: err.message, rawResponse: err.rawResponse },
+                { code: 'WOD_STRATEGY_INVALID_RESPONSE' },
                 'Strategy generation failed',
               );
               reply.code(502);
