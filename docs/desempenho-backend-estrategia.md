@@ -1,7 +1,7 @@
 # Desempenho do backend da estrategia CrossFit
 
-Implementacao local em 08/11/2026. Usuario autorizou explicitamente commit,
-push e publicacao deste ajuste; verificacao do deploy pendente.
+Publicado em develop `2936ef8` e main `b28ad73`, em 08/11/2026. Deploy Render
+`dep-dbobn6p42hec73d839dg` confirmado live as 15:14:02 de Sao Paulo.
 
 ## Evidencia que orientou a mudanca
 
@@ -76,3 +76,13 @@ modelo/tentativas/fontes e databaseOperations por chamada. Nao somar etapas
 sobrepostas. Comparar mais de uma amostra antes de afirmar media/p95 ou ganho
 real. Usar os tempos de persistencia e reserva para decidir o proximo ajuste;
 tempo de entrada/commit da transacao ainda pode ficar fora das chamadas internas.
+
+## Publicacao
+
+Verificacao as 15:14:10 de Sao Paulo: health/pagina 200, rotas de metricas
+e geracao de estrategia 401 sem sessao, JS/CSS com hashes identicos ao build
+local de producao. Build remoto concluido e servico confirmado live no commit
+validado. Sem nova migration ou geracao autenticada/paga nesta verificacao.
+Ganho real sera medido nas proximas geracoes; a verificacao publica nao
+exercita as consultas do contexto nem a gravacao com dados de atleta. Evidencia
+local: `output/deploy/crossfit-backend-b28ad73-verified.json`.
