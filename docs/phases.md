@@ -19,8 +19,8 @@ Cada fase só começa depois que a anterior está implementada e validada (typec
 
 Prioridade escolhida pelo usuario: fidelidade da analise e da estrategia.
 
-- Quebras numericas por round em escadas: primeiro incremento implementado
-  localmente, verificacao/publicacao acompanhadas na memoria do projeto.
+- Quebras numericas por round em escadas: primeiro incremento publicado
+  em 08/11/2026, com verificacao registrada na memoria do projeto.
   [Escopo e regressoes](confiabilidade-quebras-por-round.md).
 - Avaliacao completa S1-S8, OCR de imagens reais e revisao de coaching continuam
   pendentes. O corpus de capturas segue vazio; exemplos sinteticos e testes
