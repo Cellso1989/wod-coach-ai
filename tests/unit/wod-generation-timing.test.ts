@@ -5,6 +5,29 @@ import { observeWodGeneration } from '../../apps/api/src/services/wod-generation
 afterEach(() => vi.restoreAllMocks());
 
 describe('WOD generation timings', () => {
+  it('measures database calls separately, including failures, without logging returned data or errors', async () => {
+    const { timing, info, advance } = setup();
+    const privateError = new Error('private SQL parameters');
+    await timing.run(async () => {
+      expect(
+        await timing.measureDatabase('context.target', async () => {
+          advance(12);
+          return { rawText: 'private workout' };
+        }),
+      ).toEqual({ rawText: 'private workout' });
+      await expect(
+        timing.measureDatabase('lease.assert', async () => {
+          advance(4);
+          throw privateError;
+        }),
+      ).rejects.toBe(privateError);
+    });
+    expect(info.mock.calls[0][0].databaseOperations).toEqual([
+      { operation: 'context.target', durationMs: 12, status: 'succeeded' },
+      { operation: 'lease.assert', durationMs: 4, status: 'failed' },
+    ]);
+    expect(JSON.stringify(info.mock.calls)).not.toMatch(/private/);
+  });
   function setup() {
     let now = 0;
     vi.spyOn(performance, 'now').mockImplementation(() => now);

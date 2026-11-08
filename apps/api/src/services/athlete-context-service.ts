@@ -6,12 +6,18 @@ import {
   type HistoricalWodEntry,
   type WodAnalysisSummary,
 } from '@wod-coach-ai/coach-engine';
+import { withoutDatabaseTiming, type MeasureWodDatabase } from './wod-database-timing.js';
 
 const HISTORY_WINDOW_DAYS = 90;
 const CHECKIN_WINDOW_DAYS = 28;
 
 export class WodNotFoundError extends Error {}
 export class WodNotAnalyzedError extends Error {}
+
+function readResult<T>(result: PromiseSettledResult<T>): T {
+  if (result.status === 'rejected') throw result.reason;
+  return result.value;
+}
 
 /**
  * Loads the target WOD (with its analysis) plus the athlete's recent
@@ -22,15 +28,18 @@ export class WodNotAnalyzedError extends Error {}
 export async function getAthleteContextForWod(
   userId: string,
   wodId: string,
+  measure: MeasureWodDatabase = withoutDatabaseTiming,
 ): Promise<{
   targetWod: Wod & { analysis: WodAnalysis & { movements: WodMovement[] } };
   targetAnalysis: WodAnalysisSummary;
   context: AthleteContext;
 }> {
-  const targetWod = await prisma.wod.findFirst({
-    where: { id: wodId, userId },
-    include: { analysis: { include: { movements: true } } },
-  });
+  const targetWod = await measure('context.target', () =>
+    prisma.wod.findFirst({
+      where: { id: wodId, userId },
+      include: { analysis: { include: { movements: true } } },
+    }),
+  );
 
   if (!targetWod) {
     throw new WodNotFoundError();
@@ -42,50 +51,61 @@ export async function getAthleteContextForWod(
   const historyCutoff = new Date(Date.now() - HISTORY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const checkinCutoff = new Date(Date.now() - CHECKIN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
-  const [historicalWods, checkins, personalRecords] = await Promise.all([
-    prisma.wod.findMany({
-      where: { userId, id: { not: wodId }, date: { gte: historyCutoff } },
-      select: {
-        id: true,
-        date: true,
-        analysis: {
-          select: {
-            format: true,
-            durationMinutes: true,
-            stimulus: true,
-            movements: { select: { name: true, category: true } },
+  // Finish every in-flight read before the caller releases its generation lease
+  // or writes the timing event, even if one of the parallel reads fails.
+  const reads = await Promise.allSettled([
+    measure('context.history', () =>
+      prisma.wod.findMany({
+        where: { userId, id: { not: wodId }, date: { gte: historyCutoff } },
+        select: {
+          id: true,
+          date: true,
+          analysis: {
+            select: {
+              format: true,
+              durationMinutes: true,
+              stimulus: true,
+              movements: { select: { name: true, category: true } },
+            },
+          },
+          result: { select: { score: true } },
+          strategy: {
+            select: {
+              recommendedIntensity: true,
+              targetRpe: true,
+              criticalPoint: true,
+              breakStrategy: true,
+            },
           },
         },
-        result: { select: { score: true } },
-        strategy: {
-          select: {
-            recommendedIntensity: true,
-            targetRpe: true,
-            criticalPoint: true,
-            breakStrategy: true,
-          },
+        orderBy: { date: 'desc' },
+        take: 100,
+      }),
+    ),
+    measure('context.checkins', () =>
+      prisma.dailyCheckin.findMany({
+        where: { userId, date: { gte: checkinCutoff } },
+        orderBy: { date: 'desc' },
+        select: { date: true },
+      }),
+    ),
+    measure('context.personalRecords', () =>
+      prisma.personalRecord.findMany({
+        where: { userId },
+        select: {
+          movementName: true,
+          value: true,
+          unit: true,
+          recordType: true,
+          repetitions: true,
+          achievedAt: true,
         },
-      },
-      orderBy: { date: 'desc' },
-      take: 100,
-    }),
-    prisma.dailyCheckin.findMany({
-      where: { userId, date: { gte: checkinCutoff } },
-      orderBy: { date: 'desc' },
-      select: { date: true },
-    }),
-    prisma.personalRecord.findMany({
-      where: { userId },
-      select: {
-        movementName: true,
-        value: true,
-        unit: true,
-        recordType: true,
-        repetitions: true,
-        achievedAt: true,
-      },
-    }),
+      }),
+    ),
   ]);
+  const historicalWods = readResult(reads[0]);
+  const checkins = readResult(reads[1]);
+  const personalRecords = readResult(reads[2]);
 
   const targetAnalysis: WodAnalysisSummary = {
     format: targetWod.analysis.format,

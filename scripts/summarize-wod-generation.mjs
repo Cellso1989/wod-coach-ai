@@ -110,6 +110,15 @@ export function summarizeWodGenerationLogs(records) {
       ]) {
         stages[stage] = distribution(entries.map((r) => r.stages?.[stage]));
       }
+      const databaseOperations = {};
+      const databaseCalls = entries.flatMap((r) => r.databaseOperations ?? []);
+      for (const name of [...new Set(databaseCalls.map((call) => call.operation))].sort()) {
+        const calls = databaseCalls.filter((call) => call.operation === name);
+        databaseOperations[name] = {
+          ...distribution(calls.map((call) => call.durationMs)),
+          failures: calls.filter((call) => call.status === 'failed').length,
+        };
+      }
       return {
         routeWork: distribution(entries.map((r) => r.durationMs)),
         routeWorkWithCorrection: distribution(corrections.map((r) => r.durationMs)),
@@ -147,6 +156,7 @@ export function summarizeWodGenerationLogs(records) {
             .length,
         },
         stages,
+        databaseOperations,
       };
     };
     const httpById = new Map(http.filter(identity).map((r) => [identity(r), r]));

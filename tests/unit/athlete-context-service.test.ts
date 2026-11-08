@@ -15,6 +15,49 @@ vi.mock('../../packages/database/dist/index.js', () => ({ prisma }));
 beforeEach(() => vi.resetAllMocks());
 
 describe('athlete history projection', () => {
+  it('settles all account-scoped history reads before reporting a failure', async () => {
+    prisma.wod.findFirst.mockResolvedValue({ id: 'target', analysis: {} });
+    const failure = new Error('history unavailable');
+    prisma.wod.findMany.mockRejectedValue(failure);
+    let finish!: () => void;
+    prisma.dailyCheckin.findMany.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve([]);
+        }),
+    );
+    prisma.personalRecord.findMany.mockResolvedValue([]);
+    const completed: string[] = [];
+    const result = getAthleteContextForWod('athlete', 'target', async (name, work) => {
+      try {
+        return await work();
+      } finally {
+        completed.push(name);
+      }
+    });
+    const assertion = expect(result).rejects.toBe(failure);
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    expect(completed).toContain('context.history');
+    expect(completed).not.toContain('context.checkins');
+    finish();
+    await assertion;
+    expect(completed.sort()).toEqual([
+      'context.checkins',
+      'context.history',
+      'context.personalRecords',
+      'context.target',
+    ]);
+    expect(prisma.dailyCheckin.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: 'athlete' }),
+      }),
+    );
+    expect(prisma.personalRecord.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 'athlete' },
+      }),
+    );
+  });
   it('keeps score, prior advice, PRs and training counts while excluding photos and full AI payloads', async () => {
     const now = new Date();
     const analysis = {

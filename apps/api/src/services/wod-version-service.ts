@@ -7,6 +7,7 @@ import {
 } from '@wod-coach-ai/database';
 import type { StrategyCoachInput } from '@wod-coach-ai/coach-engine';
 import type { AiGenerationMetadata } from './ai-generation-metadata.js';
+import { withoutDatabaseTiming, type MeasureWodDatabase } from './wod-database-timing.js';
 
 type AnalysisWithMovements = WodAnalysis & { movements: WodMovement[] };
 
@@ -74,25 +75,32 @@ export async function recordStrategyVersion(
   analysisVersionId: string,
   input: StrategyCoachInput,
   generationMetadata?: AiGenerationMetadata,
+  measure: MeasureWodDatabase = withoutDatabaseTiming,
 ) {
-  const latest = await tx.wodStrategyVersion.findFirst({
-    where: { wodId: wod.id },
-    orderBy: { version: 'desc' },
-    select: { version: true },
-  });
-  const version = await tx.wodStrategyVersion.create({
-    data: {
-      wodId: wod.id,
-      version: (latest?.version ?? 0) + 1,
-      analysisVersionId,
-      sourceSnapshot: sourceSnapshot(wod),
-      inputSnapshot: jsonSnapshot(input),
-      snapshot: jsonSnapshot({
-        ...strategy,
-        versionId: undefined,
-        generationMetadata: generationMetadata ?? null,
-      }),
-    },
-  });
-  return tx.wodStrategy.update({ where: { wodId: wod.id }, data: { versionId: version.id } });
+  const latest = await measure('persistence.versionRead', () =>
+    tx.wodStrategyVersion.findFirst({
+      where: { wodId: wod.id },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    }),
+  );
+  const version = await measure('persistence.versionCreate', () =>
+    tx.wodStrategyVersion.create({
+      data: {
+        wodId: wod.id,
+        version: (latest?.version ?? 0) + 1,
+        analysisVersionId,
+        sourceSnapshot: sourceSnapshot(wod),
+        inputSnapshot: jsonSnapshot(input),
+        snapshot: jsonSnapshot({
+          ...strategy,
+          versionId: undefined,
+          generationMetadata: generationMetadata ?? null,
+        }),
+      },
+    }),
+  );
+  return measure('persistence.versionActivate', () =>
+    tx.wodStrategy.update({ where: { wodId: wod.id }, data: { versionId: version.id } }),
+  );
 }

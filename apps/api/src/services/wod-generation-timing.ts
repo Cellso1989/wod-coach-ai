@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AiValidationObservation } from '@wod-coach-ai/coach-engine';
 import type { AiAttemptTiming } from './ai-generation-metadata.js';
 import { wodMeasurementId, WOD_TELEMETRY_INSTANCE_ID } from './wod-generation-http-timing.js';
+import type { MeasureWodDatabase, WodDatabaseOperation } from './wod-database-timing.js';
 
 type Stage = 'sourceRead' | 'context' | 'profile' | 'analysisRead' | 'ai' | 'persistence';
 
@@ -16,8 +17,25 @@ export function observeWodGeneration(
   const attempts: Array<Pick<AiAttemptTiming, 'durationMs' | 'status'> & Partial<AiAttemptTiming>> =
     [];
   const validations: AiValidationObservation[] = [];
+  const databaseOperations: Array<{
+    operation: WodDatabaseOperation;
+    durationMs: number;
+    status: 'succeeded' | 'failed';
+  }> = [];
+  const measureDatabase: MeasureWodDatabase = async (operation, work) => {
+    const start = performance.now();
+    let status: 'succeeded' | 'failed' = 'failed';
+    try {
+      const result = await work();
+      status = 'succeeded';
+      return result;
+    } finally {
+      databaseOperations.push({ operation, durationMs: performance.now() - start, status });
+    }
+  };
   let sourceType: string | null = null;
   return {
+    measureDatabase,
     setSourceType(value: string) {
       sourceType = value;
     },
@@ -59,6 +77,7 @@ export function observeWodGeneration(
             stages,
             attempts,
             validations,
+            databaseOperations,
             aiSummary: {
               attemptCount: attempts.length,
               correctionAttempted: attempts.length > 1,

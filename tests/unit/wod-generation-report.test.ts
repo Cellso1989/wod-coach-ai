@@ -11,6 +11,25 @@ import {
 } from '../../scripts/summarize-wod-generation.mjs';
 
 describe('CrossFit production log report', () => {
+  it('summarizes per-call database waits without treating overlapping operations as additive', () => {
+    const result = summarizeWodGenerationLogs([
+      {
+        ...work('a', false, 100),
+        databaseOperations: [
+          { operation: 'profile', durationMs: 30, status: 'succeeded' },
+          { operation: 'lease.assert', durationMs: 10, status: 'succeeded' },
+          { operation: 'lease.assert', durationMs: 20, status: 'failed' },
+        ],
+      },
+      work('older', false, 50),
+    ]);
+    expect(result.groups[0].databaseOperations).toEqual({
+      profile: { count: 1, p50Ms: 30, p95Ms: 30, maxMs: 30, failures: 0 },
+      'lease.assert': { count: 2, p50Ms: 10, p95Ms: 20, maxMs: 20, failures: 1 },
+    });
+    expect(result.groups[0].routeWork).toMatchObject({ count: 2, p50Ms: 50, maxMs: 100 });
+    expect(result.groups[1].databaseOperations).toEqual({});
+  });
   const work = (id: string, correction: boolean, durationMs: number, outcome = 'succeeded') => ({
     event: 'wod_generation_timing',
     schemaVersion: 2,
