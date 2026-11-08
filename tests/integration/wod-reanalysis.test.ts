@@ -162,6 +162,7 @@ let app: ReturnType<typeof buildApp>;
 let headers: { authorization: string };
 let lease: { token: string; expiresAt: number } | null;
 let simulatedTransactionDurationMs: number;
+let versionWriteCalls: Array<{ kind: string; select?: Record<string, boolean>; data: Row }>;
 
 async function leaseQuery(strings: TemplateStringsArray, ...values: unknown[]) {
   const sql = strings.join('?');
@@ -188,13 +189,16 @@ function databaseClient(current: () => Store) {
           ? current()[key].find((version) => version.id === where.id)
           : current()[key].at(-1)) ?? null,
       findMany: async () => [...current()[key]].reverse(),
-      create: async ({ data }: { data: Row }) => {
+      create: async ({ data, select }: { data: Row; select?: Record<string, boolean> }) => {
+        versionWriteCalls.push({ kind: key, select, data });
         if (failWrite === (key === 'analysisVersions' ? 'analysisVersion' : 'strategyVersion')) {
           throw new Error('Version write failed');
         }
         const row = structuredClone({ ...data, id: `${key}-${current()[key].length + 1}` });
         current()[key].push(row);
-        return row;
+        return select
+          ? Object.fromEntries(Object.entries(row).filter(([key]) => select[key]))
+          : row;
       },
     };
   }
@@ -288,6 +292,7 @@ beforeEach(async () => {
   mocks.prisma.$queryRaw.mockImplementation(leaseQuery);
   failWrite = null;
   simulatedTransactionDurationMs = 0;
+  versionWriteCalls = [];
   store = {
     wod: {
       id: 'wod-1',
@@ -367,6 +372,34 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  it('archives full image/input snapshots while fetching only version IDs on the write path', async () => {
+    store.wod.imageData = 'large-private-image-source';
+    store.wod.imageMimeType = 'image/jpeg';
+    await seedAnalyzedWod();
+    expect(versionWriteCalls).toEqual([
+      expect.objectContaining({
+        kind: 'analysisVersions',
+        select: { id: true },
+        data: expect.objectContaining({
+          sourceSnapshot: expect.objectContaining({ imageData: 'large-private-image-source' }),
+        }),
+      }),
+      expect.objectContaining({
+        kind: 'strategyVersions',
+        select: { id: true },
+        data: expect.objectContaining({
+          analysisVersionId: store.analysisVersions[0].id,
+          sourceSnapshot: expect.objectContaining({ imageData: 'large-private-image-source' }),
+          inputSnapshot: expect.objectContaining({
+            athleteContext: CONTEXT,
+            athleteProfile: PROFILE,
+          }),
+        }),
+      }),
+    ]);
+    expect(store.analysis?.versionId).toBe(store.analysisVersions[0].id);
+    expect(store.strategy?.versionId).toBe(store.strategyVersions[0].id);
+  });
   it('loads the profile while context is pending and avoids a duplicate source read on successful strategy generation', async () => {
     await seedAnalyzedWod();
     mocks.prisma.wod.findFirst.mockClear();
@@ -397,6 +430,9 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
       await observed;
       expect(mocks.sendMessage).not.toHaveBeenCalled();
       expect(lease).not.toBeNull();
+      expect(mocks.context).toHaveBeenLastCalledWith('athlete-1', 'wod-1', expect.any(Function), {
+        parallelHistory: true,
+      });
     } finally {
       releaseContext();
     }

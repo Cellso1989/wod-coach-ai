@@ -1154,6 +1154,7 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
     });
     expect(created.statusCode).toBe(201);
     const record = created.json().record;
+    let foreignUserId: string | undefined;
     try {
       expect(record).toMatchObject({ recordType: 'REP_MAX', repetitions: 5 });
       const url = `/api/personal-records/${record.id}`;
@@ -1166,7 +1167,18 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
         repetitions: 5,
       });
       const before = await prisma.personalRecord.findUniqueOrThrow({ where: { id: record.id } });
-      const foreignToken = [{ alg: 'HS256', typ: 'JWT' }, { sub: 'other-athlete' }]
+      // Exercise ownership with an approved account: a nonexistent subject is
+      // rejected by authentication (401) before the PR route can hide it (404).
+      const foreignUser = await prisma.user.create({
+        data: {
+          email: `version-foreign-${Date.now()}@example.test`,
+          name: 'Other regression athlete',
+          passwordHash: 'test-only',
+          accessStatus: 'APPROVED',
+        },
+      });
+      foreignUserId = foreignUser.id;
+      const foreignToken = [{ alg: 'HS256', typ: 'JWT' }, { sub: foreignUserId }]
         .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
         .join('.');
       const foreignHeaders = {
@@ -1220,6 +1232,7 @@ describe.skipIf(!process.env.WOD_VERSION_TEST_DATABASE_URL)('WOD versions on Pos
       );
     } finally {
       await prisma.personalRecord.delete({ where: { id: record.id } });
+      if (foreignUserId) await prisma.user.delete({ where: { id: foreignUserId } });
     }
   });
 
