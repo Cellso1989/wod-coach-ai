@@ -107,3 +107,45 @@ e nenhum erro de runtime retornado na consulta inicial. 922 testes aprovados,
 Evidencia local: `output/deploy/crossfit-strategy-model-10a7c69-verified.json`.
 O modelo solicitado efetivamente em producao sera conferido no proximo evento
 autenticado; nao foi gerado treino sintetico no banco para essa verificacao.
+
+## Primeira comparacao real apos a troca
+
+Coleta continua entre 14:29:56 e 14:36:02 de Sao Paulo, em 08/11/2026, retornou
+seis eventos sem pagina adicional. A estrategia concluida as 14:35:27 confirma
+modelo solicitado/reportado `gpt-5.4-mini-2026-03-17`, medium/8000, mesmo hash
+do prompt, resposta aceita na primeira tentativa e persistencia bem-sucedida.
+
+| Medicao da estrategia | Antes, 14:16 | Depois, 14:35 |
+| --------------------- | ------------ | ------------- |
+| Espera no navegador   | 56,96 s      | 32,90 s       |
+| HTTP servidor         | 56,66 s      | 32,54 s       |
+| Trabalho da rota      | 55,78 s      | 31,46 s       |
+| Chamada ao provedor   | 44,20 s      | 18,49 s       |
+| Contexto              | 4,22 s       | 4,36 s        |
+| Persistencia          | 2,99 s       | 4,13 s        |
+
+Reducao observada no navegador de 24,06 s (42,2%); na chamada ao provedor,
+58,2%. A diferenca navegador menos provedor ainda soma 14,42 s, incluindo as
+demais etapas, verificacoes, autenticacao, transferencia e parse. Nao atribuir
+todo esse intervalo ao banco ou a rede sem uma medicao mais especifica.
+
+Uma amostra por configuracao, com entradas diferentes: antes TEXT e 8316 tokens
+de entrada; depois TEXT_AND_IMAGE e 8812 tokens. A telemetria nao permite afirmar
+que se trata do mesmo treino nem provar causalidade isolada da troca de modelo.
+O evento de estrategia recebe a analise estruturada; TEXT_AND_IMAGE identifica
+a fonte do treino, sem comprovar envio de imagem ao modelo de estrategia.
+O resultado demonstra ganho nessa comparacao observada, sem estabelecer media,
+p95 populacional ou equivalencia de qualidade de coaching.
+
+Novo uso reportado: 8812 tokens de entrada (3968 em cache), 5324 de saida
+(4722 de raciocinio ja incluidos). Com os precos acima, estimativa de USD
+0,02789 contra USD 0,00996 na execucao anterior; nao e uma fatura nem comparacao
+de custo com input/cache controlados.
+
+A analise nova teve fonte IMAGE e 33,23 s no navegador, com o modelo antigo
+preservado. Nao comparar esse tempo com a analise anterior de texto como se
+fosse um teste controlado da mesma entrada.
+
+Evidencias locais: `output/crossfit-production-20261108-post-model.jsonl` e
+`output/crossfit-production-20261108-post-model-report.json`. Nenhuma nova
+chamada paga ou geracao foi feita pelo agente nesta coleta.
