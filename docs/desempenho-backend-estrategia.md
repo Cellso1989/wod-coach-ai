@@ -213,3 +213,50 @@ local de producao. Deploy confirmado live no commit validado; sem nova migration
 ou geracao autenticada/paga nesta verificacao. Ganho real de contexto e
 persistencia sera avaliado nas proximas geracoes. Evidencia local:
 `output/deploy/crossfit-context-d4d97bd-verified.json`.
+
+### Primeira coleta real da segunda etapa
+
+Janela continua de 08/11/2026, 20:43:00-20:45:28 de Sao Paulo: seis eventos,
+uma analise e uma estrategia com seus eventos HTTP/cliente correlacionados.
+Sem paginacao pendente. O check publico sem sessao das 20:42:15 ficou fora da
+janela. Coleta de leitura, sem chamada paga ou geracao feita pelo agente.
+
+Estrategia concluida as 20:45:05, 200 e aceita na primeira tentativa. Mesmo
+gpt-5.4-mini-2026-03-17/medium/8000/hash de prompt e categoria TEXT_AND_IMAGE
+da amostra anterior, das 15:19:14, antes desta segunda etapa.
+
+| Medida                       | Antes    | Depois   | Diferenca         |
+| ---------------------------- | -------- | -------- | ----------------- |
+| Navegador                    | 36,342 s | 21,459 s | -14,883 s / 41,0% |
+| HTTP completo                | 36,013 s | 21,226 s | -14,787 s         |
+| Trabalho da rota             | 35,137 s | 20,333 s | -14,804 s         |
+| Provedor                     | 23,812 s | 11,545 s | -12,267 s         |
+| Navegador menos provedor     | 12,530 s | 9,914 s  | -2,616 s / 20,9%  |
+| Contexto                     | 4,437 s  | 2,541 s  | -1,895 s / 42,7%  |
+| Perfil, paralelo ao contexto | 1,051 s  | 2,674 s  | +1,623 s          |
+| Persistencia                 | 4,259 s  | 3,437 s  | -0,822 s / 19,3%  |
+| Criar versao                 | 1,427 s  | 0,728 s  | -0,698 s          |
+
+Os eventos confirmam alvo/historico sobrepostos: alvo 1,949 s, historico
+2,539 s e contexto total 2,541 s. O perfil agora terminou depois do contexto;
+a maior espera do conjunto perfil/contexto foi 2,674 s vs 4,437 s antes.
+Nao somar os tempos paralelos. O aumento do perfil deve ser acompanhado,
+sem concluir por estes eventos que houve contencao de pool, indice lento ou
+problema de regiao. Reserva/liberacao 0,888/0,887 s; conferencia pre-provedor
+0,883 s. Na persistencia, demais chamadas 0,354-0,374 s, criar versao 0,728 s.
+Chamadas Prisma podem conter varios comandos SQL e incluem rede/pool.
+
+O total observado caiu, com reducao tambem fora do provedor. A maior parte
+da diferenca total veio da variacao da chamada de IA: 11,545 s vs 23,812 s.
+Input 8438 vs 8779, saida 3275 vs 7372, detalhe de raciocinio 2755 vs 6597
+(incluido na saida), cache 0 vs 3968. Nao atribuir os 41% somente ao codigo,
+nem toda a variacao da IA aos tokens. Uma amostra por versao nao comprova
+treino identico, efeito causal, qualidade equivalente, media ou p95 do app.
+
+Analise de imagem: navegador 30,336 s, provedor 15,128 s e persistencia 8,101 s;
+aceita sem retry. A projecao de ID tambem se aplica ao arquivo de analise,
+mas esta amostra nao isola seu efeito na gravacao.
+
+Evidencias locais: `output/crossfit-production-20261108-post-context.jsonl`,
+`output/crossfit-production-20261108-post-context-report.json` e
+`output/crossfit-production-20261108-post-context-comparison.json`.
