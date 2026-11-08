@@ -1,7 +1,8 @@
 # Confiabilidade: quebras por round
 
 Primeiro incremento da frente de confiabilidade escolhida em 08/11/2026.
-Implementado e verificado localmente; commit/publicacao ainda pendentes.
+Publicado em develop `61976c2` e main `237b4a1`; deploy Render
+`dep-dbobdb5g1s2s738bmfog` confirmado live em 08/11/2026.
 
 ## Falha reproduzida
 
@@ -69,3 +70,11 @@ Evidencias locais: `output/reliability-round-breaks-before.txt`,
 `output/reliability-round-breaks-focused.txt`,
 `output/reliability-round-breaks-archived-replay.json` e verificacoes gerais
 `output/reliability-round-breaks-{build,typecheck,tests}.txt`.
+
+## Publicacao
+
+Verificacao as 14:53:18 de Sao Paulo: health e pagina 200, rota de metricas
+401 sem sessao e hashes de JS/CSS iguais ao build local de producao. Nao houve
+nova migration ou chamada paga; guard exercitado pelos testes locais, sem
+geracao autenticada de atleta para esta verificacao. Evidencia local:
+`output/deploy/crossfit-round-breaks-237b4a1-verified.json`.
