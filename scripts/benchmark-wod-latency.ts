@@ -179,7 +179,10 @@ async function main() {
         const started = performance.now();
         let strategy, error;
         try {
-          strategy = await generateStrategy(input, generation.sendMessage, { effort });
+          strategy = await generateStrategy(input, generation.sendMessage, {
+            model: 'gpt-5-mini',
+            effort,
+          });
         } catch (err) {
           error =
             err instanceof Error

@@ -4,6 +4,11 @@ A instrumentacao foi ampliada em 08/11/2026 para medir producao e correcoes
 CrossFit; consulte [medicao-crossfit-producao.md](medicao-crossfit-producao.md).
 As medicoes abaixo continuam sendo ensaios locais da rodada de 03/11.
 
+Depois da primeira coleta completa de producao em 08/11, o modelo da estrategia
+CrossFit foi atualizado em comparacao controlada; detalhes, custo e limites em
+[otimizacao-estrategia-crossfit-2026-11-08.md](otimizacao-estrategia-crossfit-2026-11-08.md).
+As configuracoes descritas abaixo representam a rodada historica de 03/11.
+
 ## Escopo e mudancas
 
 Fluxo CrossFit: envio → analise → contexto do atleta → estrategia → persistencia.

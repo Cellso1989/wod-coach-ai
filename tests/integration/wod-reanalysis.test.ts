@@ -367,6 +367,37 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  it.each([
+    ['', 'gpt-5.4-mini-2026-03-17'],
+    [' gpt-5-mini ', 'gpt-5-mini'],
+  ])(
+    'uses server model configuration %j without trusting request overrides',
+    async (configured, expected) => {
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      mocks.sendMessage.mockClear();
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+      const previous = process.env.CROSSFIT_STRATEGY_MODEL;
+      process.env.CROSSFIT_STRATEGY_MODEL = configured;
+      try {
+        expect(
+          (await request('POST', 'strategy', { model: 'untrusted', effort: 'low' })).statusCode,
+        ).toBe(200);
+        expect(mocks.sendMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            model: expected,
+            effort: 'medium',
+            maxTokens: 8000,
+          }),
+        );
+        expect(
+          store.strategyVersions.at(-1)?.snapshot.generationMetadata.attempts[0].requestedModel,
+        ).toBe(expected);
+      } finally {
+        if (previous === undefined) delete process.env.CROSSFIT_STRATEGY_MODEL;
+        else process.env.CROSSFIT_STRATEGY_MODEL = previous;
+      }
+    },
+  );
   it.each(['analyze', 'strategy'])(
     'does not count a lease rejection as an AI attempt in %s',
     async (operation) => {
@@ -1266,7 +1297,8 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
               attempts: [
                 {
                   attempt: 1,
-                  requestedModel: 'gpt-5-mini',
+                  requestedModel:
+                    operation === 'analyze' ? 'gpt-5-mini' : 'gpt-5.4-mini-2026-03-17',
                   model: 'gpt-5-mini-snapshot',
                   responseId: 'resp-first',
                   promptVersion: `sha256:${createHash('sha256').update(prompt).digest('hex')}`,

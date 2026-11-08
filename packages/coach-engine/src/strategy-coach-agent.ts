@@ -289,9 +289,13 @@ function buildUserContent(input: StrategyCoachInput): string {
   return `Dados para a recomendação de hoje:\n\n${JSON.stringify({ ...input, ...(scoredIntervals ? { scoredIntervals, scoreMovement: 'Squat snatch', scoreAggregation: 'sum across sets' } : {}) }, null, 2)}`;
 }
 
+export const DEFAULT_STRATEGY_MODEL = 'gpt-5.4-mini-2026-03-17';
+
 export interface GenerateStrategyOptions {
   maxAttempts?: number;
   onValidation?: AiValidationObserver;
+  /** Server configuration or offline comparisons; never supplied by a public request. */
+  model?: string;
   /** For offline comparisons; production keeps the validated medium default. */
   effort?: 'low' | 'medium';
 }
@@ -321,7 +325,7 @@ export async function generateStrategy(
       sendMessage,
       maxAttempts: options.maxAttempts,
       onValidation: options.onValidation,
-      model: 'gpt-5-mini',
+      model: options.model ?? DEFAULT_STRATEGY_MODEL,
       // Responses budgets include reasoning as well as the final strategy JSON.
       maxTokens: 8000,
       effort: options.effort ?? 'medium',

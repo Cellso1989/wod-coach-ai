@@ -190,6 +190,7 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
           try {
             output = await timing.measure('ai', () =>
               generateStrategy(strategyInput, guardedSendMessage, {
+                model: process.env.CROSSFIT_STRATEGY_MODEL?.trim() || undefined,
                 onValidation: timing.recordValidation,
               }),
             );
