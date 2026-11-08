@@ -15,7 +15,19 @@ Cada fase só começa depois que a anterior está implementada e validada (typec
 - [x] **Fase 11** — Playwright (14 testes e2e — positivos e negativos — sobre app + banco reais; IA mockada via `page.route`)
 - [x] **Fase 12** — Hardening (error handler centralizado, Helmet, rate limiting por rota, mensagens de erro sem vazar detalhes internos)
 
-## Infraestrutura
+## Apos o MVP: confiabilidade (iniciada em 08/11/2026)
+
+Prioridade escolhida pelo usuario: fidelidade da analise e da estrategia.
+
+- Quebras numericas por round em escadas: primeiro incremento implementado
+  localmente, verificacao/publicacao acompanhadas na memoria do projeto.
+  [Escopo e regressoes](confiabilidade-quebras-por-round.md).
+- Avaliacao completa S1-S8, OCR de imagens reais e revisao de coaching continuam
+  pendentes. O corpus de capturas segue vazio; exemplos sinteticos e testes
+  deterministas nao encerram essa avaliacao.
+  [Roteiro existente](auditoria-wod-avaliacao-semantica.md).
+
+## Infraestrutura do MVP
 
 WSL2 + Docker Desktop + PostgreSQL estão instalados e rodando. Migration inicial aplicada
 (`User`, `AthleteProfile`, `DailyCheckin`, `Wod`, `WodAnalysis`, `WodMovement`, `WodResult`,

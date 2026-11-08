@@ -92,6 +92,53 @@ export function compactLadderAnalysisIssue(
   return null;
 }
 
+// Parse only a complete numeric instruction. Seconds, loads, alternatives and
+// free-form advice are outside this grammar and must not become inferred reps.
+function explicitBreakReps(text: string): number | null {
+  const expression = text
+    .normalize('NFKC')
+    .trim()
+    .replace(/[.!]$/, '')
+    .trim()
+    .replace(/\s*(?:reps?(?:\s+(?:direto|unbroken))?|direto|unbroken)$/i, '')
+    .trim();
+  const product = expression.match(/^(\d+)\s*[x\u00d7]\s*(\d+)$/i);
+  let count: number;
+  if (product) count = Number(product[1]) * Number(product[2]);
+  else if (/^\d+(?:\s*[/+]\s*\d+)*$/.test(expression)) {
+    count = expression.split(/[/+]/).reduce((sum, item) => sum + Number(item.trim()), 0);
+  } else return null;
+  return Number.isSafeInteger(count) ? count : null;
+}
+
+function roundBreakMismatch(
+  entry: { movement: string; strategy: string },
+  expected: Map<number, number>,
+): { round: number; reps: number; prescribed: number } | null {
+  const clauses = entry.strategy.split(';');
+  let hasRoundClause = false;
+  for (const clause of clauses) {
+    const scoped = clause.match(/^\s*(?:round|r|bloco|set)\s*(\d+)\s*:\s*(.*?)\s*$/i);
+    if (!scoped) continue;
+    hasRoundClause = true;
+    const round = Number(scoped[1]);
+    const prescribed = expected.get(round);
+    const reps = explicitBreakReps(scoped[2]!);
+    if (prescribed !== undefined && reps !== null && reps !== prescribed)
+      return { round, reps, prescribed };
+  }
+  // A separate entry can scope the first instruction through its movement label.
+  const label = entry.movement.match(/\((?:round|r|bloco|set)\s*(\d+)\s*[-:]\s*\d+\s*reps?\s*\)$/i);
+  if (!hasRoundClause && label) {
+    const round = Number(label[1]);
+    const prescribed = expected.get(round);
+    const reps = explicitBreakReps(clauses[0]!);
+    if (prescribed !== undefined && reps !== null && reps !== prescribed)
+      return { round, reps, prescribed };
+  }
+  return null;
+}
+
 export function validateStrategyLadderIntegrity(
   analysis: WodAnalysisOutput,
   output: StrategyOutput,
@@ -114,6 +161,19 @@ export function validateStrategyLadderIntegrity(
       const entries = output[field].filter(
         (entry) => movementIdentity(entry.movement.split(/\s*\(/)[0]!) === key,
       );
+      const expectedReps = new Map(
+        occurrences.map(({ item, roundNumber }) => [roundNumber, item.reps!]),
+      );
+      // Repeated occurrences of this movement inside one block are ambiguous.
+      for (const entry of expectedReps.size === occurrences.length ? entries : []) {
+        const mismatch = roundBreakMismatch(entry, expectedReps);
+        if (mismatch)
+          ctx.addIssue({
+            code: 'custom',
+            path: [field],
+            message: `Para ${summary.name}, o round ${mismatch.round} tem ${mismatch.prescribed} reps; a quebra informada soma ${mismatch.reps}. As series desse round devem somar exatamente ${mismatch.prescribed}, sem usar o volume de outro round.`,
+          });
+      }
       // Require one concise entry with the ordered ladder, or explicit per-round labels.
       const ladderPattern = new RegExp(`\\b${ladder.join('\\s*[-/\\u2013\\u2192]\\s*')}\\b`);
       const covers =

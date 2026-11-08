@@ -817,6 +817,38 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
     expect(store).toEqual(previous);
     expect(lease).toBeNull();
   });
+  it.each([false, true])(
+    'preserves saved state when per-round breaks are wrong, then saves one corrected version (existing strategy: %s)',
+    async (existing) => {
+      store.wod.rawText = ladderSource;
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ladderAnalysis) });
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      if (existing) {
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(ladderStrategy) });
+        expect((await request('POST', 'strategy')).statusCode).toBe(200);
+      }
+      const previous = structuredClone(store);
+      const invalid = structuredClone(ladderStrategy);
+      invalid.breakStrategy[0]!.strategy = 'R1: 7/7/7; R2: 7/7/7; R3: 9 direto.';
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(invalid) });
+      expect((await request('POST', 'strategy')).statusCode).toBe(502);
+      expect(store).toEqual(previous);
+      expect(lease).toBeNull();
+      mocks.sendMessage.mockClear();
+      mocks.sendMessage
+        .mockResolvedValueOnce({ text: JSON.stringify(invalid) })
+        .mockResolvedValueOnce({ text: JSON.stringify(ladderStrategy) });
+      expect((await request('POST', 'strategy')).statusCode).toBe(200);
+      expect(mocks.sendMessage).toHaveBeenCalledTimes(2);
+      expect(store.strategyVersions).toHaveLength(previous.strategyVersions.length + 1);
+      expect(store.strategyVersions.slice(0, -1)).toEqual(previous.strategyVersions);
+      expect(store.strategyVersions.at(-1)?.snapshot.breakStrategy).toEqual(
+        ladderStrategy.breakStrategy,
+      );
+      expect(store.analysis).toEqual(previous.analysis);
+      expect(lease).toBeNull();
+    },
+  );
   it.each(['analysis', 'duration', 'strategy'] as const)(
     'allows %s persistence beyond the default five-second transaction budget',
     async (operation) => {
