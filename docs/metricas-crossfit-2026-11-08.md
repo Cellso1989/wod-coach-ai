@@ -63,7 +63,35 @@ real de analisar/gerar estrategia depois desta publicacao e seguir
 Nenhum coletor em segundo plano foi configurado; os eventos ficam nos logs
 Render e precisam ser exportados novamente para atualizar o relatorio.
 
-## Evidencias locais
+## Primeira execucao com telemetria completa
+
+Coleta continua apos a publicacao ate 08/11/2026 14:17:24 de Sao Paulo:
+seis eventos correlacionados, uma analise (14:14:51) e uma estrategia
+(14:16:31), ambas de texto e persistidas com sucesso. Cada uma foi aceita
+na primeira resposta; nenhuma correcao foi solicitada ou tentada.
+
+| Medicao                                 | Analise | Estrategia |
+| --------------------------------------- | ------- | ---------- |
+| Espera no navegador                     | 22,34 s | 56,96 s    |
+| HTTP no servidor                        | 22,04 s | 56,66 s    |
+| Trabalho da rota                        | 21,16 s | 55,78 s    |
+| Chamada ao provedor                     | 9,62 s  | 44,20 s    |
+| Etapa IA, incluindo verificacoes locais | 10,70 s | 45,07 s    |
+| Persistencia                            | 5,88 s  | 2,99 s     |
+
+A estrategia usou `gpt-5-mini-2025-08-07`, effort medium, teto 8000;
+8316 tokens de entrada, 3939 de saida (incluindo 3392 de raciocinio), cache
+reportado zero. Contexto 4,22 s, perfil 0,87 s, leitura inicial 0,87 s.
+A diferenca cliente-HTTP foi 0,30 s; o processo tinha 761 s ao responder.
+Nesta execucao, os dados apontam a chamada de IA como principal componente,
+sem retry observado. Nao sao evidencia de distribuicao populacional, de
+causalidade dos tokens ou de uma melhoria ja aplicada.
+
+Evidencias locais: `output/crossfit-production-20261108-first-pair.jsonl` e
+`output/crossfit-production-20261108-first-pair-report.json`. Os indicadores
+de p50/p95 desse relatorio representam apenas um evento por operacao.
+
+## Evidencias locais anteriores
 
 - `output/deploy/crossfit-build-fix-00c4be6-verified.json`: deploy e hashes.
 - `output/crossfit-production-legacy-20261101-08.jsonl`: 16 eventos antigos.

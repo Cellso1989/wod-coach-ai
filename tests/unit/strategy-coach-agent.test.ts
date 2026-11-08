@@ -98,7 +98,7 @@ describe('generateStrategy', () => {
     await generateStrategy(MINIMAL_INPUT, send);
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'gpt-5-mini',
+        model: 'gpt-5.4-mini-2026-03-17',
         maxTokens: 8000,
         effort: 'medium',
       }),
@@ -113,7 +113,24 @@ describe('generateStrategy', () => {
     expect(result.targetRpe).toBe(10);
     expect(send).toHaveBeenCalledTimes(2);
     for (const [params] of send.mock.calls) {
-      expect(params).toMatchObject({ model: 'gpt-5-mini', maxTokens: 8000, effort: 'low' });
+      expect(params).toMatchObject({
+        model: 'gpt-5.4-mini-2026-03-17',
+        maxTokens: 8000,
+        effort: 'low',
+      });
+    }
+  });
+  it('keeps validation and corrective retries when explicitly rolling back the model', async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce(textMessage('not JSON'))
+      .mockResolvedValueOnce(textMessage(JSON.stringify(VALID_STRATEGY)));
+    const result = await generateStrategy(MINIMAL_INPUT, send, { model: 'gpt-5-mini' });
+    expect(result.targetRpe).toBe(10);
+    expect(send).toHaveBeenCalledTimes(2);
+    for (const [params] of send.mock.calls) {
+      expect(params).toMatchObject({ model: 'gpt-5-mini', maxTokens: 8000, effort: 'medium' });
+      expect(params.systemPrompt).toBe(send.mock.calls[0][0].systemPrompt);
     }
   });
   it.each([
