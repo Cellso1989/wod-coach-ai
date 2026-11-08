@@ -1,4 +1,5 @@
-﻿import type { z } from 'zod';
+import { performance } from 'node:perf_hooks';
+import type { z } from 'zod';
 
 /**
  * Shared plumbing for agents that ask an AI model for structured JSON
