@@ -1,6 +1,6 @@
 # Desempenho do backend da estrategia CrossFit
 
-Publicado em develop `2936ef8` e main `b28ad73`, em 08/11/2026. Deploy Render
+Primeira etapa publicada em develop `2936ef8` e main `b28ad73`, em 08/11/2026. Deploy Render
 `dep-dbobn6p42hec73d839dg` confirmado live as 15:14:02 de Sao Paulo.
 
 ## Evidencia que orientou a mudanca
@@ -137,8 +137,8 @@ Evidencias locais: `output/crossfit-production-20261108-post-backend.jsonl`,
 ## Segunda etapa: contexto e retorno das versoes
 
 Implementacao local em 08/11/2026, apos o usuario pedir para retomar os ajustes.
-Usuario autorizou explicitamente commit, push e publicacao deste incremento
-em 08/11/2026; verificacao do deploy pendente.
+Publicado em develop `512b872` e main `d4d97bd`, em 08/11/2026.
+Deploy Render `dep-dboggrqvcj2c739cj86g` confirmado live as 20:41:59 de Sao Paulo.
 
 O contexto real de 4,437 s tinha uma dependencia removivel: alvo de 2,093 s
 antes do historico de 2,342 s. A rota de estrategia agora inicia o historico
@@ -204,3 +204,12 @@ Evidencias locais: `output/context-overlap-tests.txt`,
 `output/context-overlap-postgres-drift.txt`, `output/context-overlap-build.txt`,
 `output/context-overlap-typecheck.txt`, `output/context-overlap-lint-final.txt` e
 `output/context-overlap-final-regressions.txt`.
+
+### Publicacao da segunda etapa
+
+Verificacao publica as 20:42:17 de Sao Paulo: health/pagina 200, rotas de
+metricas e estrategia 401 sem sessao, JS/CSS com hashes identicos ao build
+local de producao. Deploy confirmado live no commit validado; sem nova migration
+ou geracao autenticada/paga nesta verificacao. Ganho real de contexto e
+persistencia sera avaliado nas proximas geracoes. Evidencia local:
+`output/deploy/crossfit-context-d4d97bd-verified.json`.
