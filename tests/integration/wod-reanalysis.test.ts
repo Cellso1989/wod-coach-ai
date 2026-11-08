@@ -367,6 +367,102 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  it('loads the profile while context is pending and avoids a duplicate source read on successful strategy generation', async () => {
+    await seedAnalyzedWod();
+    mocks.prisma.wod.findFirst.mockClear();
+    mocks.sendMessage.mockClear();
+    mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+    let releaseContext!: () => void;
+    const contextGate = new Promise<void>((resolve) => {
+      releaseContext = resolve;
+    });
+    let profileStarted!: () => void;
+    const observed = new Promise<void>((resolve) => {
+      profileStarted = resolve;
+    });
+    mocks.context.mockImplementationOnce(async () => {
+      await contextGate;
+      return {
+        context: CONTEXT,
+        targetWod: structuredClone({ ...store.wod, analysis: store.analysis }),
+      };
+    });
+    mocks.prisma.athleteProfile.findUnique.mockImplementationOnce(async () => {
+      profileStarted();
+      return PROFILE;
+    });
+    const pending = request('POST', 'strategy');
+    // The old sequential implementation cannot reach this event before context resolves.
+    try {
+      await observed;
+      expect(mocks.sendMessage).not.toHaveBeenCalled();
+      expect(lease).not.toBeNull();
+    } finally {
+      releaseContext();
+    }
+    expect((await pending).statusCode).toBe(200);
+    expect(mocks.prisma.wod.findFirst).not.toHaveBeenCalled();
+    expect(store.strategyVersions.at(-1)?.inputSnapshot.athleteProfile).toEqual(PROFILE);
+    expect(lease).toBeNull();
+  });
+
+  it('waits for a pending profile read before releasing a failed context generation', async () => {
+    await seedAnalyzedWod();
+    mocks.sendMessage.mockClear();
+    let releaseProfile!: () => void;
+    let profileStarted!: () => void;
+    const observed = new Promise<void>((resolve) => {
+      profileStarted = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      releaseProfile = resolve;
+    });
+    mocks.prisma.athleteProfile.findUnique.mockImplementationOnce(async () => {
+      profileStarted();
+      await gate;
+      return PROFILE;
+    });
+    const { WodNotAnalyzedError } =
+      await import('../../apps/api/src/services/athlete-context-service.js');
+    mocks.context.mockRejectedValueOnce(new WodNotAnalyzedError());
+    const pending = request('POST', 'strategy');
+    await observed;
+    expect(lease).not.toBeNull();
+    releaseProfile();
+    expect((await pending).statusCode).toBe(409);
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+    expect(lease).toBeNull();
+  });
+
+  it.each([null, { id: 'wod-1', sourceType: 'TEXT' }])(
+    'distinguishes unavailable WODs from concurrent generation only after a denied claim (%j)',
+    async (visibleWod) => {
+      mocks.prisma.$queryRaw.mockResolvedValueOnce([]);
+      mocks.prisma.wod.findFirst.mockResolvedValueOnce(visibleWod);
+      expect((await request('POST', 'strategy')).statusCode).toBe(visibleWod ? 409 : 404);
+      expect(mocks.prisma.wod.findFirst).toHaveBeenCalledWith({
+        where: { id: 'wod-1', userId: 'athlete-1', discipline: 'CROSSFIT' },
+        select: { id: true, sourceType: true },
+      });
+      expect(mocks.context).not.toHaveBeenCalled();
+      expect(mocks.prisma.athleteProfile.findUnique).not.toHaveBeenCalled();
+      expect(mocks.sendMessage).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not remap a lost lease to a missing WOD after work has started', async () => {
+    await seedAnalyzedWod();
+    mocks.prisma.wod.findFirst.mockClear();
+    mocks.sendMessage.mockClear();
+    mocks.prisma.$queryRaw.mockImplementation(
+      (strings: TemplateStringsArray, ...values: unknown[]) =>
+        strings.join('?').includes('SELECT "token"') ? [] : leaseQuery(strings, ...values),
+    );
+    expect((await request('POST', 'strategy')).statusCode).toBe(409);
+    expect(mocks.prisma.wod.findFirst).not.toHaveBeenCalled();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+    expect(lease).toBeNull();
+  });
   it.each([
     ['', 'gpt-5.4-mini-2026-03-17'],
     [' gpt-5-mini ', 'gpt-5-mini'],

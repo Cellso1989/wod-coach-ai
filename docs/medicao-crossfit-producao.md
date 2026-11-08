@@ -51,6 +51,24 @@ a 1 KiB, duracao a 30 minutos e trafego a 30 envios/minuto por IP. Nao escreve n
 banco. Logout, troca de conta, retorno a conta anterior e acesso negado descartam
 medicoes ainda pendentes. Uma notificacao ja enviada pode ser perdida ou falhar.
 
+### Operacoes de banco da estrategia
+
+Incremento local de 08/11/2026 adiciona `databaseOperations` opcional ao evento
+de trabalho v2, sem invalidar logs anteriores. Cada chamada registra somente
+`operation`, `durationMs` e `status` (succeeded/failed), com rotulos fixos:
+reserva/conferencia/liberacao, alvo/historico/check-ins/PRs, perfil e operacoes
+da persistencia/versionamento. Nao registra SQL, parametros ou retornos.
+
+Uma operacao Prisma pode executar varios comandos SQL. O tempo inclui espera
+de pool/rede e execucao da chamada inteira; nao e uma medicao isolada do servidor
+PostgreSQL. O relatorio resume cada rotulo por chamada, incluindo quantidade de
+falhas. Contexto e perfil agora se sobrepoem: nao somar suas duracoes nem as
+distribuicoes para estimar o tempo total. O total de persistencia tambem inclui
+entrada/commit da transacao alem das chamadas internas. ANALYSIS e logs antigos
+podem nao ter operacoes detalhadas; ausencia nao significa custo zero.
+
+Detalhes e comparacao local em [desempenho-backend-estrategia.md](desempenho-backend-estrategia.md).
+
 ## Tentativas e motivos de correcao
 
 `attempts` registra tempo, received/failed, modelo solicitado/reportado, effort,
