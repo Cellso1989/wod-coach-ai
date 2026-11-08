@@ -1,5 +1,9 @@
 # Desempenho da analise e estrategia — 03/11/2026
 
+A instrumentacao foi ampliada em 08/11/2026 para medir producao e correcoes
+CrossFit; consulte [medicao-crossfit-producao.md](medicao-crossfit-producao.md).
+As medicoes abaixo continuam sendo ensaios locais da rodada de 03/11.
+
 ## Escopo e mudancas
 
 Fluxo CrossFit: envio → analise → contexto do atleta → estrategia → persistencia.

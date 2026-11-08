@@ -40,11 +40,38 @@ describe('AI generation metadata collector', () => {
     await expect(generation.sendMessage(PARAMS)).rejects.toBe(failure);
     expect(generation.metadata().attempts).toHaveLength(1);
     expect(generation.metadata().attempts[0].durationMs).toBe(25);
-    expect(observer.mock.calls).toEqual([
+    expect(observer.mock.calls).toMatchObject([
       [{ durationMs: 25, status: 'received' }],
       [{ durationMs: 50, status: 'failed' }],
     ]);
+    expect(observer.mock.calls[0]![0]).toMatchObject({
+      requestedModel: 'gpt-5-mini',
+      requestedReasoningEffort: 'low',
+      maxOutputTokens: 2500,
+      usage: MESSAGE.metadata.usage,
+    });
+    expect(observer.mock.calls[1]![0].usage).toBeNull();
+    expect(JSON.stringify(observer.mock.calls)).not.toContain('Private athlete data');
     expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let an observer failure reject a response or replace a transport error', async () => {
+    const failObserver = () => {
+      throw new Error('logger');
+    };
+    const success = captureAiGeneration(
+      vi.fn().mockResolvedValue(MESSAGE),
+      'WodAnalyzerAgent',
+      failObserver,
+    );
+    expect(await success.sendMessage(PARAMS)).toBe(MESSAGE);
+    const error = new Error('transport');
+    const failed = captureAiGeneration(
+      vi.fn().mockRejectedValue(error),
+      'WodAnalyzerAgent',
+      failObserver,
+    );
+    await expect(failed.sendMessage(PARAMS)).rejects.toBe(error);
   });
   it('does not substitute the requested model or zero tokens for unknown provider data', async () => {
     const sender = vi.fn().mockResolvedValue({ text: '{}' });

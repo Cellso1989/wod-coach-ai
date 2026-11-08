@@ -84,13 +84,14 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
           }
 
           const generation = captureAiGeneration(
-            async (params) => {
-              await lease.assertOwned();
-              return sendMessage(params);
-            },
+            sendMessage,
             'WodAnalyzerAgent',
             timing.recordAttempt,
           );
+          const guardedSendMessage: typeof generation.sendMessage = async (params) => {
+            await lease.assertOwned();
+            return generation.sendMessage(params);
+          };
           let output;
           try {
             output = await timing.measure('ai', () =>
@@ -101,7 +102,8 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
                   imageMimeType: wod.imageMimeType,
                   durationOverrideMinutes,
                 },
-                generation.sendMessage,
+                guardedSendMessage,
+                { onValidation: timing.recordValidation },
               ),
             );
             const loaded = applyLoadOverrides(
@@ -118,10 +120,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
             };
           } catch (err) {
             if (err instanceof WodAnalysisError) {
-              request.log.warn(
-                { err: err.message, rawResponse: err.rawResponse },
-                'WOD analysis failed',
-              );
+              request.log.warn({ code: 'WOD_ANALYSIS_INVALID_RESPONSE' }, 'WOD analysis failed');
               reply.code(502);
               return {
                 error:

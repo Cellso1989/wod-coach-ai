@@ -20,6 +20,7 @@ import {
   AiJsonError,
   type AiMessageContent,
   type SendMessage,
+  type AiValidationObserver,
 } from './ai-json-agent.js';
 
 export type { SendMessage } from './ai-json-agent.js';
@@ -666,6 +667,7 @@ function normalizeAnalysisOutput(
 
 export interface AnalyzeWodOptions {
   maxAttempts?: number;
+  onValidation?: AiValidationObserver;
 }
 
 /**
@@ -757,6 +759,7 @@ export async function analyzeWod(
       userContent: buildUserContent(input),
       sendMessage,
       maxAttempts: options.maxAttempts,
+      onValidation: options.onValidation,
       // Extrair formato/movimentos de um WOD é classificação/extração
       // estruturada — não precisa do modelo mais caro. O StrategyCoachAgent,
       // que decide intensidade/segurança, continua no modelo padrão

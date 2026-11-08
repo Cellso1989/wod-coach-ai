@@ -38,8 +38,11 @@ describe('WOD generation timings', () => {
       return 'persisted';
     });
     expect(result).toBe('persisted');
-    expect(info.mock.calls[0][0]).toEqual({
+    expect(info.mock.calls[0][0]).toMatchObject({
       event: 'wod_generation_timing',
+      schemaVersion: 2,
+      requestId: null,
+      measurementId: null,
       operation: 'ANALYSIS',
       sourceType: 'IMAGE',
       statusCode: 200,
@@ -50,6 +53,45 @@ describe('WOD generation timings', () => {
         { durationMs: 80, status: 'received' },
         { durationMs: 20, status: 'received' },
       ],
+      validations: [],
+      aiSummary: { attemptCount: 2, correctionAttempted: true, corrected: false },
+    });
+  });
+
+  it('distinguishes a recovered response from a later persistence failure', async () => {
+    const { timing, info, reply } = setup();
+    await timing.run(async () => {
+      timing.recordAttempt({ durationMs: 10, status: 'received' });
+      timing.recordValidation({
+        attempt: 1,
+        status: 'rejected',
+        reason: 'schema',
+        issues: [{ field: 'rounds', code: 'custom' }],
+        issueCount: 1,
+        willRetry: true,
+        durationMs: 1,
+      });
+      timing.recordAttempt({ durationMs: 20, status: 'received' });
+      timing.recordValidation({
+        attempt: 2,
+        status: 'accepted',
+        reason: null,
+        issues: [],
+        issueCount: 0,
+        willRetry: false,
+        durationMs: 1,
+      });
+      reply.statusCode = 409;
+    });
+    expect(info.mock.calls[0][0]).toMatchObject({
+      outcome: 'failed',
+      aiSummary: {
+        corrected: true,
+        correctionAttempted: true,
+        correctionRequested: true,
+        rejectedResponses: 1,
+        acceptedResponses: 1,
+      },
     });
   });
 

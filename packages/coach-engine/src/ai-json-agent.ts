@@ -38,10 +38,62 @@ export interface AiTextMessage {
  */
 export type SendMessage = (params: SendMessageParams) => Promise<AiTextMessage>;
 
+export interface AiValidationObservation {
+  attempt: number;
+  status: 'accepted' | 'rejected';
+  reason: 'invalid_json' | 'schema' | 'empty_response' | null;
+  issues: Array<{ field: string; code: string }>;
+  issueCount: number;
+  willRetry: boolean;
+  durationMs: number;
+}
+
+export type AiValidationObserver = (event: AiValidationObservation) => void;
+
+// Never put arbitrary JSON keys, validation messages or athlete values in telemetry.
+const OBSERVED_FIELDS = new Set([
+  'format',
+  'durationMinutes',
+  'targetMinutes',
+  'stimulus',
+  'movements',
+  'rounds',
+  'estimatedDemand',
+  'estimatedIntensity',
+  'confidence',
+  'warnings',
+  'extractedText',
+  'recommendedIntensity',
+  'targetRpe',
+  'loadRecommendation',
+  'loadCalculations',
+  'pacing',
+  'breakStrategy',
+  'restStrategy',
+  'movementStrategy',
+  'transitionStrategy',
+  'energyManagement',
+  'goal',
+  'target',
+  'criticalPoint',
+]);
+
+function observeValidation(
+  observer: AiValidationObserver | undefined,
+  event: AiValidationObservation,
+) {
+  try {
+    observer?.(event);
+  } catch {
+    // Diagnostics must never change generation, validation or retry behavior.
+  }
+}
+
 export class AiJsonError extends Error {
   constructor(
     message: string,
     public readonly rawResponse?: string,
+    public readonly validation?: Pick<AiValidationObservation, 'reason' | 'issues' | 'issueCount'>,
   ) {
     super(message);
   }
@@ -64,7 +116,11 @@ function parseAndValidate<S extends z.ZodTypeAny>(schema: S, rawText: string): z
       .replace(/```\s*$/, '');
     parsedJson = JSON.parse(stripped);
   } catch {
-    throw new AiJsonError('Resposta da IA nao e um JSON valido', rawText);
+    throw new AiJsonError('Resposta da IA nao e um JSON valido', rawText, {
+      reason: 'invalid_json',
+      issues: [],
+      issueCount: 0,
+    });
   }
 
   const result = schema.safeParse(parsedJson);
@@ -72,6 +128,14 @@ function parseAndValidate<S extends z.ZodTypeAny>(schema: S, rawText: string): z
     throw new AiJsonError(
       `Resposta da IA nao passou na validacao: ${result.error.message}`,
       rawText,
+      {
+        reason: 'schema',
+        issueCount: result.error.issues.length,
+        issues: result.error.issues.slice(0, 12).map((issue) => ({
+          field: OBSERVED_FIELDS.has(String(issue.path[0])) ? String(issue.path[0]) : 'other',
+          code: issue.code,
+        })),
+      },
     );
   }
 
@@ -87,6 +151,7 @@ export interface CallAiForJsonParams<S extends z.ZodTypeAny> {
   maxTokens?: number;
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   maxAttempts?: number;
+  onValidation?: AiValidationObserver;
 }
 
 export async function callAiForJson<S extends z.ZodTypeAny>(
@@ -106,12 +171,46 @@ export async function callAiForJson<S extends z.ZodTypeAny>(
       effort: params.effort ?? 'medium',
     });
 
-    const rawText = extractJsonText(message);
+    const validationStarted = performance.now();
+    let rawText: string;
+    try {
+      rawText = extractJsonText(message);
+    } catch (error) {
+      observeValidation(params.onValidation, {
+        attempt,
+        status: 'rejected',
+        reason: 'empty_response',
+        issues: [],
+        issueCount: 0,
+        willRetry: false,
+        durationMs: performance.now() - validationStarted,
+      });
+      throw error;
+    }
 
     try {
-      return parseAndValidate(params.schema, rawText);
+      const result = parseAndValidate(params.schema, rawText);
+      observeValidation(params.onValidation, {
+        attempt,
+        status: 'accepted',
+        reason: null,
+        issues: [],
+        issueCount: 0,
+        willRetry: false,
+        durationMs: performance.now() - validationStarted,
+      });
+      return result;
     } catch (err) {
       lastError = err instanceof AiJsonError ? err : new AiJsonError(String(err));
+      observeValidation(params.onValidation, {
+        attempt,
+        status: 'rejected',
+        reason: lastError.validation?.reason ?? 'schema',
+        issues: lastError.validation?.issues ?? [],
+        issueCount: lastError.validation?.issueCount ?? 0,
+        willRetry: attempt < maxAttempts,
+        durationMs: performance.now() - validationStarted,
+      });
 
       if (attempt < maxAttempts) {
         messages.push({

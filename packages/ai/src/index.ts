@@ -27,6 +27,8 @@ export interface AiTokenUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  cachedInputTokens?: number | null;
+  reasoningTokens?: number | null;
 }
 
 export interface AiResponseMetadata {
@@ -47,12 +49,22 @@ function responseMetadata(body: Record<string, unknown>): AiResponseMetadata {
   const inputTokens = tokenCount(usage.input_tokens);
   const outputTokens = tokenCount(usage.output_tokens);
   const totalTokens = tokenCount(usage.total_tokens);
+  const inputDetails = usage.input_tokens_details as { cached_tokens?: unknown } | null;
+  const outputDetails = usage.output_tokens_details as { reasoning_tokens?: unknown } | null;
+  const cached = inputDetails?.cached_tokens;
+  const reasoning = outputDetails?.reasoning_tokens;
   return {
     responseId: typeof body.id === 'string' && body.id.trim() ? body.id : null,
     model: typeof body.model === 'string' && body.model.trim() ? body.model : null,
     usage:
       inputTokens !== null && outputTokens !== null && totalTokens !== null
-        ? { inputTokens, outputTokens, totalTokens }
+        ? {
+            inputTokens,
+            outputTokens,
+            totalTokens,
+            ...(cached !== undefined ? { cachedInputTokens: tokenCount(cached) } : {}),
+            ...(reasoning !== undefined ? { reasoningTokens: tokenCount(reasoning) } : {}),
+          }
         : null,
   };
 }

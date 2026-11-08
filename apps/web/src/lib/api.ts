@@ -7,7 +7,9 @@ import { SessionReadCache } from './session-read-cache.js';
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 const navigationReads = new SessionReadCache();
 let readUserId: string | null = null;
+let readSessionRevision = 0;
 export const setApiReadSession = (userId: string | null) => {
+  if (userId !== readUserId) readSessionRevision += 1;
   readUserId = userId;
   navigationReads.setSession(userId);
 };
@@ -57,6 +59,50 @@ export class ApiError extends Error {
     message: string,
   ) {
     super(message);
+  }
+}
+
+/** Measures request + response body parsing. Rendering and user think time are excluded. */
+async function measuredGeneration<T>(path: string, operation: 'ANALYSIS' | 'STRATEGY'): Promise<T> {
+  let measurementId: string | undefined;
+  try {
+    measurementId = globalThis.crypto?.randomUUID?.();
+  } catch {
+    // A browser diagnostics failure must not prevent the actual request.
+  }
+  if (!measurementId) return request<T>(path, { method: 'POST' });
+  const session = readSessionRevision;
+  const userId = readUserId;
+  const started = performance.now();
+  let outcome: 'succeeded' | 'failed' = 'failed';
+  try {
+    const result = await request<T>(path, {
+      method: 'POST',
+      headers: { 'X-Wod-Measurement-Id': measurementId },
+    });
+    outcome = 'succeeded';
+    return result;
+  } finally {
+    const durationMs = performance.now() - started;
+    if (
+      userId &&
+      session === readSessionRevision &&
+      Number.isFinite(durationMs) &&
+      durationMs <= 30 * 60_000
+    ) {
+      // Do not await telemetry, invalidate reads, retry it, or let it affect the result.
+      try {
+        void fetch(`${API_URL}/api/wod-generation-metrics`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ measurementId, operation, durationMs, outcome }),
+          signal: AbortSignal.timeout(5000),
+        }).catch(() => undefined);
+      } catch {
+        // Unsupported browser APIs or diagnostics failure leave generation unchanged.
+      }
+    }
   }
 }
 
@@ -605,9 +651,10 @@ export const api = {
   deleteWod: (id: string) => request<void>(`/wods/${id}`, { method: 'DELETE' }),
 
   analyzeWod: (id: string) =>
-    request<{ analysis: WodAnalysis; wod?: Wod | null }>(`/wods/${id}/analyze`, {
-      method: 'POST',
-    }),
+    measuredGeneration<{ analysis: WodAnalysis; wod?: Wod | null }>(
+      `/wods/${id}/analyze`,
+      'ANALYSIS',
+    ),
 
   getWodAnalysis: (id: string, signal?: AbortSignal) =>
     request<{ analysis: WodAnalysis }>(`/wods/${id}/analysis`, { signal }),
@@ -669,7 +716,7 @@ export const api = {
     request<{ context: AthleteContext }>(`/wods/${wodId}/context`),
 
   generateStrategy: (wodId: string) =>
-    request<{ strategy: WodStrategy }>(`/wods/${wodId}/strategy`, { method: 'POST' }),
+    measuredGeneration<{ strategy: WodStrategy }>(`/wods/${wodId}/strategy`, 'STRATEGY'),
 
   getStrategy: (wodId: string, signal?: AbortSignal) =>
     request<{ strategy: WodStrategy }>(`/wods/${wodId}/strategy`, { signal }),

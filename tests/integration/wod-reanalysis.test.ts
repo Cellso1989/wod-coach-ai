@@ -367,6 +367,75 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  it.each(['analyze', 'strategy'])(
+    'does not count a lease rejection as an AI attempt in %s',
+    async (operation) => {
+      if (operation === 'strategy') await seedAnalyzedWod();
+      mocks.sendMessage.mockClear();
+      mocks.prisma.$queryRaw.mockImplementation(
+        (strings: TemplateStringsArray, ...values: unknown[]) =>
+          strings.join('?').includes('SELECT "token"') ? [] : leaseQuery(strings, ...values),
+      );
+      const info = vi.spyOn(app.log, 'info');
+      const child = vi.spyOn(app.log, 'child').mockReturnValue(app.log);
+      try {
+        expect((await request('POST', operation)).statusCode).toBe(409);
+        expect(mocks.sendMessage).not.toHaveBeenCalled();
+        const event = info.mock.calls
+          .map((call) => call[0] as unknown as Row)
+          .find((event) => event?.event === 'wod_generation_timing');
+        expect(event).toMatchObject({ aiSummary: { attemptCount: 0, correctionAttempted: false } });
+      } finally {
+        info.mockRestore();
+        child.mockRestore();
+      }
+    },
+  );
+
+  it('correlates real CrossFit routes and observes corrective validation for both agents', async () => {
+    const info = vi.spyOn(app.log, 'info');
+    const child = vi.spyOn(app.log, 'child').mockReturnValue(app.log);
+    try {
+      headers['x-wod-measurement-id'] = '6df01b70-31e6-4db3-9a0c-7fb09ec9dd94';
+      mocks.sendMessage
+        .mockResolvedValueOnce({ text: 'private invalid response' })
+        .mockResolvedValueOnce({ text: JSON.stringify(ANALYSIS) });
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      mocks.sendMessage
+        .mockResolvedValueOnce({ text: JSON.stringify({ ...STRATEGY, target: 'x'.repeat(100) }) })
+        .mockResolvedValueOnce({ text: JSON.stringify(STRATEGY) });
+      expect((await request('POST', 'strategy')).statusCode).toBe(200);
+      const events = info.mock.calls.map((call) => call[0] as unknown as Row);
+      const work = events.filter((event) => event?.event === 'wod_generation_timing');
+      expect(work).toHaveLength(2);
+      expect(work.map((event) => event.operation)).toEqual(['ANALYSIS', 'STRATEGY']);
+      for (const event of work) {
+        expect(event).toMatchObject({
+          measurementId: headers['x-wod-measurement-id'],
+          aiSummary: {
+            correctionAttempted: true,
+            corrected: true,
+            rejectedResponses: 1,
+            acceptedResponses: 1,
+          },
+        });
+        expect(event.validations).toHaveLength(2);
+        expect(event.attempts).toHaveLength(2);
+        expect(
+          events.find(
+            (http) =>
+              http?.event === 'wod_generation_http_timing' && http.requestId === event.requestId,
+          ),
+        ).toMatchObject({ statusCode: 200, operation: event.operation });
+      }
+      expect(JSON.stringify(work)).not.toContain('private invalid response');
+      expect(JSON.stringify(work)).not.toContain(RAW_WOD);
+    } finally {
+      info.mockRestore();
+      child.mockRestore();
+    }
+  });
+
   it.each(['CROSSFIT', 'HYROX'] as const)(
     'records each completed %s analysis once, including reanalysis, without private workout content',
     async (discipline) => {

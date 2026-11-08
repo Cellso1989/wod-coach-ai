@@ -26,6 +26,8 @@ import statsRoutes from './routes/stats.js';
 import adminRoutes from './routes/admin.js';
 import rankingRoutes from './routes/ranking.js';
 import notificationRoutes from './routes/notifications.js';
+import wodGenerationMetricsRoutes from './routes/wod-generation-metrics.js';
+import { registerWodGenerationHttpTiming } from './services/wod-generation-http-timing.js';
 import { registerPushDeliveryWorker } from './services/web-push.js';
 
 export function buildApp(): FastifyInstance {
@@ -54,6 +56,7 @@ export function buildApp(): FastifyInstance {
   // API "GET /wods" se não houvesse esse prefixo.
   app.register(
     async (api) => {
+      registerWodGenerationHttpTiming(api);
       api.register(multipart, {
         limits: { fileSize: WOD_IMAGE_MAX_BYTES, files: 1 },
       });
@@ -67,6 +70,7 @@ export function buildApp(): FastifyInstance {
       api.register(personalRecordRoutes);
       api.register(athleteContextRoutes);
       api.register(wodStrategyRoutes);
+      api.register(wodGenerationMetricsRoutes);
       api.register(hyroxWorkoutRoutes);
       api.register(hyroxStrategyRoutes);
       api.register(statsRoutes);

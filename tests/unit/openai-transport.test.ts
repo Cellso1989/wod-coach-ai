@@ -25,6 +25,26 @@ afterEach(() => {
 });
 
 describe('OpenAI transport completion and deadline', () => {
+  it('records reasoning and cache details without estimating missing values', async () => {
+    respond({
+      status: 'completed',
+      output_text: '{}',
+      usage: {
+        input_tokens: 100,
+        output_tokens: 25,
+        total_tokens: 125,
+        input_tokens_details: { cached_tokens: 80 },
+        output_tokens_details: { reasoning_tokens: 20 },
+      },
+    });
+    expect((await createOpenAiMessageSender('test-key')(PARAMS)).metadata?.usage).toEqual({
+      inputTokens: 100,
+      outputTokens: 25,
+      totalTokens: 125,
+      cachedInputTokens: 80,
+      reasoningTokens: 20,
+    });
+  });
   it('records bounded diagnostics for an incomplete response without exposing its text', async () => {
     respond({
       status: 'incomplete',
