@@ -97,3 +97,13 @@ e publicacao sao registrados na memoria do projeto no mesmo ciclo.
 A confirmacao de ganho em producao requer novas estrategias reais no modelo
 publicado, correlacionando navegador/HTTP/rota/tentativas. Nao somar os tempos
 locais do modelo aos tempos de banco anteriores para anunciar um ganho medido.
+
+Publicado em develop `c89809b` e main `10a7c69`. Render
+`dep-dbob2iq9lscs73cqoldg` ficou `live` em 08/11/2026 14:29:56 de Sao Paulo.
+Verificacao as 14:30:06: health/pagina 200, endpoint de metricas 401 sem sessao,
+JS/CSS publicados iguais ao build local de producao. Nenhuma migration pendente
+e nenhum erro de runtime retornado na consulta inicial. 922 testes aprovados,
+70 testes PostgreSQL opt-in pulados; build/typecheck/lint/formatacao aprovados.
+Evidencia local: `output/deploy/crossfit-strategy-model-10a7c69-verified.json`.
+O modelo solicitado efetivamente em producao sera conferido no proximo evento
+autenticado; nao foi gerado treino sintetico no banco para essa verificacao.
