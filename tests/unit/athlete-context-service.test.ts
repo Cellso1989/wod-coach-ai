@@ -15,6 +15,165 @@ vi.mock('../../packages/database/dist/index.js', () => ({ prisma }));
 beforeEach(() => vi.resetAllMocks());
 
 describe('athlete history projection', () => {
+  function emptyHistory() {
+    prisma.wod.findMany.mockResolvedValue([]);
+    prisma.dailyCheckin.findMany.mockResolvedValue([]);
+    prisma.personalRecord.findMany.mockResolvedValue([]);
+  }
+
+  const targetFixture = () => ({
+    id: 'target',
+    userId: 'athlete',
+    rawText: 'AMRAP 12: Pull-ups',
+    imageData: 'source image retained for the version',
+    analysis: {
+      versionId: 'captured-analysis',
+      format: 'AMRAP',
+      durationMinutes: 12,
+      stimulus: 'mixed_modal',
+      movements: [{ name: 'Pull-up', category: 'gymnastics' }],
+    },
+  });
+
+  it('starts scoped history before the reserved target read completes, preserving one target snapshot', async () => {
+    emptyHistory();
+    const target = targetFixture();
+    let finish!: () => void;
+    prisma.wod.findFirst.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve(target);
+        }),
+    );
+    const result = getAthleteContextForWod('athlete', 'target', undefined, {
+      parallelHistory: true,
+    });
+    try {
+      expect(prisma.wod.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.dailyCheckin.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.personalRecord.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.wod.findMany.mock.calls[0][0].where).toMatchObject({
+        userId: 'athlete',
+        id: { not: 'target' },
+      });
+    } finally {
+      finish();
+      await result;
+    }
+    const loaded = await result;
+    expect(loaded.targetWod).toEqual(target);
+    expect(loaded.targetAnalysis.durationMinutes).toBe(target.analysis.durationMinutes);
+    expect(prisma.wod.findFirst).toHaveBeenCalledTimes(1);
+    expect(prisma.wod.findFirst).toHaveBeenCalledWith({
+      where: { id: 'target', userId: 'athlete' },
+      include: { analysis: { include: { movements: true } } },
+    });
+  });
+
+  it.each([null, { id: 'target', analysis: null }])(
+    'settles speculative history before a target error and prioritizes that error (%j)',
+    async (target) => {
+      emptyHistory();
+      const historyFailure = new Error('private history error');
+      prisma.wod.findFirst.mockResolvedValueOnce(target);
+      prisma.wod.findMany.mockRejectedValueOnce(historyFailure);
+      let finish!: () => void;
+      prisma.personalRecord.findMany.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = () => resolve([]);
+          }),
+      );
+      let done = false;
+      const result = getAthleteContextForWod('athlete', 'target', undefined, {
+        parallelHistory: true,
+      });
+      const assertion = expect(result).rejects.toBeInstanceOf(
+        target ? WodNotAnalyzedError : WodNotFoundError,
+      );
+      void result.then(
+        () => {
+          done = true;
+        },
+        () => {
+          done = true;
+        },
+      );
+      await vi.waitFor(() => expect(finish).toBeDefined());
+      expect(done).toBe(false);
+      finish();
+      await assertion;
+      expect(done).toBe(true);
+    },
+  );
+
+  it('settles the target read before rejecting failed parallel history', async () => {
+    emptyHistory();
+    const failure = new Error('history unavailable');
+    prisma.wod.findMany.mockRejectedValueOnce(failure);
+    let finish!: () => void;
+    prisma.wod.findFirst.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve(targetFixture());
+        }),
+    );
+    let done = false;
+    const result = getAthleteContextForWod('athlete', 'target', undefined, {
+      parallelHistory: true,
+    });
+    const assertion = expect(result).rejects.toBe(failure);
+    void result.then(
+      () => {
+        done = true;
+      },
+      () => {
+        done = true;
+      },
+    );
+    await Promise.resolve();
+    expect(done).toBe(false);
+    finish();
+    await assertion;
+    expect(done).toBe(true);
+  });
+
+  it('returns the same context and source data with sequential and parallel history', async () => {
+    const now = new Date();
+    prisma.wod.findFirst.mockImplementation(async () => structuredClone(targetFixture()));
+    prisma.wod.findMany.mockResolvedValue([
+      {
+        id: 'prior',
+        date: now,
+        analysis: targetFixture().analysis,
+        result: { score: '5 rounds' },
+        strategy: {
+          recommendedIntensity: 9,
+          targetRpe: 10,
+          criticalPoint: 'Grip',
+          breakStrategy: [{ movement: 'Pull-up', strategy: '6/4' }],
+        },
+      },
+    ]);
+    prisma.dailyCheckin.findMany.mockResolvedValue([{ date: now }]);
+    prisma.personalRecord.findMany.mockResolvedValue([
+      {
+        movementName: 'Pull-up',
+        value: 20,
+        unit: 'reps',
+        recordType: 'UNBROKEN_REPS',
+        repetitions: 20,
+        achievedAt: now,
+      },
+    ]);
+    const sequential = await getAthleteContextForWod('athlete', 'target');
+    const parallel = await getAthleteContextForWod('athlete', 'target', undefined, {
+      parallelHistory: true,
+    });
+    expect(parallel).toEqual(sequential);
+    expect(parallel.context.similarWods).toHaveLength(1);
+    expect(parallel.context.relevantPersonalRecords).toHaveLength(1);
+  });
   it('settles all account-scoped history reads before reporting a failure', async () => {
     prisma.wod.findFirst.mockResolvedValue({ id: 'target', analysis: {} });
     const failure = new Error('history unavailable');

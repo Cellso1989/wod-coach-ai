@@ -49,6 +49,7 @@ export async function recordAnalysisVersion(
     select: { version: true },
   });
   const version = await tx.wodAnalysisVersion.create({
+    select: { id: true },
     data: {
       wodId: wod.id,
       version: (latest?.version ?? 0) + 1,
@@ -86,6 +87,7 @@ export async function recordStrategyVersion(
   );
   const version = await measure('persistence.versionCreate', () =>
     tx.wodStrategyVersion.create({
+      select: { id: true },
       data: {
         wodId: wod.id,
         version: (latest?.version ?? 0) + 1,

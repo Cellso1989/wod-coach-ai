@@ -53,7 +53,9 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
               // Settle both reads before releasing the lease, including on failure.
               const [contextResult, profileResult] = await Promise.allSettled([
                 timing.measure('context', () =>
-                  getAthleteContextForWod(userId, id, timing.measureDatabase),
+                  getAthleteContextForWod(userId, id, timing.measureDatabase, {
+                    parallelHistory: true,
+                  }),
                 ),
                 timing.measure('profile', () =>
                   timing.measureDatabase('profile', () =>

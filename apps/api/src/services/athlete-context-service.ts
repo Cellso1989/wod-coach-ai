@@ -29,83 +29,102 @@ export async function getAthleteContextForWod(
   userId: string,
   wodId: string,
   measure: MeasureWodDatabase = withoutDatabaseTiming,
+  options: { parallelHistory?: boolean } = {},
 ): Promise<{
   targetWod: Wod & { analysis: WodAnalysis & { movements: WodMovement[] } };
   targetAnalysis: WodAnalysisSummary;
   context: AthleteContext;
 }> {
-  const targetWod = await measure('context.target', () =>
-    prisma.wod.findFirst({
-      where: { id: wodId, userId },
-      include: { analysis: { include: { movements: true } } },
-    }),
-  );
+  const loadTarget = async () => {
+    const targetWod = await measure('context.target', () =>
+      prisma.wod.findFirst({
+        where: { id: wodId, userId },
+        include: { analysis: { include: { movements: true } } },
+      }),
+    );
 
-  if (!targetWod) {
-    throw new WodNotFoundError();
-  }
-  if (!targetWod.analysis) {
-    throw new WodNotAnalyzedError();
-  }
+    if (!targetWod) {
+      throw new WodNotFoundError();
+    }
+    if (!targetWod.analysis) {
+      throw new WodNotAnalyzedError();
+    }
 
-  const historyCutoff = new Date(Date.now() - HISTORY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const checkinCutoff = new Date(Date.now() - CHECKIN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    return { ...targetWod, analysis: targetWod.analysis };
+  };
+  const loadHistory = async () => {
+    const historyCutoff = new Date(Date.now() - HISTORY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const checkinCutoff = new Date(Date.now() - CHECKIN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
-  // Finish every in-flight read before the caller releases its generation lease
-  // or writes the timing event, even if one of the parallel reads fails.
-  const reads = await Promise.allSettled([
-    measure('context.history', () =>
-      prisma.wod.findMany({
-        where: { userId, id: { not: wodId }, date: { gte: historyCutoff } },
-        select: {
-          id: true,
-          date: true,
-          analysis: {
-            select: {
-              format: true,
-              durationMinutes: true,
-              stimulus: true,
-              movements: { select: { name: true, category: true } },
+    // Finish every in-flight read before the caller releases its generation lease
+    // or writes the timing event, even if one of the parallel reads fails.
+    const reads = await Promise.allSettled([
+      measure('context.history', () =>
+        prisma.wod.findMany({
+          where: { userId, id: { not: wodId }, date: { gte: historyCutoff } },
+          select: {
+            id: true,
+            date: true,
+            analysis: {
+              select: {
+                format: true,
+                durationMinutes: true,
+                stimulus: true,
+                movements: { select: { name: true, category: true } },
+              },
+            },
+            result: { select: { score: true } },
+            strategy: {
+              select: {
+                recommendedIntensity: true,
+                targetRpe: true,
+                criticalPoint: true,
+                breakStrategy: true,
+              },
             },
           },
-          result: { select: { score: true } },
-          strategy: {
-            select: {
-              recommendedIntensity: true,
-              targetRpe: true,
-              criticalPoint: true,
-              breakStrategy: true,
-            },
+          orderBy: { date: 'desc' },
+          take: 100,
+        }),
+      ),
+      measure('context.checkins', () =>
+        prisma.dailyCheckin.findMany({
+          where: { userId, date: { gte: checkinCutoff } },
+          orderBy: { date: 'desc' },
+          select: { date: true },
+        }),
+      ),
+      measure('context.personalRecords', () =>
+        prisma.personalRecord.findMany({
+          where: { userId },
+          select: {
+            movementName: true,
+            value: true,
+            unit: true,
+            recordType: true,
+            repetitions: true,
+            achievedAt: true,
           },
-        },
-        orderBy: { date: 'desc' },
-        take: 100,
-      }),
-    ),
-    measure('context.checkins', () =>
-      prisma.dailyCheckin.findMany({
-        where: { userId, date: { gte: checkinCutoff } },
-        orderBy: { date: 'desc' },
-        select: { date: true },
-      }),
-    ),
-    measure('context.personalRecords', () =>
-      prisma.personalRecord.findMany({
-        where: { userId },
-        select: {
-          movementName: true,
-          value: true,
-          unit: true,
-          recordType: true,
-          repetitions: true,
-          achievedAt: true,
-        },
-      }),
-    ),
-  ]);
-  const historicalWods = readResult(reads[0]);
-  const checkins = readResult(reads[1]);
-  const personalRecords = readResult(reads[2]);
+        }),
+      ),
+    ]);
+    const historicalWods = readResult(reads[0]);
+    const checkins = readResult(reads[1]);
+    const personalRecords = readResult(reads[2]);
+
+    return { historicalWods, checkins, personalRecords };
+  };
+
+  const targetRead = loadTarget();
+  // Strategy enables overlap only after the atomic account-scoped lease claim.
+  // GET context keeps its early target/analysis guard before reading history.
+  const historyRead = options.parallelHistory
+    ? loadHistory()
+    : targetRead.then(() => loadHistory());
+  const [targetResult, historyResult] = await Promise.allSettled([targetRead, historyRead]);
+  // Finish every read, and prioritize the target error over speculative history.
+  const targetWod = readResult(targetResult);
+  const { historicalWods, checkins, personalRecords } = readResult(historyResult);
 
   const targetAnalysis: WodAnalysisSummary = {
     format: targetWod.analysis.format,
