@@ -741,7 +741,8 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
-  listPersonalRecords: () => request<{ records: PersonalRecord[] }>('/personal-records'),
+  listPersonalRecords: (signal?: AbortSignal) =>
+    request<{ records: PersonalRecord[] }>('/personal-records', { signal }),
 
   getMonthlyRanking: (month: string, signal?: AbortSignal) =>
     request<MonthlyRanking>(`/ranking/monthly?${new URLSearchParams({ month })}`, { signal }),
@@ -786,8 +787,10 @@ export const api = {
     return requestForm<{ workout: HyroxWorkout }>('/hyrox-workouts', formData);
   },
 
-  listHyroxWorkouts: (limit?: number) =>
-    request<{ workouts: HyroxWorkout[] }>(`/hyrox-workouts${limit ? `?limit=${limit}` : ''}`),
+  listHyroxWorkouts: (limit?: number, signal?: AbortSignal) =>
+    request<{ workouts: HyroxWorkout[] }>(`/hyrox-workouts${limit ? `?limit=${limit}` : ''}`, {
+      signal,
+    }),
 
   getHyroxWorkout: (id: string) => request<{ workout: HyroxWorkout }>(`/hyrox-workouts/${id}`),
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError, type AdminUsersResponse, type PasswordRecoveryLink } from '../lib/api.js';
 import { PageHeader } from '../components/PageHeader.js';
-import { Alert, Button, Card, TextInput } from '../components/ui.js';
+import { Alert, Button, Card, DataLoading, TextInput } from '../components/ui.js';
 import { NavBar } from '../components/NavBar.js';
 import { AdminAccessLogs } from '../components/AdminAccessLogs.js';
 
@@ -107,9 +107,7 @@ export function AdminPage() {
             <h1 className="text-2xl font-bold">Admin</h1>
           </PageHeader>
           <NavBar />
-          <p role="status" className="text-sm text-neutral-400">
-            Carregando painel admin...
-          </p>
+          <DataLoading message="Carregando painel admin..." />
         </div>
       </main>
     );

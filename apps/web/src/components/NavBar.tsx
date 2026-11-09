@@ -52,7 +52,7 @@ export function NavBar() {
         behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
       });
     };
-    // The intro initially hides the menu, so wait for its visible dimensions too.
+    // Recenter after layout changes as well as route changes.
     const observer = new ResizeObserver(revealActiveItem);
     observer.observe(nav);
     revealActiveItem();

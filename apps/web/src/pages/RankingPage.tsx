@@ -6,7 +6,7 @@ import { api } from '../lib/api.js';
 import { createRankingDemo } from '../lib/ranking-demo.js';
 import { NavBar } from '../components/NavBar.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
-import { Alert, Button, Card, TextInput } from '../components/ui.js';
+import { Alert, Button, Card, DataLoading, TextInput } from '../components/ui.js';
 
 const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 function currentDay() {
@@ -192,14 +192,7 @@ export function RankingPage({ demo = false }: { demo?: boolean }) {
           </div>
         </header>
 
-        {loading && (
-          <p
-            role="status"
-            className="rounded-xl border border-neutral-800 p-8 text-center text-neutral-400"
-          >
-            Carregando classificação...
-          </p>
-        )}
+        {loading && <DataLoading message="Carregando classificação..." />}
         {error && (
           <div className="space-y-3">
             <Alert>{error}</Alert>

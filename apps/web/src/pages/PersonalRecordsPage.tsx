@@ -11,7 +11,15 @@ import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { PageHeader } from '../components/PageHeader.js';
 import { PrHistoryChart } from '../components/PrHistoryChart.js';
 import { MovementAutocomplete } from '../components/MovementAutocomplete.js';
-import { Alert, Button, EmptyState, PageShell, SelectInput, TextInput } from '../components/ui.js';
+import {
+  Alert,
+  Button,
+  DataLoading,
+  EmptyState,
+  PageShell,
+  SelectInput,
+  TextInput,
+} from '../components/ui.js';
 
 function interleave(...lists: readonly (readonly string[])[]): string[] {
   const result: string[] = [];
@@ -52,6 +60,7 @@ function roundToHalf(n: number): number {
 export function PersonalRecordsPage() {
   const [records, setRecords] = useState<PersonalRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const [movementName, setMovementName] = useState('');
@@ -110,15 +119,24 @@ export function PersonalRecordsPage() {
       .filter((group) => group.history.length > 1);
   }, [records]);
 
-  function load() {
-    api
-      .listPersonalRecords()
-      .then(({ records }) => setRecords(records))
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Erro ao carregar.'))
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(load, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+    void api
+      .listPersonalRecords(controller.signal)
+      .then(({ records }) => {
+        if (!controller.signal.aborted) setRecords(records);
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted)
+          setError(err instanceof ApiError ? err.message : 'Erro ao carregar.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [attempt]);
 
   function resetForm() {
     setEditingId(null);
@@ -300,15 +318,22 @@ export function PersonalRecordsPage() {
           onChange={(event) => setNotes(event.target.value)}
         />
 
-        <Button type="submit" disabled={saving} fullWidth>
+        <Button type="submit" disabled={saving || loading} fullWidth>
           {saving ? 'Salvando...' : editingId ? 'Salvar alteracoes' : 'Adicionar PR'}
         </Button>
       </form>
 
-      {loading && <p className="text-neutral-400">Carregando...</p>}
-      {error && <Alert>{error}</Alert>}
+      {loading && <DataLoading message="Carregando seus PRs..." />}
+      {error && (
+        <div className="space-y-3">
+          <Alert>{error}</Alert>
+          <Button variant="secondary" onClick={() => setAttempt((value) => value + 1)}>
+            Tentar novamente
+          </Button>
+        </div>
+      )}
 
-      {!loading && records.length === 0 && (
+      {!loading && !error && records.length === 0 && (
         <EmptyState
           title="Nenhum PR registrado"
           description="Adicione seus principais PRs para melhorar as estrategias dos treinos."

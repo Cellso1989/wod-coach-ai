@@ -18,6 +18,8 @@ export function NotificationCenter() {
   const [error, setError] = useState('');
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushAvailable, setPushAvailable] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushError, setPushError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const root = useRef<HTMLDivElement>(null);
@@ -42,19 +44,6 @@ export function NotificationCenter() {
       }
     };
     void refresh();
-    if (supportsPush()) {
-      void api
-        .getPushConfig()
-        .then(({ publicKey }) => {
-          if (!controller.signal.aborted) setPushAvailable(!!publicKey);
-        })
-        .catch(() => {});
-      void hasPushSubscription()
-        .then((enabled) => {
-          if (!controller.signal.aborted) setPushEnabled(enabled);
-        })
-        .catch(() => {});
-    }
     const timer = window.setInterval(() => {
       void refresh();
     }, 30_000);
@@ -69,6 +58,30 @@ export function NotificationCenter() {
       window.removeEventListener('ranking-participation-changed', refresh);
     };
   }, [userId, attempt]);
+
+  // Device settings are only useful inside the open panel. Keep them out of
+  // every screen's initial requests, while the unread badge still refreshes.
+  useEffect(() => {
+    if (!open || !userId || !supportsPush()) return;
+    let active = true;
+    setPushLoading(true);
+    setPushError(false);
+    void Promise.all([api.getPushConfig(), hasPushSubscription()])
+      .then(([{ publicKey }, enabled]) => {
+        if (!active) return;
+        setPushAvailable(!!publicKey);
+        setPushEnabled(enabled);
+      })
+      .catch(() => {
+        if (active) setPushError(true);
+      })
+      .finally(() => {
+        if (active) setPushLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, userId, attempt]);
 
   useEffect(() => {
     if (!open) return;
@@ -208,7 +221,19 @@ export function NotificationCenter() {
             </>
           )}
           <div className="mt-3 border-t border-neutral-800 pt-3">
-            {pushAvailable ? (
+            {pushLoading ? (
+              <p role="status" className="text-xs text-neutral-400">
+                Verificando avisos neste dispositivo...
+              </p>
+            ) : pushError ? (
+              <button
+                type="button"
+                className="text-xs text-orange-400 underline"
+                onClick={() => setAttempt((value) => value + 1)}
+              >
+                Tentar carregar avisos no celular novamente
+              </button>
+            ) : pushAvailable ? (
               <button
                 type="button"
                 disabled={busy}

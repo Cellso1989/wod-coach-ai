@@ -16,6 +16,31 @@ afterEach(() => {
 });
 
 describe('navigation read freshness', () => {
+  it.each(['hyrox', 'records'] as const)(
+    'cancels a departing %s screen without cancelling a shared destination read',
+    async (kind) => {
+      let finish!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      fetchMock.mockImplementation(async () => {
+        await pending;
+        return reply({ workouts: [{ id: 'hyrox' }], records: [{ id: 'record' }] });
+      });
+      const read = (signal?: AbortSignal) =>
+        kind === 'hyrox' ? api.listHyroxWorkouts(100, signal) : api.listPersonalRecords(signal);
+      const controller = new AbortController();
+      const departing = read(controller.signal);
+      const rejected = expect(departing).rejects.toMatchObject({ name: 'AbortError' });
+      const destination = read();
+      controller.abort();
+      finish();
+      await rejected;
+      await expect(destination).resolves.toHaveProperty(kind === 'hyrox' ? 'workouts' : 'records');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('reuses recent list reads but keeps distinct query limits', async () => {
     await api.listWods(100);
     await api.listWods(100);

@@ -9,7 +9,7 @@ import {
   Alert,
   Button,
   Field,
-  LoadingState,
+  DataLoading,
   PageShell,
   TextArea,
   TextInput,
@@ -77,7 +77,15 @@ export function CheckinPage() {
   }
 
   if (loading) {
-    return <LoadingState />;
+    return (
+      <PageShell>
+        <PageHeader>
+          <h1 className="text-xl font-bold">Resultado do treino</h1>
+        </PageHeader>
+        <NavBar />
+        <DataLoading message="Carregando resultado de hoje..." />
+      </PageShell>
+    );
   }
 
   return (

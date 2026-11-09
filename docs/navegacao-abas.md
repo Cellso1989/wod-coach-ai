@@ -1,4 +1,84 @@
-# Navegacao entre abas — 03/11/2026
+# Navegacao e carregamento das telas
+
+## Primeira abertura e frontend - 09/11/2026
+
+O usuario encerrou a frente de geracao de estrategia e pediu foco na demora
+para abrir as telas e carregar suas informacoes. O cache de 03/11 ja acelerava
+retornos, mas nao a primeira abertura. O frontend ainda baixava o codigo de
+todas as paginas de uma vez e escondia o conteudo por uma introducao fixa de
+1,35 s, com saida animada ate 1,8 s.
+
+- Removida a introducao que bloqueava a abertura; o conteudo aparece assim que
+  a sessao e os dados necessarios ficam disponiveis.
+- Paginas secundarias agora usam importacao dinamica. O codigo da rota atual
+  comeca a baixar em paralelo com a verificacao de sessao. Ao apontar, focar
+  ou tocar em uma aba, antecipam-se seu codigo e apenas suas leituras elegiveis.
+  Na entrada autenticada, a antecipacao de dados se limita ao destino atual;
+  Inicio e check-in tambem participam. Nenhum carregamento de todas as abas.
+- Enquanto um arquivo de pagina baixa, o menu permanece utilizavel. Falha no
+  download oferece recarregamento e permite abrir outra aba.
+- Listas, painel, perfil, ranking e Admin mostram estruturas de carregamento
+  acessiveis, respeitando movimento reduzido. Check-in preserva o menu durante
+  sua consulta. Formularios de perfil e controles administrativos continuam
+  esperando seus dados antes de permitir edicao.
+- CrossFit/HYROX/PRs cancelam o consumidor ao sair e permitem nova tentativa.
+  Falha de leitura nao aparece como lista vazia; CrossFit nao mostra contagem
+  zerada antes da resposta. PRs aguardam a leitura inicial antes de salvar.
+- O feed do sino continua atualizando. Configuracao e assinatura push so sao
+  consultadas ao abrir o painel, com carregamento/erro explicitos, reduzindo
+  requisicoes secundarias na abertura de cada tela.
+
+Mantidos os prazos e as regras de isolamento/invalidação abaixo: dados somente
+em memoria por conta/dia, descarte antes/depois de escritas e ao retornar ao app,
+sem cache novo de ranking, Admin, autenticacao ou detalhes de treino.
+Nao houve mudanca de banco, hospedagem, modelos ou prompts.
+
+### Medicao local
+
+Build imediatamente anterior preservado antes das edicoes e build atual de
+producao, Chromium isolado, 390 x 900 px, movimento normal, service worker
+bloqueado, dados ficticios e atraso fixo de 500 ms por resposta de API.
+Tres repeticoes alternadas por versao. Abertura direta de `/wods`, visita a
+HYROX e retorno a CrossFit; tempos da abertura incluem verificacao de sessao.
+
+| Medida                                  |     Antes |    Depois |
+| --------------------------------------- | --------: | --------: |
+| JavaScript inicial, sem compressao      | 349,84 KB | 242,68 KB |
+| JavaScript inicial, gzip                | 104,45 KB |  76,81 KB |
+| Menu visivel, mediana                   |  1.735 ms |  1.113 ms |
+| Dados CrossFit visiveis, mediana        |  1.746 ms |  1.350 ms |
+| Retorno recente a CrossFit, mediana     |     86 ms |     84 ms |
+| Requisicoes de API na primeira abertura |         4 |         3 |
+
+O arquivo JavaScript inicial ficou 30,6% menor (26,5% em gzip); arquivos das
+paginas visitadas sao baixados separadamente. Nesta simulacao, o menu apareceu
+35,9% antes e os dados, 22,7% antes. Retornos continuam na ordem de 0,1 s;
+nao atribuir significado estatistico a pequenas diferencas com tres amostras.
+As medidas nao representam latencia autenticada de producao. A consulta de
+dados ainda depende da API/banco; a mudanca nao promete eliminar essa espera.
+
+### Verificacao e estado
+
+970 testes gerais passaram; 81 PostgreSQL opt-in ficaram pulados. Incluidas
+duas regressoes de cancelamento das leituras HYROX/PRs sem interromper outro
+consumidor. Build completo e typecheck passaram. Lint do frontend sem erros,
+com o aviso preexistente de Fast Refresh sobre `cn` em `ui.tsx`.
+
+Playwright CLI validou 24 verificacoes: celular/desktop, menu durante dados e
+codigo pendentes, estados vazios/contagens, retry, retorno com cache, invalidacao
+apos salvar, troca de conta sem dados antigos, push sob demanda, recuperacao
+de falha de arquivo de pagina, ranking sempre na rede e check-in pendente.
+A troca de conta tambem descarta notificacoes do menu de carregamento enquanto
+o arquivo da pagina esta pendente.
+Capturas 390/1280 px sem transbordamento horizontal; fluxo normal sem erros
+de console. Evidencias locais em `output/screen-loading/report.json`,
+`comparison-final.txt`, `verification*.txt` e `output/playwright/screen-loading-*.png`.
+
+Usuario autorizou commit, push e deploy deste ajuste em 09/11/2026.
+Publicacao em andamento pelo fluxo `origin/main` do Render; a verificacao
+sera registrada apos a nova versao entrar em producao.
+
+## Historico — navegacao entre abas em 03/11/2026
 
 O usuario esclareceu que a lentidao ocorre ao trocar de abas. A otimizacao
 anterior do detalhe CrossFit tratava outra parte do fluxo: ela reduziu o tamanho

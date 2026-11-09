@@ -9,6 +9,7 @@ import { disablePushNotifications } from '../lib/push-notifications.js';
 import {
   Alert,
   Button,
+  DataLoading,
   Field,
   PageShell,
   SelectInput,
@@ -194,9 +195,7 @@ export function ProfilePage() {
           <h1 className="text-xl font-bold">Meu perfil</h1>
         </PageHeader>
         <NavBar />
-        <p role="status" className="text-sm text-neutral-400">
-          Carregando perfil...
-        </p>
+        <DataLoading message="Carregando perfil..." />
       </PageShell>
     );
   }
