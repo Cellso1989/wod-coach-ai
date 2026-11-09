@@ -10,8 +10,8 @@ export const AUTH_COOKIE_NAME = 'wod_coach_ai_token';
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
-    payload: { sub: string };
-    user: { sub: string };
+    payload: { sub: string; generationJobId?: string; generationJobToken?: string };
+    user: { sub: string; generationJobId?: string; generationJobToken?: string };
   }
 }
 

@@ -69,7 +69,7 @@ const TECHNICAL = new Set([
 ]);
 
 // Preserve unknown/legacy fields without applying today's stricter AI output schema.
-function Snapshot({ value }: { value: unknown }) {
+function Snapshot({ value, imageUrl }: { value: unknown; imageUrl?: string }) {
   if (value === null || value === undefined)
     return <span className="text-neutral-500">Nao registrado</span>;
   if (Array.isArray(value))
@@ -91,8 +91,16 @@ function Snapshot({ value }: { value: unknown }) {
   const entries = Object.entries(value);
   const technical = entries.filter(([key]) => TECHNICAL.has(key));
   const source = value as Record<string, unknown>;
+  const privateImageKeys = new Set(['imageStorageKey', 'imageSha256']);
   return (
     <div className="min-w-0 space-y-3">
+      {source.imageStorageKey && imageUrl ? (
+        <img
+          src={imageUrl}
+          alt="Fonte arquivada do treino"
+          className="max-h-96 max-w-full object-contain"
+        />
+      ) : null}
       {typeof source.imageData === 'string' &&
         typeof source.imageMimeType === 'string' &&
         /^image\/(png|jpeg|webp|gif)$/.test(source.imageMimeType) && (
@@ -104,7 +112,9 @@ function Snapshot({ value }: { value: unknown }) {
         )}
       <dl className="space-y-3">
         {entries
-          .filter(([key]) => !TECHNICAL.has(key) && key !== 'imageData')
+          .filter(
+            ([key]) => !TECHNICAL.has(key) && key !== 'imageData' && !privateImageKeys.has(key),
+          )
           .map(([key, entry]) => (
             <div key={key} className="min-w-0">
               <dt className="mb-1 text-xs font-semibold text-neutral-400 [overflow-wrap:anywhere]">
@@ -331,7 +341,10 @@ export function WodVersionHistory({
               )}
               <section className="border-t border-neutral-800 pt-3">
                 <h3 className="mb-3 font-semibold">Fonte arquivada</h3>
-                <Snapshot value={version.sourceSnapshot} />
+                <Snapshot
+                  value={version.sourceSnapshot}
+                  imageUrl={api.wodVersionImageUrl(wodId, tab, version.id)}
+                />
               </section>
               <section className="border-t border-neutral-800 pt-3">
                 <h3 className="mb-3 font-semibold">

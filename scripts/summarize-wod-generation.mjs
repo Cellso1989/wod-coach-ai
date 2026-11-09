@@ -8,6 +8,7 @@ const EVENTS = new Set([
   'wod_generation_timing',
   'wod_generation_http_timing',
   'wod_generation_client_timing',
+  'wod_generation_job_timing',
 ]);
 
 export function parseLogLine(line) {
@@ -44,6 +45,20 @@ const ratio = (numerator, denominator) => ({
   denominator,
   percent: denominator ? (100 * numerator) / denominator : null,
 });
+const cohortKey = (row) => {
+  const attempt = row.attempts?.[0];
+  return [
+    row.release ?? 'unknown-release',
+    row.executionMode ?? 'synchronous',
+    row.imageStorage ?? 'database',
+    row.sourceType ?? 'unknown-source',
+    attempt?.requestedModel ?? 'unknown-model',
+    attempt?.requestedReasoningEffort ?? 'unknown-effort',
+    attempt?.maxOutputTokens ?? 'unknown-cap',
+    attempt?.promptVersion ?? 'unknown-prompt',
+    attempt?.cacheRouting ?? 'default',
+  ].join('|');
+};
 
 export function summarizeWodGenerationLogs(records) {
   const seen = new Set();
@@ -105,6 +120,8 @@ export function summarizeWodGenerationLogs(records) {
         'analysisRead',
         'context',
         'profile',
+        'athleteBasics',
+        'imageRead',
         'ai',
         'persistence',
       ]) {
@@ -159,9 +176,25 @@ export function summarizeWodGenerationLogs(records) {
         databaseOperations,
       };
     };
+    const synchronousHttp = http.filter((r) => !r.phase || r.phase === 'synchronous');
+    const jobs = rows.filter(
+      (r) => r.operation === operation && r.event === 'wod_generation_job_timing',
+    );
+    const queuedMeasurements = new Set(
+      [...http.filter((r) => r.phase === 'enqueue'), ...jobs]
+        .map((r) => r.measurementId)
+        .filter(Boolean),
+    );
+    const jobByMeasurement = new Map(
+      jobs.filter((r) => r.measurementId).map((r) => [r.measurementId, r]),
+    );
+    const pairedQueued = client.flatMap((c) => {
+      const job = jobByMeasurement.get(c.measurementId);
+      return job ? [{ client: c, job }] : [];
+    });
     const httpById = new Map(http.filter(identity).map((r) => [identity(r), r]));
     const httpByMeasurement = new Map();
-    for (const row of http) {
+    for (const row of synchronousHttp) {
       if (!row.measurementId) continue;
       const group = httpByMeasurement.get(row.measurementId) ?? [];
       group.push(row);
@@ -206,8 +239,38 @@ export function summarizeWodGenerationLogs(records) {
           ),
         ]),
       ),
-      http: distribution(http.map((r) => r.durationMs)),
-      httpFailures: http.filter((r) => r.outcome === 'failed').length,
+      byCohort: Object.fromEntries(
+        [...new Set(work.map(cohortKey))].map((key) => {
+          const entries = work.filter((r) => cohortKey(r) === key);
+          return [
+            key,
+            {
+              ...summarizeWork(entries),
+              sampleAssessment:
+                entries.length < 30
+                  ? 'insufficient_for_stable_p95'
+                  : 'descriptive_only_requires_representative_sampling',
+              minimumSamples: 30,
+            },
+          ];
+        }),
+      ),
+      queued: {
+        completed: jobs.length,
+        failures: jobs.filter((r) => r.statusCode >= 400).length,
+        total: distribution(jobs.map((r) => r.durationMs)),
+        wait: distribution(jobs.map((r) => r.queueWaitMs)),
+        enqueue: distribution(http.filter((r) => r.phase === 'enqueue').map((r) => r.durationMs)),
+        client: distribution(
+          client.filter((c) => queuedMeasurements.has(c.measurementId)).map((c) => c.durationMs),
+        ),
+        matchedClientJob: pairedQueued.length,
+        clientMinusJob: distribution(
+          pairedQueued.map((pair) => pair.client.durationMs - pair.job.durationMs),
+        ),
+      },
+      http: distribution(synchronousHttp.map((r) => r.durationMs)),
+      httpFailures: synchronousHttp.filter((r) => r.outcome === 'failed').length,
       matchedHttpWork: matchedWork.length,
       httpMinusWork: distribution(
         matchedWork.map(({ work: w, server: s }) => s.durationMs - w.durationMs),

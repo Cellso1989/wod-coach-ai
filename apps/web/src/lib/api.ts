@@ -70,21 +70,69 @@ async function measuredGeneration<T>(path: string, operation: 'ANALYSIS' | 'STRA
   } catch {
     // A browser diagnostics failure must not prevent the actual request.
   }
-  if (!measurementId) return request<T>(path, { method: 'POST' });
   const session = readSessionRevision;
   const userId = readUserId;
   const started = performance.now();
   let outcome: 'succeeded' | 'failed' = 'failed';
   try {
-    const result = await request<T>(path, {
+    const initial = await request<T | { queued: true; jobId: string }>(path, {
       method: 'POST',
-      headers: { 'X-Wod-Measurement-Id': measurementId },
+      headers: {
+        ...(measurementId ? { 'X-Wod-Measurement-Id': measurementId } : {}),
+        'X-Wod-Async': '1',
+        'X-Wod-Response-Compact': '1',
+      },
     });
+    const ensureSession = () => {
+      if (session !== readSessionRevision)
+        throw new ApiError(409, 'A conta mudou. Abra o treino novamente.');
+    };
+    ensureSession();
+    let result: T;
+    if (
+      initial &&
+      typeof initial === 'object' &&
+      'queued' in initial &&
+      initial.queued === true &&
+      'jobId' in initial &&
+      typeof initial.jobId === 'string'
+    ) {
+      while (true) {
+        ensureSession();
+        if (performance.now() - started >= 30 * 60_000)
+          throw new ApiError(
+            504,
+            'A espera expirou. Atualize o treino para consultar o resultado.',
+          );
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        ensureSession();
+        const job = await request<{ status: string; statusCode: number | null; result: unknown }>(
+          `/wod-generation-jobs/${encodeURIComponent(initial.jobId)}`,
+          { signal: AbortSignal.timeout(15_000) },
+        );
+        ensureSession();
+        if (job.status === 'FAILED') {
+          const error =
+            job.result && typeof job.result === 'object' && 'error' in job.result
+              ? String(job.result.error)
+              : 'A geração falhou. Atualize o treino antes de tentar novamente.';
+          throw new ApiError(job.statusCode ?? 500, error);
+        }
+        if (job.status === 'SUCCEEDED') {
+          result = job.result as T;
+          break;
+        }
+        if (job.status !== 'PENDING' && job.status !== 'RUNNING')
+          throw new ApiError(502, 'Estado de geração inválido');
+      }
+    } else result = initial as T;
     outcome = 'succeeded';
     return result;
   } finally {
+    navigationReads.clear();
     const durationMs = performance.now() - started;
     if (
+      measurementId &&
       userId &&
       session === readSessionRevision &&
       Number.isFinite(durationMs) &&
@@ -641,6 +689,8 @@ export const api = {
 
   getWodDetail,
   wodImageUrl: (id: string) => `${API_URL}/api/wods/${encodeURIComponent(id)}/image`,
+  wodVersionImageUrl: (id: string, kind: 'analysis' | 'strategy', versionId: string) =>
+    `${API_URL}/api/wods/${encodeURIComponent(id)}/versions/${kind}/${encodeURIComponent(versionId)}/image`,
 
   updateWod: (id: string, input: { rawText?: string; name?: string; notes?: string }) =>
     request<{ wod: Wod }>(`/wods/${id}`, {

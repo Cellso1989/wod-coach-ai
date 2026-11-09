@@ -69,7 +69,7 @@ describe('CrossFit browser timing', () => {
           : new Response('{"analysis":{}}');
       });
       if (change === 'denied') await expect(api.analyzeWod('wod')).rejects.toThrow('Denied');
-      else await api.analyzeWod('wod');
+      else await expect(api.analyzeWod('wod')).rejects.toThrow('A conta mudou');
       expect(fetchMock).toHaveBeenCalledTimes(1);
     },
   );

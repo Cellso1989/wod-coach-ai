@@ -17,9 +17,24 @@ const MESSAGE = {
     usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
   },
 };
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 describe('AI generation metadata collector', () => {
+  it('uses a stable non-personal routing key only when explicitly enabled on the server', async () => {
+    vi.stubEnv('CROSSFIT_PROMPT_CACHE_ROUTING', 'enabled');
+    const sender = vi.fn().mockResolvedValue(MESSAGE);
+    const observer = vi.fn();
+    await captureAiGeneration(sender, 'StrategyCoachAgent', observer).sendMessage(PARAMS);
+    expect(sender.mock.calls[0][0]).toMatchObject({
+      ...PARAMS,
+      promptCacheKey: expect.stringMatching(/^wod-StrategyCoachAgent-[a-f0-9]{32}$/),
+    });
+    expect(JSON.stringify(sender.mock.calls[0][0].promptCacheKey)).not.toContain('Private');
+    expect(observer).toHaveBeenCalledWith(expect.objectContaining({ cacheRouting: 'stable' }));
+  });
   it('archives successful attempt durations and reports failed attempts without inventing usage', async () => {
     let now = 0;
     vi.spyOn(performance, 'now').mockImplementation(() => now);

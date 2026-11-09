@@ -1,7 +1,9 @@
-import fp from "fastify-plugin";
-import type { FastifyError, FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import fp from 'fastify-plugin';
+import type { FastifyError, FastifyInstance } from 'fastify';
+import { ZodError } from 'zod';
 import { WodGenerationConflictError } from '../services/wod-generation-lease.js';
+import { WodImageStorageError } from '../services/wod-image-storage.js';
+import { GenerationJobAdmissionError } from '../services/wod-generation-jobs.js';
 
 /**
  * Centralized error handling (Fase 12 — hardening):
@@ -14,33 +16,37 @@ import { WodGenerationConflictError } from '../services/wod-generation-lease.js'
  */
 export default fp(async (app: FastifyInstance) => {
   app.setErrorHandler((error: FastifyError, request, reply) => {
-    request.log.error({ err: error }, "Unhandled request error");
+    request.log.error({ err: error }, 'Unhandled request error');
 
     if (error instanceof WodGenerationConflictError) {
       return reply.code(409).send({ error: error.message });
     }
+    if (error instanceof WodImageStorageError)
+      return reply.code(503).send({ error: error.message });
+    if (error instanceof GenerationJobAdmissionError)
+      return reply.code(error.statusCode).send({ error: error.message });
 
     if (error instanceof ZodError) {
-      return reply.code(400).send({ error: "Dados inválidos", details: error.flatten() });
+      return reply.code(400).send({ error: 'Dados inválidos', details: error.flatten() });
     }
 
     // Fastify's own validation/parsing errors (bad JSON body, etc.) come
     // with an English message — replace it with a generic PT-BR one.
     if (error.statusCode && error.statusCode < 500) {
-      return reply.code(error.statusCode).send({ error: "Requisição inválida" });
+      return reply.code(error.statusCode).send({ error: 'Requisição inválida' });
     }
 
     // Prisma known-request errors: surface a generic conflict for
     // unique-constraint violations, hide everything else.
-    const prismaCode = "code" in error ? (error as { code?: unknown }).code : undefined;
-    if (prismaCode === "P2002") {
-      return reply.code(409).send({ error: "Este registro já existe" });
+    const prismaCode = 'code' in error ? (error as { code?: unknown }).code : undefined;
+    if (prismaCode === 'P2002') {
+      return reply.code(409).send({ error: 'Este registro já existe' });
     }
-    if (prismaCode === "P2025") {
-      return reply.code(404).send({ error: "Registro não encontrado" });
+    if (prismaCode === 'P2025') {
+      return reply.code(404).send({ error: 'Registro não encontrado' });
     }
 
-    return reply.code(500).send({ error: "Erro interno do servidor" });
+    return reply.code(500).send({ error: 'Erro interno do servidor' });
   });
 
   // O notFoundHandler é registrado em app.ts (único lugar permitido pelo

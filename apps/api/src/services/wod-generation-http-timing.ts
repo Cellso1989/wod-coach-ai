@@ -41,6 +41,12 @@ export function registerWodGenerationHttpTiming(app: FastifyInstance) {
         requestId: request.id,
         measurementId: wodMeasurementId(request),
         operation: timing.operation,
+        phase:
+          reply.statusCode === 202
+            ? 'enqueue'
+            : request.user?.generationJobId
+              ? 'worker'
+              : 'synchronous',
         statusCode: reply.statusCode,
         outcome: reply.statusCode < 400 ? 'succeeded' : 'failed',
         durationMs: performance.now() - timing.started,

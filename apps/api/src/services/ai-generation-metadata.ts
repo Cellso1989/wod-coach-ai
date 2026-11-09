@@ -14,6 +14,7 @@ interface AiGenerationAttempt {
 }
 
 export interface AiAttemptTiming {
+  cacheRouting?: 'stable' | 'default';
   durationMs: number;
   status: 'received' | 'failed';
   requestedModel: string;
@@ -54,14 +55,19 @@ export function captureAiGeneration(
         maxOutputTokens: params.maxTokens,
         promptVersion: `sha256:${createHash('sha256').update(params.systemPrompt).digest('hex')}`,
       };
+      const stableCache = process.env.CROSSFIT_PROMPT_CACHE_ROUTING === 'enabled';
+      const routed = stableCache
+        ? { ...params, promptCacheKey: `wod-${agent}-${details.promptVersion.slice(7, 39)}` }
+        : params;
       let message: AiTextMessage;
       try {
-        message = await sendMessage(params);
+        message = await sendMessage(routed);
       } catch (error) {
         observe({
           durationMs: performance.now() - started,
           status: 'failed',
           ...details,
+          cacheRouting: stableCache ? 'stable' : 'default',
           model: null,
           usage: null,
         });
@@ -79,6 +85,7 @@ export function captureAiGeneration(
       observe({
         durationMs,
         status: 'received',
+        cacheRouting: stableCache ? 'stable' : 'default',
         ...details,
         model: message.metadata?.model ?? null,
         usage: message.metadata?.usage ? { ...message.metadata.usage } : null,

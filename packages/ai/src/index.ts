@@ -16,6 +16,7 @@ export interface SendMessageParams {
   systemPrompt: string;
   messages: Array<{ role: 'user'; content: AiMessageContentPart[] }>;
   effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  promptCacheKey?: string;
 }
 
 export interface AiTextMessage {
@@ -159,6 +160,7 @@ export function createOpenAiMessageSender(
         },
         body: JSON.stringify({
           model: params.model,
+          ...(params.promptCacheKey ? { prompt_cache_key: params.promptCacheKey } : {}),
           instructions: params.systemPrompt,
           input: params.messages.map((message) => ({
             role: message.role,

@@ -26,11 +26,19 @@ import {
   WodGenerationUnavailableError,
 } from '../services/wod-generation-lease.js';
 import { observeWodGeneration } from '../services/wod-generation-timing.js';
+import { readAthleteStrategyBasics } from '../services/athlete-strategy-basics.js';
+import {
+  wantsQueuedGeneration,
+  enqueueGeneration,
+  generationJobFence,
+} from '../services/wod-generation-jobs.js';
 
 export default async function wodStrategyRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
 
   app.post('/wods/:id/strategy', async (request, reply) => {
+    if (wantsQueuedGeneration(request))
+      return reply.code(202).send(await enqueueGeneration(request, 'STRATEGY'));
     const timing = observeWodGeneration(request, reply, 'STRATEGY');
     return timing.run(async () => {
       const { id } = request.params as { id: string };
@@ -43,6 +51,7 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
             userId,
             operation: 'STRATEGY',
             measureDatabase: timing.measureDatabase,
+            job: generationJobFence(request),
             onCleanupError: (err) =>
               request.log.error({ err }, 'WOD generation lease cleanup failed'),
           },
@@ -50,33 +59,24 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
             let athleteContextResult;
             let athleteProfile;
             try {
+              const basics = timing.measure('athleteBasics', () =>
+                readAthleteStrategyBasics(userId, timing.measureDatabase),
+              );
               // Settle both reads before releasing the lease, including on failure.
               const [contextResult, profileResult] = await Promise.allSettled([
                 timing.measure('context', () =>
                   getAthleteContextForWod(userId, id, timing.measureDatabase, {
                     parallelHistory: true,
+                    basics,
                   }),
                 ),
-                timing.measure('profile', () =>
-                  timing.measureDatabase('profile', () =>
-                    prisma.athleteProfile.findUnique({
-                      where: { userId },
-                      select: {
-                        level: true,
-                        goals: true,
-                        injuries: true,
-                        limitedMovements: true,
-                        weeklyFrequency: true,
-                      },
-                    }),
-                  ),
-                ),
+                basics,
               ]);
               if (contextResult.status === 'rejected') throw contextResult.reason;
               athleteContextResult = contextResult.value;
               timing.setSourceType(athleteContextResult.targetWod.sourceType);
               if (profileResult.status === 'rejected') throw profileResult.reason;
-              athleteProfile = profileResult.value;
+              athleteProfile = profileResult.value.profile;
             } catch (err) {
               if (err instanceof WodNotFoundError) {
                 reply.code(404);

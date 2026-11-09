@@ -28,9 +28,9 @@ describe('WOD generation reservation', () => {
     expect(work).not.toHaveBeenCalled();
     expect(query).toHaveBeenCalledTimes(1);
     const [sql, token, operation, wodId, userId] = query.mock.calls[0];
-    expect(sql.join('?')).toContain(
-      'FROM "wods" WHERE "id" = ? AND "userId" = ? AND "discipline" = \'CROSSFIT\'',
-    );
+    expect(sql.join('?')).toContain('w."id"=args.id AND w."userId"=args."userId"');
+    expect(sql.join('?')).toContain('w."discipline"=\'CROSSFIT\' FOR UPDATE OF w');
+    expect(sql.join('?')).toContain('NOT EXISTS (SELECT 1 FROM "wod_generation_jobs"');
     expect([operation, wodId, userId]).toEqual(['ANALYSIS', 'wod', 'user']);
     expect(typeof token).toBe('string');
   });
