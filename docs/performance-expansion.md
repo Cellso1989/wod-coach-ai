@@ -211,5 +211,24 @@ Usuario autorizou commit e deploy em 08/11/2026, incluindo o push necessario
 para publicar. Primeira etapa no servico existente: migration aditiva, leituras
 agrupadas, resposta compacta e novas medicoes; Storage/Sentry/fila continuam
 desativados. Worker pago adicional nao sera provisionado nesta etapa.
-Verificacao do deploy pendente. Coletar a proxima coorte real depois de publicar;
+Publicacao verificada em 08/11/2026. Coletar a proxima coorte real apos uso;
 a validacao local nao comprova ganho de producao.
+
+## Publicacao de 08/11/2026
+
+Commit develop `dbda01c`, main `1d1e3f2`; Render `dep-dbohk4u8bjmc73b8f12g`
+live as 21:57:18 de Sao Paulo, Node 24.22.2. Migration concluida as
+21:57:08 e estrutura conferida por SELECT no projeto Supabase confirmado.
+Verificacao publica as 21:57:55: health/paginas 200, endpoints protegidos
+401 sem sessao, assets identicos ao build de producao; nenhum erro/aviso de
+runtime na nova instancia durante a verificacao. Sem geracao autenticada
+de producao, portanto sem nova evidencia de latencia/coaching real.
+
+As integracoes opcionais nao foram ativadas e nenhum worker pago foi criado.
+Leituras agrupadas, resposta compacta e medicoes estao publicadas no servico
+existente. A fila privada tem RLS e zero politicas de cliente, por projeto;
+o advisor registrou apenas o informativo esperado
+[RLS Enabled No Policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
+Nao adicionar uma politica permissiva somente para silenciar este informativo.
+
+Evidencia local: `output/deploy/performance-expansion-1d1e3f2-verified.json`.
