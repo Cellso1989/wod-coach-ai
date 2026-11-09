@@ -376,6 +376,64 @@ describe('user approval and administrator authorization', () => {
     expect(db.logs).toHaveLength(1);
   });
 
+  it('loads the public session with one fresh user read and never selects credentials', async () => {
+    const user = db.users.get(athleteId)!;
+    user.accessStatus = 'APPROVED';
+    user.lastAccessAt = new Date();
+    const response = await app.inject({ url: '/api/auth/me', headers: headers(athleteId) });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      user: {
+        id: athleteId,
+        email: user.email,
+        name: user.name,
+        accessStatus: 'APPROVED',
+        isAdmin: false,
+      },
+    });
+    expect(db.user.findUnique).toHaveBeenCalledTimes(1);
+    expect(db.user.findUnique).toHaveBeenCalledWith({
+      where: { id: athleteId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        accessStatus: true,
+        isAdmin: true,
+        lastAccessAt: true,
+      },
+    });
+    expect(db.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('uses one fresh authorization read for admin and rejects revoked privileges on the next request', async () => {
+    const url = '/api/admin/access-logs';
+    expect((await app.inject({ url, headers: headers(adminId) })).statusCode).toBe(200);
+    expect(db.user.findUnique).toHaveBeenCalledTimes(1);
+    db.users.get(adminId)!.isAdmin = false;
+    expect((await app.inject({ url, headers: headers(adminId) })).statusCode).toBe(403);
+    expect(db.user.findUnique).toHaveBeenCalledTimes(2);
+    expect(db.logFindMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps concurrent session reads isolated and rechecks changed names and deleted accounts', async () => {
+    db.users.get(athleteId)!.accessStatus = 'APPROVED';
+    db.users.get(athleteId)!.lastAccessAt = new Date();
+    db.users.get(adminId)!.lastAccessAt = new Date();
+    const sessions = await Promise.all(
+      [athleteId, adminId].map((id) => app.inject({ url: '/api/auth/me', headers: headers(id) })),
+    );
+    expect(sessions.map((response) => response.json().user.id)).toEqual([athleteId, adminId]);
+    db.users.get(athleteId)!.name = 'Updated athlete';
+    const renamed = await app.inject({ url: '/api/auth/me', headers: headers(athleteId) });
+    expect(renamed.json().user.name).toBe('Updated athlete');
+    db.users.delete(athleteId);
+    const deleted = await app.inject({ url: '/api/auth/me', headers: headers(athleteId) });
+    expect(deleted.statusCode).toBe(401);
+    expect(deleted.json()).not.toHaveProperty('user');
+    expect(db.user.findUnique).toHaveBeenCalledTimes(4);
+  });
+
   it('rolls back the access timestamp if the log fails and still allows authentication and a later retry', async () => {
     db.users.get(athleteId)!.accessStatus = 'APPROVED';
     db.logCreate.mockRejectedValueOnce(new Error('storage unavailable'));

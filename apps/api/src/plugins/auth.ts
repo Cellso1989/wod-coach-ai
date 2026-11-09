@@ -3,10 +3,22 @@ import fastifyJwt from '@fastify/jwt';
 import fastifyCookie from '@fastify/cookie';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-import { prisma } from '@wod-coach-ai/database';
+import { prisma, type Prisma } from '@wod-coach-ai/database';
 import { accessDenied } from '../services/user-access.js';
 
 export const AUTH_COOKIE_NAME = 'wod_coach_ai_token';
+
+// Reuse only within this request. Every protected request still checks the database.
+// These are the public session fields plus the timestamp needed for access logging.
+const authenticatedUserSelect = {
+  id: true,
+  email: true,
+  name: true,
+  accessStatus: true,
+  isAdmin: true,
+  lastAccessAt: true,
+} as const;
+type AuthenticatedUser = Prisma.UserGetPayload<{ select: typeof authenticatedUserSelect }>;
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
@@ -16,6 +28,10 @@ declare module '@fastify/jwt' {
 }
 
 declare module 'fastify' {
+  interface FastifyRequest {
+    authenticatedUser: AuthenticatedUser | null;
+  }
+
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
@@ -36,6 +52,8 @@ export default fp(async (app) => {
     },
   });
 
+  app.decorateRequest('authenticatedUser', null);
+
   app.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify();
@@ -44,7 +62,7 @@ export default fp(async (app) => {
     }
     const user = await prisma.user.findUnique({
       where: { id: request.user.sub },
-      select: { accessStatus: true },
+      select: authenticatedUserSelect,
     });
     if (!user) {
       reply.clearCookie(AUTH_COOKIE_NAME, { path: '/' });
@@ -55,5 +73,6 @@ export default fp(async (app) => {
       reply.clearCookie(AUTH_COOKIE_NAME, { path: '/' });
       return reply.code(403).send({ error: denied, code: 'ACCESS_DENIED' });
     }
+    request.authenticatedUser = user;
   });
 });

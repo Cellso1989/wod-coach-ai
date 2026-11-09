@@ -230,9 +230,9 @@ export default async function authRoutes(app: FastifyInstance) {
 
   app.get('/auth/me', { onRequest: [app.authenticate] }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    const user = await prisma.user.findUnique({ where: { id: request.user.sub } });
+    const user = request.authenticatedUser;
     if (!user) {
-      return reply.code(404).send({ error: 'Usuário não encontrado' });
+      return reply.code(401).send({ error: 'Não autenticado' });
     }
     await recordUserAccess(user, 'SESSION_RETURN', request.log);
     return reply.send({ user: publicUser(user) });

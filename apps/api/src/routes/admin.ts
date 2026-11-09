@@ -4,10 +4,7 @@ import { createPasswordReset, passwordResetBaseUrl } from '../services/password-
 
 import { z } from 'zod';
 async function requireAdmin(request: FastifyRequest, reply: FastifyReply) {
-  const user = await prisma.user.findUnique({
-    where: { id: request.user.sub },
-    select: { isAdmin: true },
-  });
+  const user = request.authenticatedUser;
 
   if (!user || !user.isAdmin) {
     return reply.code(403).send({ error: 'Acesso restrito ao administrador' });
