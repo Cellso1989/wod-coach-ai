@@ -43,6 +43,16 @@ das abas, isolamento, invalidacao e ranking fresco permanecem as descritas
 abaixo. Sem mudanca de schema, infraestrutura ou IA. Verificacao final e
 estado da publicacao registrados na memoria do projeto.
 
+Publicado em 09/11/2026: develop `f765a81`, main `fbcc2ea`, Render
+`dep-dbp3rth5efls73aokbeg` live as 18:42:51 de Sao Paulo. Verificacao
+as 18:43:06: dez paginas/health 200, oito consultas protegidas 401 sem
+sessao, 19 JS/CSS iguais ao build local de producao. Nenhum erro/aviso
+na nova instancia entre 18:42:23 e 18:43:21, sem paginacao. 973 testes
+gerais e 74 focados aprovados, 81 PostgreSQL opt-in pulados; build, tipos,
+lint e formatacao aprovados. Sem sessao autenticada de producao ou
+medicao do ganho real nas telas. Evidencia:
+`output/deploy/session-loading-fbcc2ea-verified.json`.
+
 ## Primeira abertura e frontend - 09/11/2026
 
 O usuario encerrou a frente de geracao de estrategia e pediu foco na demora
