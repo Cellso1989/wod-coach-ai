@@ -4,7 +4,15 @@ import { api, ApiError, type HyroxWorkout, type WodSourceType } from '../lib/api
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
 import { PageHeader } from '../components/PageHeader.js';
-import { Alert, Button, ButtonLink, EmptyState, PageShell, TextInput } from '../components/ui.js';
+import {
+  Alert,
+  Button,
+  ButtonLink,
+  DataLoading,
+  EmptyState,
+  PageShell,
+  TextInput,
+} from '../components/ui.js';
 
 const SOURCE_LABEL: Record<WodSourceType, string> = {
   TEXT: 'Texto',
@@ -16,6 +24,7 @@ export function HyroxPage({ demo = false }: { demo?: boolean }) {
   const isDemo = import.meta.env.DEV && demo;
   const [workouts, setWorkouts] = useState<HyroxWorkout[]>([]);
   const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
@@ -24,12 +33,23 @@ export function HyroxPage({ demo = false }: { demo?: boolean }) {
       setLoading(false);
       return;
     }
-    api
-      .listHyroxWorkouts(100)
-      .then(({ workouts }) => setWorkouts(workouts))
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Erro ao carregar.'))
-      .finally(() => setLoading(false));
-  }, [isDemo]);
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+    void api
+      .listHyroxWorkouts(100, controller.signal)
+      .then(({ workouts }) => {
+        if (!controller.signal.aborted) setWorkouts(workouts);
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted)
+          setError(err instanceof ApiError ? err.message : 'Erro ao carregar.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [isDemo, attempt]);
 
   const filteredWorkouts = useMemo(() => {
     const normalized = search.trim().toLowerCase();
@@ -93,10 +113,17 @@ export function HyroxPage({ demo = false }: { demo?: boolean }) {
         onChange={(event) => setSearch(event.target.value)}
       />
 
-      {loading && <p className="text-neutral-400">Carregando...</p>}
-      {error && <Alert>{error}</Alert>}
+      {loading && <DataLoading message="Carregando treinos HYROX..." />}
+      {error && (
+        <div className="space-y-3">
+          <Alert>{error}</Alert>
+          <Button variant="secondary" onClick={() => setAttempt((value) => value + 1)}>
+            Tentar novamente
+          </Button>
+        </div>
+      )}
 
-      {!loading && workouts.length === 0 && (
+      {!loading && !error && workouts.length === 0 && (
         <EmptyState
           title="Nenhum treino HYROX enviado ainda"
           description="Envie texto ou foto do treino do box para gerar analise e estrategia."

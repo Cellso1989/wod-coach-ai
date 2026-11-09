@@ -3,6 +3,7 @@ import { api, ApiError, clearApiReadCache, setApiReadSession } from './api.js';
 import { AuthContext, type AuthContextValue } from './auth-context.js';
 import type { PublicUser } from './api.js';
 import { disablePushNotifications } from './push-notifications.js';
+import { preloadNavigation } from './navigation-prefetch.js';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<PublicUser | null>(null);
@@ -17,6 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(({ user }) => {
         if (!active || revision !== sessionRevision.current) return;
         setApiReadSession(user.id);
+        preloadNavigation(window.location.pathname);
         setUser(user);
       })
       .catch(() => {

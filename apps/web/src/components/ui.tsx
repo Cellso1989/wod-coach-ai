@@ -42,6 +42,31 @@ export function LoadingState({ message = 'Carregando...' }: { message?: string }
   );
 }
 
+export function DataLoading({
+  message = 'Carregando...',
+  rows = 3,
+}: {
+  message?: string;
+  rows?: number;
+}) {
+  return (
+    <div role="status" className="space-y-3">
+      <p className="text-sm text-neutral-400">{message}</p>
+      <div aria-hidden="true" className="space-y-2 motion-safe:animate-pulse">
+        {Array.from({ length: rows }, (_, index) => (
+          <div
+            key={index}
+            className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4"
+          >
+            <div className="h-4 w-2/3 rounded bg-neutral-800" />
+            <div className="h-3 w-1/3 rounded bg-neutral-800" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={cn('rounded-lg border border-neutral-800 bg-neutral-900 p-4', className)}>

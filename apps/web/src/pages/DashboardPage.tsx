@@ -6,7 +6,7 @@ import { NavBar } from '../components/NavBar.js';
 import { LogoutButton } from '../components/LogoutButton.js';
 import { TrainingCalendar } from '../components/TrainingCalendar.js';
 import { PageHeader } from '../components/PageHeader.js';
-import { Alert, Button, ButtonLink, Card, PageShell } from '../components/ui.js';
+import { Alert, Button, ButtonLink, Card, DataLoading, PageShell } from '../components/ui.js';
 
 function isToday(dateStr: string): boolean {
   const d = new Date(dateStr);
@@ -91,9 +91,7 @@ export function DashboardPage() {
         </div>
 
         {loading ? (
-          <p role="status" className="text-sm text-neutral-400">
-            Carregando seus WODs...
-          </p>
+          <DataLoading message="Carregando seus WODs..." rows={1} />
         ) : error ? (
           <div className="space-y-3">
             <Alert>Não foi possível carregar seus WODs.</Alert>

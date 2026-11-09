@@ -9,6 +9,7 @@ import {
   Alert,
   Button,
   ButtonLink,
+  DataLoading,
   EmptyState,
   PageShell,
   SelectInput,
@@ -25,6 +26,7 @@ export function WodListPage({ demo = false }: { demo?: boolean }) {
   const isDemo = import.meta.env.DEV && demo;
   const [wods, setWods] = useState<Wod[]>([]);
   const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState<'ALL' | WodSourceType>('ALL');
@@ -35,12 +37,23 @@ export function WodListPage({ demo = false }: { demo?: boolean }) {
       setLoading(false);
       return;
     }
-    api
-      .listWods(100)
-      .then(({ wods }) => setWods(wods))
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Erro ao carregar.'))
-      .finally(() => setLoading(false));
-  }, [isDemo]);
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+    void api
+      .listWods(100, controller.signal)
+      .then(({ wods }) => {
+        if (!controller.signal.aborted) setWods(wods);
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted)
+          setError(err instanceof ApiError ? err.message : 'Erro ao carregar.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [isDemo, attempt]);
 
   const filteredWods = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -131,15 +144,24 @@ export function WodListPage({ demo = false }: { demo?: boolean }) {
             <option value="WITHOUT_RESULT">Sem resultado</option>
           </SelectInput>
         </div>
-        <p className="text-xs text-neutral-500">
-          {filteredWods.length} de {wods.length} WODs
-        </p>
+        {!loading && !error && (
+          <p className="text-xs text-neutral-500">
+            {filteredWods.length} de {wods.length} WODs
+          </p>
+        )}
       </div>
 
-      {loading && <p className="text-neutral-400">Carregando...</p>}
-      {error && <Alert>{error}</Alert>}
+      {loading && <DataLoading message="Carregando WODs..." />}
+      {error && (
+        <div className="space-y-3">
+          <Alert>{error}</Alert>
+          <Button variant="secondary" onClick={() => setAttempt((value) => value + 1)}>
+            Tentar novamente
+          </Button>
+        </div>
+      )}
 
-      {!loading && wods.length === 0 && (
+      {!loading && !error && wods.length === 0 && (
         <EmptyState
           title="Nenhum WOD enviado ainda"
           description="Comece enviando uma foto ou colando o texto do treino."
