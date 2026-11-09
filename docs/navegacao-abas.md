@@ -75,8 +75,14 @@ de console. Evidencias locais em `output/screen-loading/report.json`,
 `comparison-final.txt`, `verification*.txt` e `output/playwright/screen-loading-*.png`.
 
 Usuario autorizou commit, push e deploy deste ajuste em 09/11/2026.
-Publicacao em andamento pelo fluxo `origin/main` do Render; a verificacao
-sera registrada apos a nova versao entrar em producao.
+Publicado: develop `4fe3a01`, main `f327b2d`, Render
+`dep-dboreenb9u1s73e05c30` live as 09:08:06 de Sao Paulo. Verificacao
+publica as 09:08:45: health/paginas 200, seis leituras protegidas 401 sem
+sessao, todos os 19 JS/CSS iguais ao build testado. Nenhum erro/aviso de
+runtime no intervalo 09:08:06-09:08:46 consultado, sem paginacao. Login
+conferido no navegador a 390 px; `auth/me` retorna 401 esperado sem sessao.
+Sem medicao de latencia autenticada real nesta verificacao. Evidencia em
+`output/deploy/screen-loading-f327b2d-verified.json`.
 
 ## Historico — navegacao entre abas em 03/11/2026
 
