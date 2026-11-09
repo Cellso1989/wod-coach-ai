@@ -40,6 +40,10 @@ docs/             Documentação do produto e fases
 
 ## Setup
 
+Use Node.js 24 (24.15.0 ou superior, abaixo de 25) e o pnpm definido em `packageManager`.
+Storage privado, fila de IA e monitoramento sao opcionais; veja
+[configuracao e ativacao](docs/performance-expansion.md).
+
 ```bash
 cp .env.example .env
 docker compose up -d          # sobe PostgreSQL

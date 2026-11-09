@@ -23,19 +23,29 @@ import { captureAiGeneration } from '../services/ai-generation-metadata.js';
 import { runWodGeneration } from '../services/wod-generation-lease.js';
 import { observeWodGeneration } from '../services/wod-generation-timing.js';
 import { recordWorkoutAnalysis } from '../services/access-log.js';
+import { readWodImage, wodSourceResponse } from '../services/wod-image-storage.js';
+import {
+  wantsQueuedGeneration,
+  enqueueGeneration,
+  generationJobFence,
+} from '../services/wod-generation-jobs.js';
 
 export default async function wodAnalysisRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate);
 
   app.post('/wods/:id/analyze', async (request, reply) => {
+    if (wantsQueuedGeneration(request))
+      return reply.code(202).send(await enqueueGeneration(request, 'ANALYSIS'));
     const timing = observeWodGeneration(request, reply, 'ANALYSIS');
     return timing.run(async () => {
       const { id } = request.params as { id: string };
 
       const wod = await timing.measure('sourceRead', () =>
-        prisma.wod.findFirst({
-          where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
-        }),
+        timing.measureDatabase('sourceRead', () =>
+          prisma.wod.findFirst({
+            where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
+          }),
+        ),
       );
       if (!wod) {
         return reply.code(404).send({ error: 'WOD não encontrado' });
@@ -47,12 +57,16 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
           wodId: wod.id,
           userId: request.user.sub,
           operation: 'ANALYSIS',
+          measureDatabase: timing.measureDatabase,
+          job: generationJobFence(request),
           onCleanupError: (err) =>
             request.log.error({ err }, 'WOD generation lease cleanup failed'),
         },
         async (lease) => {
           const previousAnalysis = await timing.measure('analysisRead', () =>
-            prisma.wodAnalysis.findUnique({ where: { wodId: wod.id } }),
+            timing.measureDatabase('analysisRead', () =>
+              prisma.wodAnalysis.findUnique({ where: { wodId: wod.id } }),
+            ),
           );
           const previousVersionId = previousAnalysis?.versionId ?? null;
           const override = z
@@ -64,10 +78,12 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
             ? override.data.durationOverrideMinutes
             : undefined;
           if (durationOverrideMinutes === undefined && previousVersionId) {
-            const version = await prisma.wodAnalysisVersion.findFirst({
-              where: { id: previousVersionId, wodId: wod.id },
-              select: { reason: true },
-            });
+            const version = await timing.measureDatabase('analysis.overrideVersion', () =>
+              prisma.wodAnalysisVersion.findFirst({
+                where: { id: previousVersionId, wodId: wod.id },
+                select: { reason: true },
+              }),
+            );
             if (version?.reason === 'DURATION_EDIT')
               durationOverrideMinutes = previousAnalysis!.durationMinutes;
           }
@@ -94,11 +110,15 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
           };
           let output;
           try {
+            const imageBase64 = wod.imageStorageKey
+              ? ((await timing.measure('imageRead', () => readWodImage(wod)))?.toString('base64') ??
+                null)
+              : wod.imageData;
             output = await timing.measure('ai', () =>
               analyzeWod(
                 {
                   rawText: wod.rawText,
-                  imageBase64: wod.imageData,
+                  imageBase64,
                   imageMimeType: wod.imageMimeType,
                   durationOverrideMinutes,
                 },
@@ -139,90 +159,100 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
 
           const persisted = await timing.measure('persistence', () =>
             prisma.$transaction(async (tx) => {
-              await lockWodVersions(tx, wod.id);
+              await timing.measureDatabase('persistence.lock', () => lockWodVersions(tx, wod.id));
               await lease.assertOwned(tx);
-              const currentWod = await tx.wod.findFirst({
-                where: { id: wod.id, userId: request.user.sub, discipline: 'CROSSFIT' },
-              });
-              const currentAnalysis = await tx.wodAnalysis.findUnique({
-                where: { wodId: wod.id },
-                select: { versionId: true },
-              });
+              const currentWod = await timing.measureDatabase('persistence.sourceRead', () =>
+                tx.wod.findFirst({
+                  where: { id: wod.id, userId: request.user.sub, discipline: 'CROSSFIT' },
+                }),
+              );
+              const currentAnalysis = await timing.measureDatabase(
+                'persistence.analysisVersion',
+                () =>
+                  tx.wodAnalysis.findUnique({
+                    where: { wodId: wod.id },
+                    select: { versionId: true },
+                  }),
+              );
               if (
                 !currentWod ||
                 currentWod.rawText !== wod.rawText ||
                 currentWod.imageData !== wod.imageData ||
                 currentWod.imageMimeType !== wod.imageMimeType ||
+                currentWod.imageStorageKey !== wod.imageStorageKey ||
+                currentWod.imageSha256 !== wod.imageSha256 ||
                 (currentAnalysis?.versionId ?? null) !== previousVersionId
               ) {
                 return null;
               }
-              let analysis = await tx.wodAnalysis.upsert({
-                where: { wodId: wod.id },
-                create: {
-                  wodId: wod.id,
-                  format: output.format,
-                  durationMinutes: output.durationMinutes,
-                  stimulus: output.stimulus,
-                  estimatedIntensity: output.estimatedIntensity,
-                  engineDemand: output.estimatedDemand.engine,
-                  gripDemand: output.estimatedDemand.grip,
-                  legDemand: output.estimatedDemand.legs,
-                  gymnasticsDemand: output.estimatedDemand.gymnastics,
-                  technicalDemand: output.estimatedDemand.technical,
-                  confidence: output.confidence,
-                  warnings: output.warnings,
-                  roundBreakdown: output.rounds ?? Prisma.JsonNull,
-                  rawResponse: {
-                    ...output,
-                    ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
-                    ...(loadOverrides.length ? { loadOverrides } : {}),
+              let analysis = await timing.measureDatabase('persistence.save', () =>
+                tx.wodAnalysis.upsert({
+                  where: { wodId: wod.id },
+                  create: {
+                    wodId: wod.id,
+                    format: output.format,
+                    durationMinutes: output.durationMinutes,
+                    stimulus: output.stimulus,
+                    estimatedIntensity: output.estimatedIntensity,
+                    engineDemand: output.estimatedDemand.engine,
+                    gripDemand: output.estimatedDemand.grip,
+                    legDemand: output.estimatedDemand.legs,
+                    gymnasticsDemand: output.estimatedDemand.gymnastics,
+                    technicalDemand: output.estimatedDemand.technical,
+                    confidence: output.confidence,
+                    warnings: output.warnings,
+                    roundBreakdown: output.rounds ?? Prisma.JsonNull,
+                    rawResponse: {
+                      ...output,
+                      ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
+                      ...(loadOverrides.length ? { loadOverrides } : {}),
+                    },
+                    movements: {
+                      create: output.movements.map((movement, index) => ({
+                        order: index,
+                        name: movement.name,
+                        category: movement.category,
+                        reps: movement.reps ?? undefined,
+                        distanceMeters: movement.distanceMeters ?? undefined,
+                        loadDescription: movement.loadDescription ?? undefined,
+                        calories: movement.calories ?? undefined,
+                      })),
+                    },
                   },
-                  movements: {
-                    create: output.movements.map((movement, index) => ({
-                      order: index,
-                      name: movement.name,
-                      category: movement.category,
-                      reps: movement.reps ?? undefined,
-                      distanceMeters: movement.distanceMeters ?? undefined,
-                      loadDescription: movement.loadDescription ?? undefined,
-                      calories: movement.calories ?? undefined,
-                    })),
+                  update: {
+                    format: output.format,
+                    durationMinutes: output.durationMinutes,
+                    stimulus: output.stimulus,
+                    estimatedIntensity: output.estimatedIntensity,
+                    engineDemand: output.estimatedDemand.engine,
+                    gripDemand: output.estimatedDemand.grip,
+                    legDemand: output.estimatedDemand.legs,
+                    gymnasticsDemand: output.estimatedDemand.gymnastics,
+                    technicalDemand: output.estimatedDemand.technical,
+                    confidence: output.confidence,
+                    warnings: output.warnings,
+                    roundBreakdown: output.rounds ?? Prisma.JsonNull,
+                    rawResponse: {
+                      ...output,
+                      ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
+                      ...(loadOverrides.length ? { loadOverrides } : {}),
+                    },
+                    movements: {
+                      deleteMany: {},
+                      create: output.movements.map((movement, index) => ({
+                        order: index,
+                        name: movement.name,
+                        category: movement.category,
+                        reps: movement.reps ?? undefined,
+                        distanceMeters: movement.distanceMeters ?? undefined,
+                        loadDescription: movement.loadDescription ?? undefined,
+                        calories: movement.calories ?? undefined,
+                      })),
+                    },
                   },
-                },
-                update: {
-                  format: output.format,
-                  durationMinutes: output.durationMinutes,
-                  stimulus: output.stimulus,
-                  estimatedIntensity: output.estimatedIntensity,
-                  engineDemand: output.estimatedDemand.engine,
-                  gripDemand: output.estimatedDemand.grip,
-                  legDemand: output.estimatedDemand.legs,
-                  gymnasticsDemand: output.estimatedDemand.gymnastics,
-                  technicalDemand: output.estimatedDemand.technical,
-                  confidence: output.confidence,
-                  warnings: output.warnings,
-                  roundBreakdown: output.rounds ?? Prisma.JsonNull,
-                  rawResponse: {
-                    ...output,
-                    ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
-                    ...(loadOverrides.length ? { loadOverrides } : {}),
-                  },
-                  movements: {
-                    deleteMany: {},
-                    create: output.movements.map((movement, index) => ({
-                      order: index,
-                      name: movement.name,
-                      category: movement.category,
-                      reps: movement.reps ?? undefined,
-                      distanceMeters: movement.distanceMeters ?? undefined,
-                      loadDescription: movement.loadDescription ?? undefined,
-                      calories: movement.calories ?? undefined,
-                    })),
-                  },
-                },
-                include: { movements: { orderBy: { order: 'asc' } } },
-              });
+                  include: { movements: { orderBy: { order: 'asc' } } },
+                }),
+              );
 
               analysis = await recordAnalysisVersion(
                 tx,
@@ -230,22 +260,29 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
                 analysis,
                 'AI',
                 generation.metadata(),
+                timing.measureDatabase,
               );
 
               // A strategy based on the previous analysis must not survive its replacement.
-              await tx.wodStrategy.deleteMany({ where: { wodId: wod.id } });
+              await timing.measureDatabase('persistence.invalidate', () =>
+                tx.wodStrategy.deleteMany({ where: { wodId: wod.id } }),
+              );
 
               const extractedText = output.extractedText?.trim();
               const updatedWod =
                 extractedText && !wod.rawText?.trim()
-                  ? await tx.wod.update({
-                      where: { id: wod.id },
-                      data: {
-                        rawText: extractedText,
-                        sourceType: wod.imageData ? 'TEXT_AND_IMAGE' : 'TEXT',
-                      },
-                      include: { result: true },
-                    })
+                  ? await timing.measureDatabase('persistence.sourceUpdate', () =>
+                      tx.wod.update({
+                        where: { id: wod.id },
+                        data: {
+                          rawText: extractedText,
+                          sourceType:
+                            wod.imageData || wod.imageStorageKey ? 'TEXT_AND_IMAGE' : 'TEXT',
+                        },
+                        include: { result: true },
+                        omit: { imageData: request.headers['x-wod-response-compact'] === '1' },
+                      }),
+                    )
                   : null;
 
               return { analysis, wod: updatedWod };
@@ -260,7 +297,18 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
             };
           }
           const { analysis, wod: updatedWod } = persisted;
-          await recordWorkoutAnalysis(request.user.sub, 'CROSSFIT', request.log);
+          await timing.measureDatabase('accessLog', () =>
+            recordWorkoutAnalysis(request.user.sub, 'CROSSFIT', request.log),
+          );
+          if (updatedWod && request.headers['x-wod-response-compact'] === '1') {
+            const compactWod = wodSourceResponse(updatedWod, true);
+            return { analysis, wod: compactWod };
+          }
+          if (updatedWod?.imageStorageKey) {
+            const publicWod = wodSourceResponse(updatedWod);
+            publicWod.imageData = (await readWodImage(updatedWod))?.toString('base64') ?? null;
+            return { analysis, wod: publicWod };
+          }
           return { analysis, wod: updatedWod };
         },
       );
@@ -428,6 +476,41 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
 
     if ('error' in analysis) return reply.code(analysis.status).send({ error: analysis.error });
     return reply.send({ analysis });
+  });
+
+  app.get('/wods/:id/versions/:kind/:versionId/image', async (request, reply) => {
+    const { id, kind, versionId } = request.params as {
+      id: string;
+      kind: string;
+      versionId: string;
+    };
+    if (kind !== 'analysis' && kind !== 'strategy')
+      return reply.code(404).send({ error: 'Foto não encontrada' });
+    const where = {
+      id: versionId,
+      wodId: id,
+      wod: { userId: request.user.sub, discipline: 'CROSSFIT' as const },
+    };
+    const version =
+      kind === 'analysis'
+        ? await prisma.wodAnalysisVersion.findFirst({ where, select: { sourceSnapshot: true } })
+        : await prisma.wodStrategyVersion.findFirst({ where, select: { sourceSnapshot: true } });
+    if (!version) return reply.code(404).send({ error: 'Foto não encontrada' });
+    const parsed = z
+      .object({
+        imageData: z.string().nullable().optional(),
+        imageMimeType: z.string().nullable().optional(),
+        imageStorageKey: z.string().nullable().optional(),
+        imageSha256: z.string().nullable().optional(),
+      })
+      .safeParse(version.sourceSnapshot);
+    if (!parsed.success) return reply.code(404).send({ error: 'Foto não encontrada' });
+    const bytes = await readWodImage({ id, userId: request.user.sub, ...parsed.data });
+    if (!bytes) return reply.code(404).send({ error: 'Foto não encontrada' });
+    return reply
+      .header('Cache-Control', 'private, no-store')
+      .type(parsed.data.imageMimeType!)
+      .send(bytes);
   });
 
   app.get('/wods/:id/versions', async (request, reply) => {

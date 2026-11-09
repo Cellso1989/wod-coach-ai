@@ -1,0 +1,37 @@
+# Optional, additional service. Does not replace the existing web Blueprint.
+services:
+  - type: worker
+    name: wod-coach-ai-generation
+    runtime: node
+    repo: https://github.com/Cellso1989/wod-coach-ai
+    branch: main
+    region: oregon
+    plan: 0.5c-512mb
+    numInstances: 1
+    autoDeployTrigger: 'off'
+    maxShutdownDelaySeconds: 300
+    buildCommand: pnpm install --frozen-lockfile && pnpm db:generate && pnpm build
+    startCommand: node apps/api/dist/generation-worker.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CROSSFIT_STRATEGY_MODEL
+        value: gpt-5.4-mini-2026-03-17
+      - key: WOD_IMAGE_STORAGE
+        value: database
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: WOD_IMAGE_BUCKET
+        value: wod-images
+      - key: SENTRY_DSN
+        sync: false

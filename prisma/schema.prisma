@@ -31,6 +31,7 @@ model User {
   rankingNotifications RankingNotification[]
   pushSubscriptions    PushSubscription[]
   accessLogs           UserAccessLog[]
+  generationJobs       WodGenerationJob[]
 
   @@map("users")
 }
@@ -197,11 +198,12 @@ model Wod {
 
   rawText String?
 
-  // Armazenamento simples em base64 nesta fase (sem storage de
-  // objetos configurado ainda). Migrar para storage externo se o
-  // volume de imagens justificar, sem quebrar o contrato da API.
-  imageData     String?
-  imageMimeType String?
+  // Legacy/inline bytes remain readable. New uploads can use a private,
+  // immutable object reference; preserve these fields in version snapshots.
+  imageData       String?
+  imageMimeType   String?
+  imageStorageKey String?
+  imageSha256     String?
 
   name  String?
   notes String?
@@ -217,6 +219,7 @@ model Wod {
   analysisVersions WodAnalysisVersion[]
   strategyVersions WodStrategyVersion[]
   generationLease  WodGenerationLease?
+  generationJobs   WodGenerationJob[]
 
   @@map("wods")
 }
@@ -229,6 +232,38 @@ model WodGenerationLease {
   expiresAt DateTime
 
   @@map("wod_generation_leases")
+}
+
+enum WodGenerationJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model WodGenerationJob {
+  id                String                 @id @default(uuid())
+  wodId             String
+  wod               Wod                    @relation(fields: [wodId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  operation         String
+  status            WodGenerationJobStatus @default(PENDING)
+  sourceUpdatedAt   DateTime
+  analysisVersionId String?
+  token             String?
+  measurementId     String?
+  startedAt         DateTime?
+  expiresAt         DateTime?
+  finishedAt        DateTime?
+  statusCode        Int?
+  result            Json?
+  createdAt         DateTime               @default(now())
+
+  @@index([status, createdAt])
+  @@index([wodId, status])
+  @@index([userId, createdAt])
+  @@map("wod_generation_jobs")
 }
 
 enum WodFormat {

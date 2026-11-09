@@ -7,6 +7,7 @@ import {
   type WodAnalysisSummary,
 } from '@wod-coach-ai/coach-engine';
 import { withoutDatabaseTiming, type MeasureWodDatabase } from './wod-database-timing.js';
+import type { AthleteStrategyBasics } from './athlete-strategy-basics.js';
 
 const HISTORY_WINDOW_DAYS = 90;
 const CHECKIN_WINDOW_DAYS = 28;
@@ -29,7 +30,7 @@ export async function getAthleteContextForWod(
   userId: string,
   wodId: string,
   measure: MeasureWodDatabase = withoutDatabaseTiming,
-  options: { parallelHistory?: boolean } = {},
+  options: { parallelHistory?: boolean; basics?: Promise<AthleteStrategyBasics> } = {},
 ): Promise<{
   targetWod: Wod & { analysis: WodAnalysis & { movements: WodMovement[] } };
   targetAnalysis: WodAnalysisSummary;
@@ -87,26 +88,30 @@ export async function getAthleteContextForWod(
           take: 100,
         }),
       ),
-      measure('context.checkins', () =>
-        prisma.dailyCheckin.findMany({
-          where: { userId, date: { gte: checkinCutoff } },
-          orderBy: { date: 'desc' },
-          select: { date: true },
-        }),
-      ),
-      measure('context.personalRecords', () =>
-        prisma.personalRecord.findMany({
-          where: { userId },
-          select: {
-            movementName: true,
-            value: true,
-            unit: true,
-            recordType: true,
-            repetitions: true,
-            achievedAt: true,
-          },
-        }),
-      ),
+      options.basics
+        ? options.basics.then((value) => value.checkins)
+        : measure('context.checkins', () =>
+            prisma.dailyCheckin.findMany({
+              where: { userId, date: { gte: checkinCutoff } },
+              orderBy: { date: 'desc' },
+              select: { date: true },
+            }),
+          ),
+      options.basics
+        ? options.basics.then((value) => value.personalRecords)
+        : measure('context.personalRecords', () =>
+            prisma.personalRecord.findMany({
+              where: { userId },
+              select: {
+                movementName: true,
+                value: true,
+                unit: true,
+                recordType: true,
+                repetitions: true,
+                achievedAt: true,
+              },
+            }),
+          ),
     ]);
     const historicalWods = readResult(reads[0]);
     const checkins = readResult(reads[1]);

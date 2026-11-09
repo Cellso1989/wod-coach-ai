@@ -5,7 +5,7 @@
   "description": "Seu WOD. Sua estratégia. Seu melhor resultado.",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24.15.0 <25"
   },
   "packageManager": "pnpm@11.25.0",
   "scripts": {

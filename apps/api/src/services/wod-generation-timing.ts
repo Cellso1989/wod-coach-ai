@@ -4,7 +4,15 @@ import type { AiAttemptTiming } from './ai-generation-metadata.js';
 import { wodMeasurementId, WOD_TELEMETRY_INSTANCE_ID } from './wod-generation-http-timing.js';
 import type { MeasureWodDatabase, WodDatabaseOperation } from './wod-database-timing.js';
 
-type Stage = 'sourceRead' | 'context' | 'profile' | 'analysisRead' | 'ai' | 'persistence';
+type Stage =
+  | 'sourceRead'
+  | 'context'
+  | 'profile'
+  | 'athleteBasics'
+  | 'imageRead'
+  | 'analysisRead'
+  | 'ai'
+  | 'persistence';
 
 /** Durations use a monotonic clock. Logs contain no prompts, photos or athlete data. */
 export function observeWodGeneration(
@@ -65,6 +73,9 @@ export function observeWodGeneration(
           {
             event: 'wod_generation_timing',
             schemaVersion: 2,
+            release: process.env.RENDER_GIT_COMMIT ?? process.env.APP_RELEASE ?? null,
+            executionMode: request.user?.generationJobId ? 'queued' : 'synchronous',
+            imageStorage: process.env.WOD_IMAGE_STORAGE ?? 'database',
             instanceId: WOD_TELEMETRY_INSTANCE_ID,
             requestId: request.id ?? null,
             measurementId: wodMeasurementId(request),

@@ -29,9 +29,12 @@ import notificationRoutes from './routes/notifications.js';
 import wodGenerationMetricsRoutes from './routes/wod-generation-metrics.js';
 import { registerWodGenerationHttpTiming } from './services/wod-generation-http-timing.js';
 import { registerPushDeliveryWorker } from './services/web-push.js';
+import generationJobRoutes from './routes/wod-generation-jobs.js';
+import { registerExternalMonitoring } from './services/external-monitoring.js';
 
-export function buildApp(): FastifyInstance {
+export function buildApp(options: { backgroundTasks?: boolean } = {}): FastifyInstance {
   const app = Fastify({ logger: true });
+  registerExternalMonitoring(app);
 
   app.addHook('onClose', async () => {
     await prisma.$disconnect();
@@ -71,6 +74,7 @@ export function buildApp(): FastifyInstance {
       api.register(athleteContextRoutes);
       api.register(wodStrategyRoutes);
       api.register(wodGenerationMetricsRoutes);
+      api.register(generationJobRoutes);
       api.register(hyroxWorkoutRoutes);
       api.register(hyroxStrategyRoutes);
       api.register(statsRoutes);
@@ -107,6 +111,6 @@ export function buildApp(): FastifyInstance {
     return reply.code(200).sendFile('index.html');
   });
 
-  registerPushDeliveryWorker(app);
+  if (options.backgroundTasks !== false) registerPushDeliveryWorker(app);
   return app;
 }

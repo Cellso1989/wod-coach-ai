@@ -48,6 +48,13 @@ vi.mock('../../apps/api/src/services/athlete-context-service.js', async (importO
   >()),
   getAthleteContextForWod: mocks.context,
 }));
+vi.mock('../../apps/api/src/services/athlete-strategy-basics.js', () => ({
+  readAthleteStrategyBasics: async (userId: string) => ({
+    profile: await mocks.prisma.athleteProfile.findUnique({ where: { userId } }),
+    checkins: [],
+    personalRecords: [],
+  }),
+}));
 
 const RAW_WOD =
   'Buy-in: 25 thrusters 40kg\n3 rounds: 10 T2B, 200m run\nBuy-out: 25 thrusters 40kg\nTime cap: 20 min';
@@ -430,9 +437,14 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
       await observed;
       expect(mocks.sendMessage).not.toHaveBeenCalled();
       expect(lease).not.toBeNull();
-      expect(mocks.context).toHaveBeenLastCalledWith('athlete-1', 'wod-1', expect.any(Function), {
-        parallelHistory: true,
-      });
+      expect(mocks.context).toHaveBeenLastCalledWith(
+        'athlete-1',
+        'wod-1',
+        expect.any(Function),
+        expect.objectContaining({
+          parallelHistory: true,
+        }),
+      );
     } finally {
       releaseContext();
     }

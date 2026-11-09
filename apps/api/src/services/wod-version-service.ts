@@ -26,6 +26,9 @@ function sourceSnapshot(wod: Wod) {
     rawText: wod.rawText,
     imageData: wod.imageData,
     imageMimeType: wod.imageMimeType,
+    ...(wod.imageStorageKey
+      ? { imageStorageKey: wod.imageStorageKey, imageSha256: wod.imageSha256 }
+      : {}),
     name: wod.name,
     notes: wod.notes,
   });
@@ -42,31 +45,38 @@ export async function recordAnalysisVersion(
   analysis: AnalysisWithMovements,
   reason: 'AI' | 'DURATION_EDIT' | 'LOAD_EDIT',
   generationMetadata?: AiGenerationMetadata,
+  measure: MeasureWodDatabase = withoutDatabaseTiming,
 ) {
-  const latest = await tx.wodAnalysisVersion.findFirst({
-    where: { wodId: wod.id },
-    orderBy: { version: 'desc' },
-    select: { version: true },
-  });
-  const version = await tx.wodAnalysisVersion.create({
-    select: { id: true },
-    data: {
-      wodId: wod.id,
-      version: (latest?.version ?? 0) + 1,
-      reason,
-      sourceSnapshot: sourceSnapshot(wod),
-      snapshot: jsonSnapshot({
-        ...analysis,
-        versionId: undefined,
-        generationMetadata: generationMetadata ?? null,
-      }),
-    },
-  });
-  return tx.wodAnalysis.update({
-    where: { wodId: wod.id },
-    data: { versionId: version.id },
-    include: { movements: { orderBy: { order: 'asc' } } },
-  });
+  const latest = await measure('persistence.versionRead', () =>
+    tx.wodAnalysisVersion.findFirst({
+      where: { wodId: wod.id },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    }),
+  );
+  const version = await measure('persistence.versionCreate', () =>
+    tx.wodAnalysisVersion.create({
+      select: { id: true },
+      data: {
+        wodId: wod.id,
+        version: (latest?.version ?? 0) + 1,
+        reason,
+        sourceSnapshot: sourceSnapshot(wod),
+        snapshot: jsonSnapshot({
+          ...analysis,
+          versionId: undefined,
+          generationMetadata: generationMetadata ?? null,
+        }),
+      },
+    }),
+  );
+  return measure('persistence.versionActivate', () =>
+    tx.wodAnalysis.update({
+      where: { wodId: wod.id },
+      data: { versionId: version.id },
+      include: { movements: { orderBy: { order: 'asc' } } },
+    }),
+  );
 }
 
 export async function recordStrategyVersion(

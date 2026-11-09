@@ -1,7 +1,11 @@
 /** Fixed labels only: never include SQL, parameters or athlete content in telemetry. */
 export type WodDatabaseOperation =
   | 'sourceRead'
+  | 'analysisRead'
+  | 'analysis.overrideVersion'
+  | 'accessLog'
   | 'context.target'
+  | 'context.basics'
   | 'context.history'
   | 'context.checkins'
   | 'context.personalRecords'
@@ -10,6 +14,9 @@ export type WodDatabaseOperation =
   | 'lease.assert'
   | 'lease.release'
   | 'persistence.lock'
+  | 'persistence.sourceRead'
+  | 'persistence.sourceUpdate'
+  | 'persistence.invalidate'
   | 'persistence.analysisVersion'
   | 'persistence.save'
   | 'persistence.versionRead'
