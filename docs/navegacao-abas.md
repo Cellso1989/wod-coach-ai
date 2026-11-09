@@ -1,5 +1,48 @@
 # Navegacao e carregamento das telas
 
+## Nova revisao: verificacao de sessao e Admin - 09/11/2026
+
+A abertura autenticada aguardava `/auth/me` antes de antecipar os dados da
+pagina. Essa rota fazia duas leituras consecutivas do mesmo usuario: uma
+para validar o acesso e outra para montar a sessao/consultar o ultimo acesso.
+O Admin repetia uma segunda consulta somente para verificar `isAdmin`.
+
+- A autenticacao agora seleciona seis campos pequenos: id, nome, e-mail,
+  status, permissao administrativa e horario do ultimo acesso. Senha e demais
+  colunas do cadastro ficam fora dessa leitura.
+- O resultado aprovado pertence somente a requisicao atual. `/auth/me` e a
+  autorizacao do Admin usam essa leitura, removendo uma ida sequencial ao
+  banco em cada um desses caminhos. Nao existe reaproveitamento entre
+  requisicoes; bloqueio, exclusao e retirada da permissao administrativa sao
+  conferidos novamente na proxima chamada.
+- Resposta publica de sessao e `no-store` preservados, assim como o registro
+  transacional de acesso e sua supressao durante 30 minutos. Quando um novo
+  evento precisa ser registrado, essa gravacao ainda e aguardada.
+
+Comparacao local do codigo anterior e ajustado usando a API real via
+`app.inject`, banco simulado com atraso fixo de 100 ms por leitura, cinco
+amostras por rota apos um aquecimento, usuario ficticio com acesso recente:
+
+| Medida, mediana                  | Antes  | Depois | Reducao |
+| -------------------------------- | -----: | -----: | ------: |
+| Verificacao `/api/auth/me`        | 216 ms | 113 ms | 47,5%   |
+| Leitura `/api/admin/access-logs`  | 218 ms | 106 ms | 51,3%   |
+| Leituras do usuario por chamada  | 2      | 1      | 50%     |
+
+O ensaio mede a eliminacao de uma espera de banco, sem rede real,
+navegador, SQL ou gravacao de evento de retorno. As porcentagens nao sao
+ganho do carregamento completo das telas nem medicao de producao. As
+consultas de dados apos a sessao continuam dependendo da API/banco.
+Evidencias locais em `output/session-loading/before.json`, `after.json` e
+`benchmark*.log`; fixture/configuracao do ensaio no mesmo diretorio.
+
+Regressoes protegem uma leitura por chamada, projecao sem credenciais,
+resposta publica identica, concorrencia entre contas, alteracao de nome,
+exclusao de conta e retirada da permissao administrativa. Regras de cache
+das abas, isolamento, invalidacao e ranking fresco permanecem as descritas
+abaixo. Sem mudanca de schema, infraestrutura ou IA. Verificacao final e
+estado da publicacao registrados na memoria do projeto.
+
 ## Primeira abertura e frontend - 09/11/2026
 
 O usuario encerrou a frente de geracao de estrategia e pediu foco na demora
