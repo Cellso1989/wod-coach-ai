@@ -15,6 +15,7 @@ import {
 } from './wod-time-prescription.js';
 import { WOD_TERMINOLOGY } from './wod-terminology.js';
 import { readScoredIntervals, scoredIntervalAnalysisIssue } from './wod-interval-integrity.js';
+import { scoredMovementKey } from './scored-interval-prescription.js';
 import {
   callAiForJson,
   AiJsonError,
@@ -117,7 +118,13 @@ Regra crítica sobre "rounds" (WODs com estrutura por round):
   com "sets" dentro de um único movimento — só use "rounds" para a estrutura macro do WOD.
 
 Regras críticas:
-- Sets de AMRAP com descanso sao INTERVAL, com um item em rounds por set.
+- Sets de AMRAP com entrada fixa e Max/Maximo de um ultimo movimento sao INTERVAL,
+  com um item em rounds por set, mesmo se o descanso nao estiver informado.
+  Ex.: 4 sets / Anmrap 3 min / 21 wall ball / 16 dumbel Overhead lunge /
+  Maximo burpee box jump: entrada uma vez por set; score e a soma dos burpee box jumps.
+  Nao repita a entrada dentro da janela. Anmrap e a grafia recebida para AMRAP;
+  preserve a transcricao e avise a interpretacao. Descanso ausente fica desconhecido,
+  sem inventar duracao; labels devem preservar AMRAP 3 min em cada set.
   Ex.: 4 Sets / AMRAP 3' / 200m run / 8 Ring muscle up / Max Squat snatch / Rest 1'.
   Cada set executa corrida e RMU uma vez; o restante dos 3 min e max squat snatch.
   Reinicie na corrida a cada set. Score: soma dos squat snatches, nao rounds.
@@ -624,9 +631,9 @@ function normalizeAnalysisOutput(
   const normalized = { ...output };
   const interval =
     readScoredIntervals(input.rawText ?? '') ?? readScoredIntervals(output.extractedText ?? '');
-  if (interval && interval.load == null) {
+  if (interval && interval.scoreMovement.loadDescription == null) {
     const preserveUnknownLoad = (movement: WodMovementOutput): WodMovementOutput =>
-      movementIdentity(movement.name) === 'squat snatch' &&
+      scoredMovementKey(movement.name) === scoredMovementKey(interval.scoreMovement.name) &&
       /^max effort$/i.test(movement.loadDescription?.trim() ?? '')
         ? { ...movement, loadDescription: null }
         : movement;
