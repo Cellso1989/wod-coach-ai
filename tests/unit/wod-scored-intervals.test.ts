@@ -3,6 +3,7 @@ import {
   analyzeWod,
   generateStrategy,
   scoredIntervalAnalysisIssue,
+  readScoredIntervals,
   WodAnalysisError,
   StrategyGenerationError,
 } from '@wod-coach-ai/coach-engine';
@@ -11,6 +12,7 @@ import {
   productionIntervalAnalysis,
   productionIntervalSource,
 } from '../fixtures/wod-scored-interval-production.js';
+import { wallBallLoadAnalysis, wallBallLoadSource } from '../fixtures/wod-wall-ball-loads.js';
 
 const source = "Wod\n4 Sets\nAmrap 3'\n200m run\n8 Ring muscle up\nMax Squat snatch 43kg\nRest 1'";
 const movements = [
@@ -75,6 +77,121 @@ const input = {
   },
   athleteProfile: null,
 };
+
+const burpeeAnalysis: WodAnalysisOutput = {
+  ...wallBallLoadAnalysis,
+  durationMinutes: 12,
+  extractedText: wallBallLoadSource,
+};
+const burpeeStrategy = {
+  ...strategy,
+  pacing: 'Ataque a entrada em cada set; chegue cedo aos burpee box jumps e sustente ate o sinal.',
+  breakStrategy: [
+    {
+      movement: 'Wall Ball (21 por set)',
+      strategy: 'Direto se viavel; uma quebra curta se necessario.',
+    },
+    {
+      movement: 'Dumbbell Overhead lunge (16 por set)',
+      strategy: 'Cadencia firme e transicao imediata.',
+    },
+  ],
+  restStrategy: 'Confirme o descanso entre sets; nao pare nas transicoes durante o trabalho.',
+  movementStrategy: [
+    {
+      movement: 'Burpee box jump',
+      strategy: 'Comece assim que terminar os lunges e some as reps dos 4 sets.',
+    },
+  ],
+  transitionStrategy: 'Wall Ball, lunges, burpee box jump; reinicie so no proximo set.',
+  energyManagement: 'Ganhe segundos na entrada e use o tempo restante para pontuar.',
+  goal: 'Maximizar a soma de Burpee box jumps nos 4 sets.',
+  criticalPoint: 'Chegar cedo aos burpee box jumps.',
+};
+
+describe('fixed buy-in followed by a max-reps score', () => {
+  it('recognizes the complete reported source without inventing rest', () => {
+    expect(readScoredIntervals(wallBallLoadSource)).toMatchObject({
+      sets: 4,
+      workMinutes: 3,
+      restMinutes: null,
+      buyIn: [
+        { name: 'Wall Ball', reps: 21 },
+        { name: 'Dumbbell Overhead lunge', reps: 16 },
+      ],
+      scoreMovement: { name: 'Burpee box jump' },
+    });
+  });
+  it.each(['text', 'image'])('preserves the buy-in and max-reps blocks from %s', async (kind) => {
+    const result = await analyzeWod(
+      kind === 'text'
+        ? { rawText: wallBallLoadSource }
+        : { imageBase64: 'mock', imageMimeType: 'image/png' },
+      sender(burpeeAnalysis),
+    );
+    expect(result.durationMinutes).toBe(12);
+    expect(result.rounds).toEqual(burpeeAnalysis.rounds);
+    expect(result.extractedText).toBe(wallBallLoadSource);
+  });
+  it('sends the actual score and aggressive buy-in objective to strategy', async () => {
+    const send = sender(burpeeStrategy);
+    const result = await generateStrategy({ ...input, wodAnalysis: burpeeAnalysis }, send);
+    expect(result.goal).toBe(burpeeStrategy.goal);
+    expect(result.target).toBeNull();
+    const request = send.mock.calls[0]![0];
+    const text = request.messages[0].content[0].text;
+    expect(text).toContain('"scoreMovement": "Burpee box jump"');
+    expect(text).toContain('"scoreAggregation": "sum across sets"');
+    expect(text).toContain('maximize scoring time');
+    expect(text).not.toContain('Squat snatch');
+    expect(request.systemPrompt).toContain('ataque controlado desde o inicio');
+  });
+  it.each([
+    { target: '4-5 rounds completos' },
+    { goal: 'Completar wall balls e lunges com consistencia.' },
+    { restStrategy: 'Descanse 1 min entre os sets.' },
+    { pacing: 'Controle nas primeiras 6 min e acelere nas ultimas 6 min.' },
+    {
+      energyManagement:
+        'Guarde pernas no bloco 1, mantenha no 2-3 e aperte no 4 se a técnica seguir limpa.',
+    },
+  ])('rejects advice that changes the score or invents rest: %j', async (change) => {
+    await expect(
+      generateStrategy(
+        { ...input, wodAnalysis: burpeeAnalysis },
+        sender({ ...burpeeStrategy, ...change }),
+      ),
+    ).rejects.toBeInstanceOf(StrategyGenerationError);
+  });
+  it.each(['Burpee box jump', 'Burpee', 'Thruster', 'Toes to Bar'])(
+    'uses %s as the score when it is the final max movement',
+    (name) => {
+      expect(
+        readScoredIntervals(wallBallLoadSource.replace('Máximo burpee box jump', `Máximo ${name}`))
+          ?.scoreMovement.name,
+      ).toBe(name);
+    },
+  );
+  it('rejects swapped buy-in order even when aggregate totals match', () => {
+    const invalid = {
+      ...burpeeAnalysis,
+      rounds: burpeeAnalysis.rounds!.map((round) => ({
+        ...round,
+        movements: [round.movements[1]!, round.movements[0]!, round.movements[2]!],
+      })),
+    };
+    expect(scoredIntervalAnalysisIssue(invalid, wallBallLoadSource)).not.toBeNull();
+  });
+  it.each([
+    `${wallBallLoadSource}\nThen 20 thrusters`,
+    wallBallLoadSource.replace('Máximo burpee box jump', 'Máximo peso'),
+    wallBallLoadSource.replace('16 dumbel Overhead lunge', '16 unknown exercise'),
+    wallBallLoadSource.replace('Anmrap 3 min', 'For time'),
+    wallBallLoadSource.replace('Máximo burpee box jump', 'Máximo constructor'),
+  ])('does not partially recognize an unsupported prescription', (source) => {
+    expect(readScoredIntervals(source)).toBeNull();
+  });
+});
 
 describe('scored AMRAP sets', () => {
   it('accepts the production image response with a distance-qualified run name', async () => {

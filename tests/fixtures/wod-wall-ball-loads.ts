@@ -16,7 +16,7 @@ const movements = [
 
 export const wallBallLoadAnalysis: WodAnalysisOutput = {
   format: 'INTERVAL',
-  durationMinutes: 3,
+  durationMinutes: 12,
   stimulus: 'mixed_modal',
   movements: movements.map((movement) => ({
     ...movement,

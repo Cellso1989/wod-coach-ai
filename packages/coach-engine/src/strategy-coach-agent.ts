@@ -71,13 +71,29 @@ seguido de Thruster e BMU). Quando "rounds" existir:
   for null, nao assuma rounds ou escadas ausentes; use somente a prescricao conhecida.
 
 Determine a estratégia adaptando-a ao formato do treino:
-- Sets com AMRAP e descanso: respeite cada janela independente e o descanso prescrito.
+- Sets com AMRAP e entrada fixa seguida de Max/Maximo: a prioridade e o score do
+  movimento final. Esta regra prevalece sobre o controle inicial generico abaixo.
+  Use ataque controlado desde o inicio de CADA set: conclua a entrada uma vez,
+  o mais rapido que a capacidade real permitir, com o minimo de quebras e transicoes
+  imediatas, para maximizar o tempo disponivel no movimento pontuado.
+  Ex.: 21 Wall Ball + 16 Dumbbell Overhead lunge + max Burpee box jump em 3 min:
+  Wall Ball e lunge liberam tempo; somente a soma dos Burpee box jumps dos sets e score.
+  Nao proponha um inicio deliberadamente lento nem espere o ultimo set para pontuar.
+  Evite "guarde pernas no bloco 1 e aperte no 4". Transicoes imediatas, sem reservar
+  pausas preventivas de 5-10 s em cada troca; prepare os implementos antes do inicio.
+  Ataque nao significa falha precoce: sustente repeticoes validas, preserve tecnica,
+  ajuste as quebras a capacidade e procure o maior total de reps entre todos os sets.
+  Se scoredIntervals vier no contexto, use seus movimentos, entrada e janelas como
+  referencia explicita, inclusive quando durationMinutes legado mostrar so um set.
+  Respeite cada janela independente e somente o descanso explicitamente prescrito.
   Quando houver max reps no ultimo movimento, o score e a soma desse movimento.
-  Corrida e ginastica anteriores sao requisitos por bloco; nao pontuam nem se repetem
+  Os movimentos anteriores sao requisitos por bloco; nao pontuam nem se repetem
   dentro da janela. Meta em reps do movimento pontuado, nunca rounds em tempo total.
   Sem historico suficiente para prever reps, target null e goal com o score correto.
   Oriente ritmo por bloco e descanso entre blocos; nao use primeiras/ultimas metades
-  de um AMRAP continuo. Capacidade de 2 RMU nao comprova duplas repetiveis: se for
+  de um AMRAP continuo. Descanso desconhecido: peca confirmacao sem inventar intervalo.
+  Sem historico/capacidade, nao invente contagem de burpees, tempo de entrada ou PR.
+  Capacidade de 2 RMU nao comprova duplas repetiveis: se for
   maximo unbroken, prefira individuais e evite falha. Nao invente essa capacidade.
 - "wodAnalysis.targetMinutes" e o Target prescrito (meta), nao o limite maximo.
   Ex.: Target 10 min e durationMinutes 15 min: buscar 10 min, respeitando o cap de 15.
@@ -107,6 +123,8 @@ padrões apenas para moldar COMO o atleta executa, não para decidir intensidade
   batem estratégias "ir até quebrar" em quase todo WOD de mais de ~3 minutos.
 - Nos primeiros 20-25% do treino, o ritmo fica deliberadamente abaixo do máximo sustentável
   — a maior causa de resultado pior em atletas medianos é sair rápido demais no início.
+  A excecao e a entrada fixa seguida de Max/Maximo: aplique a regra especifica de
+  ataque controlado em cada set, sem essa reducao preventiva do ritmo inicial.
 - Transições (largar barra → deitar no chão → pegar próximo implemento) são tratadas como
   parte do treino, não como descanso "de graça" — elites minimizam esse tempo morto.
 - Em movimentos de grip (barra, corda, kettlebell), a prioridade é preservar o grip cedo
@@ -286,7 +304,7 @@ Regras críticas:
 
 function buildUserContent(input: StrategyCoachInput): string {
   const scoredIntervals = readScoredIntervals(input.wodAnalysis.extractedText ?? '');
-  return `Dados para a recomendação de hoje:\n\n${JSON.stringify({ ...input, ...(scoredIntervals ? { scoredIntervals, scoreMovement: 'Squat snatch', scoreAggregation: 'sum across sets' } : {}) }, null, 2)}`;
+  return `Dados para a recomendação de hoje:\n\n${JSON.stringify({ ...input, ...(scoredIntervals ? { scoredIntervals, scoreMovement: scoredIntervals.scoreMovement.name, scoreAggregation: 'sum across sets', buyInOncePerSet: true, executionObjective: 'minimize buy-in time to maximize scoring time' } : {}) }, null, 2)}`;
 }
 
 export const DEFAULT_STRATEGY_MODEL = 'gpt-5.4-mini-2026-03-17';

@@ -232,3 +232,54 @@ o advisor registrou apenas o informativo esperado
 Nao adicionar uma politica permissiva somente para silenciar este informativo.
 
 Evidencia local: `output/deploy/performance-expansion-1d1e3f2-verified.json`.
+
+## Primeira coleta real apos a expansao
+
+Coleta read-only em 08/11/2026, janela continua 21:57:18-22:03:03 de Sao Paulo,
+sem paginacao pendente. Seis eventos correlacionados (analise e estrategia),
+apos excluir dois HTTP 401 dos checks de publicacao. Estrategia concluida as
+22:02:42, na release `1d1e3f2`, modo sincrono/storage database, aceita e salva
+na primeira tentativa. Mesmo gpt-5.4-mini-2026-03-17, medium, 8000, hash de
+prompt e categoria TEXT_AND_IMAGE da amostra anterior (`d4d97bd`, 20:45:05).
+
+| Etapa                      |    Antes |   Depois |         Diferenca |
+| -------------------------- | -------: | -------: | ----------------: |
+| Navegador                  | 21,459 s | 30,425 s | +8,966 s / +41,8% |
+| HTTP                       | 21,226 s | 30,161 s |          +8,935 s |
+| Trabalho da rota           | 20,333 s | 29,272 s |          +8,938 s |
+| Provedor de IA             | 11,545 s | 18,513 s |          +6,969 s |
+| Navegador menos provedor   |  9,914 s | 11,912 s |          +1,997 s |
+| Contexto                   |  2,541 s |  3,213 s |          +0,672 s |
+| Persistencia da estrategia |  3,437 s |  3,610 s |          +0,173 s |
+
+Nao houve ganho total nesta execucao. A maior parcela dos 8,966 s adicionais
+esta na chamada ao provedor (6,969 s); o restante tambem aumentou 1,997 s.
+Saida/raciocinio reportados foram 4429/3834 tokens, ante 3275/2755; cache
+3968 ante 0. Estes dados nao isolam a causa da variacao da IA.
+
+A leitura agrupada entregou perfil/check-ins/PRs em 0,911 s. Antes, apenas
+perfil levava 2,674 s, com check-ins/PRs em consultas separadas: escopos
+diferentes, sem somar tempos paralelos ou anunciar reducao de 66% no app.
+Alvo 2,672 s e historico 3,211 s permanecem sobrepostos e agora dominam as
+leituras. A conferencia da reserva antes da IA levou 2,147 s, ante 0,883 s;
+claim/liberacao ficaram proximos de 0,891/0,893 s. As chamadas incluem rede,
+pool e possiveis multiplos SQLs; nao representam tempo de execucao SQL puro.
+
+Analise da imagem levou 38,058 s no navegador, ante 30,336 s. Provedor
+23,287 s ante 15,128 s; gravacao 7,691 s ante 8,101 s (-0,410 s). O novo
+detalhamento localizou maiores chamadas da transacao: salvar analise e
+movimentos 1,806 s, ativar versao 1,070 s e gravar texto extraido 1,066 s.
+Gravar versao 0,721 s e conferir fonte 0,705 s. Access log levou 1,067 s fora
+da transacao. Analise aceita sem retry. Sao alvos de investigacao para reduzir
+viagens/payload ao banco preservando locks, CAS, fontes e historico.
+
+Limites: uma geracao por release, sem comprovar mesmo treino nem qualidade
+equivalente; Node tambem mudou de 26.13.0 para 24.22.2. Nao calcular media/p95
+estavel nem atribuir causalidade ao codigo. Nenhum modelo/prompt/effort/limite
+foi alterado nesta coleta; sem chamada paga ou geracao sintetica pelo agente.
+Gargalos seguintes: leituras de alvo/historico, espera da reserva e transacao
+da analise, com repeticoes reais antes de outra mudanca na IA.
+
+Evidencias: `output/crossfit-production-20261108-post-expansion.jsonl`,
+`-report.json` e `-comparison.json`; comparacao reproduzivel em
+`output/compare-expansion-production-metrics.mjs`.

@@ -891,6 +891,74 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
     },
   );
 
+  describe('Wall Ball / lunge / max Burpee box jump score', () => {
+    const correctStrategy = {
+      ...STRATEGY,
+      target: null,
+      goal: 'Maximizar a soma de Burpee box jumps nos 4 sets.',
+      pacing: 'Ataque a entrada em cada set e use todo o tempo restante nos burpee box jumps.',
+      restStrategy: 'Confirme o descanso entre sets; mantenha transicoes imediatas no trabalho.',
+      breakStrategy: [
+        {
+          movement: 'Wall Ball (21 por set)',
+          strategy: 'Direto se viavel; evite quebras desnecessarias.',
+        },
+      ],
+      movementStrategy: [
+        { movement: 'Burpee box jump', strategy: 'Comece apos os lunges e some as reps dos sets.' },
+      ],
+    };
+    it.each(['text', 'image'])(
+      'keeps the score context for %s without replacing saved data after invalid advice',
+      async (kind) => {
+        store.wod.rawText = kind === 'text' ? wallBallLoadSource : null;
+        if (kind === 'image') {
+          store.wod.imageData = 'fixture-image';
+          store.wod.imageMimeType = 'image/png';
+        }
+        mocks.sendMessage.mockResolvedValue({
+          text: JSON.stringify({ ...wallBallLoadAnalysis, extractedText: wallBallLoadSource }),
+        });
+        expect((await request('POST', 'analyze')).statusCode).toBe(200);
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(correctStrategy) });
+        expect((await request('POST', 'strategy')).statusCode).toBe(200);
+        expect(store.strategyVersions.at(-1)!.inputSnapshot).toMatchObject({
+          wodAnalysis: { extractedText: wallBallLoadSource, rounds: wallBallLoadAnalysis.rounds },
+        });
+        const previous = structuredClone(store);
+        mocks.sendMessage.mockClear();
+        mocks.sendMessage.mockResolvedValue({
+          text: JSON.stringify({ ...correctStrategy, target: '4-5 rounds completos' }),
+        });
+        expect((await request('POST', 'strategy')).statusCode).toBe(502);
+        expect(mocks.sendMessage).toHaveBeenCalledTimes(2);
+        expect(store).toEqual(previous);
+        mocks.sendMessage.mockClear();
+        mocks.sendMessage
+          .mockResolvedValueOnce({
+            text: JSON.stringify({ ...correctStrategy, goal: 'Maximizar wall balls.' }),
+          })
+          .mockResolvedValueOnce({ text: JSON.stringify(correctStrategy) });
+        expect((await request('POST', 'strategy')).statusCode).toBe(200);
+        expect(mocks.sendMessage).toHaveBeenCalledTimes(2);
+        expect(store.strategyVersions).toHaveLength(previous.strategyVersions.length + 1);
+        expect(store.analysis).toEqual(previous.analysis);
+      },
+    );
+    it('accepts complete legacy blocks when duration previously held one set', async () => {
+      store.wod.rawText = wallBallLoadSource;
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(wallBallLoadAnalysis) });
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      store.analysis!.durationMinutes = 3;
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(correctStrategy) });
+      expect((await request('POST', 'strategy')).statusCode).toBe(200);
+      expect(store.analysis!.durationMinutes).toBe(3);
+      expect(store.strategyVersions.at(-1)!.inputSnapshot).toMatchObject({
+        wodAnalysis: { durationMinutes: 3, extractedText: wallBallLoadSource },
+      });
+    });
+  });
+
   describe('scored interval prescription', () => {
     const source = "4 Sets\nAMRAP 3'\n200m run\n8 Ring muscle up\nMax Squat snatch 43kg\nRest 1'";
     const movements = [
