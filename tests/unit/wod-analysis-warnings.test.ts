@@ -2,6 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { formatWodAnalysisWarnings } from '../../apps/web/src/lib/wod-analysis-warnings.js';
 
 describe('athlete-facing WOD warnings', () => {
+  it('places interpretations first while preserving order and deduplication within each group', () => {
+    const first = 'Interpretei Anmrap como um bloco de tres minutos. Confirme o formato.';
+    const second = 'Interpretei 4 sets como quatro blocos. Confirme a leitura.';
+    const load = 'Falta informar a carga de Wall Ball. Preencha em Editar cargas.';
+    const rest = 'Não foi informado o tempo de descanso entre os 4 sets.';
+    const warnings = [load, first, rest, second, first];
+    const original = [...warnings];
+    expect(formatWodAnalysisWarnings(warnings)).toEqual([first, second, load, rest]);
+    expect(warnings).toEqual(original);
+  });
+  it.each(['Interpretei', 'interpretei', 'INTERPRETEI'])(
+    'prioritizes %s after trimming whitespace',
+    (word) => {
+      const interpretation = `${word} como quatro blocos. Confirme a leitura.`;
+      expect(
+        formatWodAnalysisWarnings(['Descanso não informado.', `  ${interpretation}  `]),
+      ).toEqual([interpretation, 'Descanso não informado.']);
+    },
+  );
   it.each(['de', 'do', 'da', 'para'])(
     'deduplicates missing load notices using %s',
     (preposition) => {
@@ -40,8 +59,8 @@ describe('athlete-facing WOD warnings', () => {
       rest,
     ];
     expect(formatWodAnalysisWarnings(warnings)).toEqual([
-      'Falta informar a carga de Dumbbell Overhead lunge. Preencha em Editar cargas.',
       interpretation,
+      'Falta informar a carga de Dumbbell Overhead lunge. Preencha em Editar cargas.',
       'Falta informar a carga de Wall Ball. Preencha em Editar cargas.',
       rest,
     ]);

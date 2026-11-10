@@ -91,7 +91,7 @@ export function formatWodAnalysisWarnings(warnings: string[]): string[] {
         : [warning];
     });
   const seen = new Set<string>();
-  return formatted.filter((warning) => {
+  const unique = formatted.filter((warning) => {
     const key = warning
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -103,4 +103,7 @@ export function formatWodAnalysisWarnings(warnings: string[]): string[] {
     seen.add(key);
     return true;
   });
+  return unique.sort(
+    (left, right) => Number(/^Interpretei\b/i.test(right)) - Number(/^Interpretei\b/i.test(left)),
+  );
 }
