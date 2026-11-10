@@ -5,6 +5,7 @@ import { Prisma } from '../../packages/database/dist/index.js';
 import { simpleSourceCase, wodFormatCases } from '../fixtures/wod-format-cases.js';
 import { ladderAnalysis, ladderSource, ladderStrategy } from '../fixtures/wod-ladder-case.js';
 import type { WodAnalysisOutput } from '@wod-coach-ai/validation';
+import { wallBallLoadAnalysis, wallBallLoadSource } from '../fixtures/wod-wall-ball-loads.js';
 import {
   productionIntervalAnalysis,
   productionIntervalSource,
@@ -700,6 +701,37 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
       ).statusCode,
     ).toBe(200);
     expect(mocks.prisma.userAccessLog.create).not.toHaveBeenCalled();
+  });
+
+  it('saves both loads in the reported workout and preserves them on reanalysis', async () => {
+    store.wod.rawText = wallBallLoadSource;
+    mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(wallBallLoadAnalysis) });
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    mocks.sendMessage.mockClear();
+    const response = await request('PATCH', 'analysis', {
+      versionId: store.analysis!.versionId,
+      movementLoads: [
+        { id: 'movement-0', loadDescription: '9/6 kg' },
+        { id: 'movement-1', loadDescription: '2 x 15 kg' },
+      ],
+    });
+    expect(response.statusCode).toBe(200);
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+    expect(store.analysis!.warnings).toEqual([]);
+    const rounds = structuredClone(store.analysis!.roundBreakdown);
+    expect(rounds).toMatchObject(
+      Array.from({ length: 4 }, () => ({
+        movements: [
+          { loadDescription: '9/6 kg', reps: 21 },
+          { loadDescription: '2 x 15 kg', reps: 16 },
+          { loadDescription: null, reps: null },
+        ],
+      })),
+    );
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    expect(store.analysis!.roundBreakdown).toEqual(rounds);
+    expect(store.analysis!.warnings).toEqual([]);
+    expect(store.wod.rawText).toBe(wallBallLoadSource);
   });
 
   it('saves loads without AI, preserves timing/source/round volumes and snapshots, and sends loads to strategy', async () => {

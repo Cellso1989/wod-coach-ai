@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { isWodLoadMovement } from '@wod-coach-ai/types';
 import { Dumbbell } from 'lucide-react';
 import { api, ApiError, type WodAnalysis } from '../lib/api.js';
 import { Alert, Button, TextInput } from './ui.js';
@@ -22,9 +23,7 @@ export function WodLoadEditor({
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const loadMovements = analysis.movements.filter(
-    (movement) => movement.category === 'weightlifting',
-  );
+  const loadMovements = analysis.movements.filter(isWodLoadMovement);
 
   function close() {
     setEditing(false);

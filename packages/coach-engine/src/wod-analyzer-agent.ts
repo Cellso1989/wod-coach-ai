@@ -4,7 +4,7 @@ import {
   type WodMovementOutput,
   type WodRoundOutput,
 } from '@wod-coach-ai/validation';
-import { WOD_FORMATS, MOVEMENT_CATEGORIES } from '@wod-coach-ai/types';
+import { WOD_FORMATS, MOVEMENT_CATEGORIES, isWodLoadMovement } from '@wod-coach-ai/types';
 import type { RefinementCtx } from 'zod';
 import { movementIdentity } from './movement-identity.js';
 import { compactLadderAnalysisIssue, readCompactLadders } from './wod-ladder-integrity.js';
@@ -777,7 +777,7 @@ export async function analyzeWod(
       );
     }
     const unloaded = output.movements.filter(
-      (movement) => movement.category === 'weightlifting' && !movement.loadDescription?.trim(),
+      (movement) => isWodLoadMovement(movement) && !movement.loadDescription?.trim(),
     );
     if (unloaded.length) {
       const names = unloaded.map((movement) => movement.name).join(', ');
