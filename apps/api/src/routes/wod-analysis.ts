@@ -6,6 +6,7 @@ import {
   applyLoadOverrides,
   sameLoadMovement,
   reconcileTimeWarnings,
+  reconcileScoredIntervalWarnings,
   WodAnalysisError,
 } from '@wod-coach-ai/coach-engine';
 import {
@@ -419,9 +420,12 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
         parsed.data.durationMinutes !== undefined
           ? parsed.data.durationMinutes
           : current.durationMinutes;
-      const warnings = reconcileTimeWarnings(
-        edits.length ? loaded.warnings : current.warnings,
-        durationMinutes,
+      const warnings = reconcileScoredIntervalWarnings(
+        reconcileTimeWarnings(edits.length ? loaded.warnings : current.warnings, durationMinutes),
+        [
+          wod.rawText,
+          typeof rawResponse.extractedText === 'string' ? rawResponse.extractedText : null,
+        ],
       );
       const updated = await tx.wodAnalysis.update({
         where: { wodId: id },
@@ -552,7 +556,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
 
     const wod = await prisma.wod.findFirst({
       where: { id, userId: request.user.sub, discipline: 'CROSSFIT' },
-      select: { id: true },
+      select: { id: true, rawText: true },
     });
     if (!wod) {
       return reply.code(404).send({ error: 'WOD não encontrado' });
@@ -567,6 +571,17 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: 'Este WOD ainda não foi analisado' });
     }
 
-    return reply.send({ analysis });
+    const extracted = z
+      .object({ extractedText: z.string().nullish() })
+      .safeParse(analysis.rawResponse);
+    return reply.send({
+      analysis: {
+        ...analysis,
+        warnings: reconcileScoredIntervalWarnings(analysis.warnings, [
+          wod.rawText,
+          extracted.success ? extracted.data.extractedText : null,
+        ]),
+      },
+    });
   });
 }

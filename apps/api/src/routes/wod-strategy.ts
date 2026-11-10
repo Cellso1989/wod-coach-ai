@@ -7,6 +7,7 @@ import {
   compactLadderAnalysisIssue,
   scoredIntervalAnalysisIssue,
   readScoredIntervals,
+  reconcileScoredIntervalWarnings,
   type StrategyCoachInput,
 } from '@wod-coach-ai/coach-engine';
 import { wodAnalysisOutputSchema, type WodRoundOutput } from '@wod-coach-ai/validation';
@@ -177,7 +178,10 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
                 },
                 estimatedIntensity: analysis.estimatedIntensity,
                 confidence: analysis.confidence,
-                warnings: analysis.warnings,
+                warnings: reconcileScoredIntervalWarnings(analysis.warnings, [
+                  wodWithAnalysis.rawText,
+                  extractedText,
+                ]),
                 rounds: (analysis.roundBreakdown as WodRoundOutput[] | null) ?? null,
               },
               athleteContext: athleteContextResult.context,

@@ -15,7 +15,11 @@ import { loadCalculationSchema, validateLoadCalculations } from './strategy-load
 import { validateStrategyTextIntegrity } from './strategy-text-integrity.js';
 import { validateStrategyLadderIntegrity } from './wod-ladder-integrity.js';
 import { WOD_TERMINOLOGY } from './wod-terminology.js';
-import { readScoredIntervals, validateScoredIntervalStrategy } from './wod-interval-integrity.js';
+import {
+  readScoredIntervals,
+  validateScoredIntervalStrategy,
+  reconcileScoredIntervalWarnings,
+} from './wod-interval-integrity.js';
 
 export type { SendMessage } from './ai-json-agent.js';
 
@@ -304,7 +308,16 @@ Regras críticas:
 
 function buildUserContent(input: StrategyCoachInput): string {
   const scoredIntervals = readScoredIntervals(input.wodAnalysis.extractedText ?? '');
-  return `Dados para a recomendação de hoje:\n\n${JSON.stringify({ ...input, ...(scoredIntervals ? { scoredIntervals, scoreMovement: scoredIntervals.scoreMovement.name, scoreAggregation: 'sum across sets', buyInOncePerSet: true, executionObjective: 'minimize buy-in time to maximize scoring time' } : {}) }, null, 2)}`;
+  const normalizedInput = {
+    ...input,
+    wodAnalysis: {
+      ...input.wodAnalysis,
+      warnings: reconcileScoredIntervalWarnings(input.wodAnalysis.warnings, [
+        input.wodAnalysis.extractedText,
+      ]),
+    },
+  };
+  return `Dados para a recomendação de hoje:\n\n${JSON.stringify({ ...normalizedInput, ...(scoredIntervals ? { scoredIntervals, scoreMovement: scoredIntervals.scoreMovement.name, scoreAggregation: 'sum across sets', buyInOncePerSet: true, executionObjective: 'minimize buy-in time to maximize scoring time' } : {}) }, null, 2)}`;
 }
 
 export const DEFAULT_STRATEGY_MODEL = 'gpt-5.4-mini-2026-03-17';

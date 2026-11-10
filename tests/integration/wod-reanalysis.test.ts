@@ -213,7 +213,13 @@ function databaseClient(current: () => Store) {
   return {
     $queryRaw: leaseQuery,
     wod: {
-      findFirst: async () => structuredClone(current().wod),
+      findFirst: async (args?: { select?: { analysis?: unknown } }) =>
+        structuredClone({
+          ...current().wod,
+          ...(args?.select?.analysis
+            ? { analysis: current().analysis, strategy: current().strategy }
+            : {}),
+        }),
       findUniqueOrThrow: async () => ({ ...current().wod, analysis: current().analysis }),
       update: async ({ data }: { data: Row }) => {
         if (failWrite === 'wod') throw new Error('WOD write failed');
@@ -892,6 +898,10 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
   );
 
   describe('Wall Ball / lunge / max Burpee box jump score', () => {
+    const incorrectNotice =
+      "Repetições 'Máximo' de burpee box jump são variáveis; total não pode ser somado.";
+    const correctNotice =
+      'Resultado do treino: some as repetições de Burpee box jump realizadas nos 4 sets.';
     const correctStrategy = {
       ...STRATEGY,
       target: null,
@@ -909,8 +919,76 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
       ],
     };
     it.each(['text', 'image'])(
-      'keeps the score context for %s without replacing saved data after invalid advice',
+      'presents the correct score for a saved %s notice without rewriting snapshots or calling AI',
       async (kind) => {
+        store.wod.rawText = kind === 'text' ? wallBallLoadSource : null;
+        if (kind === 'image') {
+          store.wod.imageData = 'fixture-image';
+          store.wod.imageMimeType = 'image/png';
+        }
+        mocks.sendMessage.mockResolvedValue({
+          text: JSON.stringify({
+            ...wallBallLoadAnalysis,
+            extractedText: wallBallLoadSource,
+            warnings: [incorrectNotice],
+          }),
+        });
+        expect((await request('POST', 'analyze')).statusCode).toBe(200);
+        expect(store.analysis!.warnings).toContain(correctNotice);
+        expect((store.analysis!.rawResponse as Row).warnings).toContain(correctNotice);
+        store.analysis!.warnings = [
+          incorrectNotice,
+          'Não foi informado o tempo de descanso entre os 4 sets.',
+        ];
+        const previous = structuredClone(store);
+        mocks.sendMessage.mockClear();
+        for (const url of ['/api/wods/wod-1/analysis', '/api/wods/wod-1?view=detail']) {
+          const response = await app.inject({ method: 'GET', url, headers });
+          expect(response.statusCode).toBe(200);
+          expect(response.json().analysis.warnings).toEqual([
+            correctNotice,
+            'Não foi informado o tempo de descanso entre os 4 sets.',
+          ]);
+          expect(response.json().analysis.movements[2].reps).toBeNull();
+        }
+        expect(mocks.sendMessage).not.toHaveBeenCalled();
+        expect(store).toEqual(previous);
+        mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(correctStrategy) });
+        expect((await request('POST', 'strategy')).statusCode).toBe(200);
+        expect(store.strategyVersions.at(-1)!.inputSnapshot).toMatchObject({
+          wodAnalysis: {
+            warnings: [correctNotice, 'Não foi informado o tempo de descanso entre os 4 sets.'],
+          },
+        });
+        expect(store.analysis).toEqual(previous.analysis);
+        expect(store.analysisVersions).toEqual(previous.analysisVersions);
+      },
+    );
+    it('does not restore the incorrect score notice when editing loads', async () => {
+      store.wod.rawText = wallBallLoadSource;
+      mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(wallBallLoadAnalysis) });
+      expect((await request('POST', 'analyze')).statusCode).toBe(200);
+      store.analysis!.warnings = [incorrectNotice];
+      const versions = structuredClone(store.analysisVersions);
+      mocks.sendMessage.mockClear();
+      const response = await request('PATCH', 'analysis', {
+        versionId: store.analysis!.versionId,
+        movementLoads: [{ id: 'movement-0', loadDescription: '9/6 kg' }],
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().analysis.warnings).toContain(correctNotice);
+      expect(response.json().analysis.warnings).not.toContain(incorrectNotice);
+      expect(store.analysisVersions.slice(0, -1)).toEqual(versions);
+      expect(mocks.sendMessage).not.toHaveBeenCalled();
+    });
+    it.each([
+      { kind: 'text', incorrect: { target: '4-5 rounds completos' } },
+      { kind: 'image', incorrect: { target: '4-5 rounds completos' } },
+      { kind: 'text', incorrect: { warnings: [incorrectNotice] } },
+      { kind: 'image', incorrect: { warnings: [incorrectNotice] } },
+    ])(
+      'keeps the score context for $kind without replacing saved data after $incorrect',
+      async ({ kind, incorrect }) => {
         store.wod.rawText = kind === 'text' ? wallBallLoadSource : null;
         if (kind === 'image') {
           store.wod.imageData = 'fixture-image';
@@ -928,7 +1006,7 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
         const previous = structuredClone(store);
         mocks.sendMessage.mockClear();
         mocks.sendMessage.mockResolvedValue({
-          text: JSON.stringify({ ...correctStrategy, target: '4-5 rounds completos' }),
+          text: JSON.stringify({ ...correctStrategy, ...incorrect }),
         });
         expect((await request('POST', 'strategy')).statusCode).toBe(502);
         expect(mocks.sendMessage).toHaveBeenCalledTimes(2);

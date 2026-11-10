@@ -7,6 +7,37 @@ import {
 } from './scored-interval-prescription.js';
 export { readScoredIntervals } from './scored-interval-prescription.js';
 
+/** Unknown prescribed reps do not prevent summing the reps actually achieved. */
+export function reconcileScoredIntervalWarnings(
+  warnings: readonly string[],
+  sources: readonly (string | null | undefined)[],
+): string[] {
+  const prescription = sources.map((source) => readScoredIntervals(source ?? '')).find(Boolean);
+  if (!prescription) return [...warnings];
+  return [
+    ...new Set(
+      warnings.map((warning) => {
+        // Match only the erroneous volume notice, leaving unrelated/safety warnings intact.
+        const normalized = warning
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+        const match = normalized.match(
+          /^repeticoes\s+['"\u2018\u2019\u201c\u201d]?(?:maximo|max)['"\u2018\u2019\u201c\u201d]?\s+de\s+(.+?)\s+sao variaveis\s*;\s*(?:o\s+)?total nao pode ser somado(?:\.(?:\s+([\s\S]+))?|)$/i,
+        );
+        if (
+          !match ||
+          scoredMovementKey(match[1]!) !== scoredMovementKey(prescription.scoreMovement.name)
+        )
+          return warning;
+        // Preserve the original suffix (including accents), e.g. advice about pain.
+        const suffix = match[2] ? (warning.trim().match(/somado\.\s+([\s\S]+)$/i)?.[1] ?? '') : '';
+        return `Resultado do treino: some as repetições de ${prescription.scoreMovement.name} realizadas nos ${prescription.sets} sets.${suffix ? ` ${suffix}` : ''}`;
+      }),
+    ),
+  ];
+}
+
 export function scoredIntervalAnalysisIssue(
   analysis: Pick<WodAnalysisOutput, 'format' | 'rounds'>,
   source: string,
@@ -59,6 +90,18 @@ export function validateScoredIntervalStrategy(
     return;
   }
   const scoreName = scoredMovementKey(prescription.scoreMovement.name);
+  if (
+    output.warnings.some(
+      (warning) =>
+        reconcileScoredIntervalWarnings([warning], [analysis.extractedText])[0] !== warning,
+    )
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['warnings'],
+      message: `Maximo e o objetivo: some as reps efetivamente realizadas de ${prescription.scoreMovement.name} nos ${prescription.sets} sets. Nao declare que o resultado nao pode ser somado.`,
+    });
+  }
   const mentionsScore = (text: string) => scoredMovementKey(text).includes(scoreName);
   if (
     output.target != null &&
