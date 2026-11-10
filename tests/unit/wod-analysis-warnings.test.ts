@@ -2,6 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { formatWodAnalysisWarnings } from '../../apps/web/src/lib/wod-analysis-warnings.js';
 
 describe('athlete-facing WOD warnings', () => {
+  it('shows one notice per movement for grouped, translated and saved load warnings', () => {
+    expect(
+      formatWodAnalysisWarnings([
+        'Carga nao informada para Wall Ball, Dumbbell Overhead lunge; confirme antes de executar.',
+        'Falta informar a carga de Dumbbell Overhead lunge. Preencha em Editar cargas.',
+        'load not specified for dumbbell overhead Lunge',
+        'Carga não informada para WALL BALL; confirme antes de executar.',
+        'Falta informar a carga para Dumbbell Overhead lunge. Preencha em Editar cargas!',
+        'Nao aumente a carga se houver dor.',
+      ]),
+    ).toEqual([
+      'Falta informar a carga de Wall Ball. Preencha em Editar cargas.',
+      'Falta informar a carga de Dumbbell Overhead lunge. Preencha em Editar cargas.',
+      'Nao aumente a carga se houver dor.',
+    ]);
+  });
   it('explains the screenshot warnings in Portuguese without changing stored text', () => {
     const warnings = [
       "format assumed ROUNDS_FOR_TIME based on '5 rounds' (not explicitly stated as for time)",

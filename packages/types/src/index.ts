@@ -26,6 +26,7 @@ export const MOVEMENT_CATEGORIES = [
 ] as const;
 
 export type MovementCategory = (typeof MOVEMENT_CATEGORIES)[number];
+export { isWodLoadMovement } from "./wod-loads.js";
 
 export const PERSONAL_RECORD_TYPES = [
   "UNKNOWN",

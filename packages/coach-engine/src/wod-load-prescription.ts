@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import { isWodLoadMovement } from '@wod-coach-ai/types';
 import type { WodRoundOutput, wodLoadOverrideSchema } from '@wod-coach-ai/validation';
 import { movementIdentity } from './movement-identity.js';
 
@@ -21,7 +22,7 @@ function normalized(text: string): string {
 
 export function reconcileLoadWarnings(warnings: string[], movements: Movement[]): string[] {
   const missing = movements.filter(
-    (item) => item.category === 'weightlifting' && !item.loadDescription?.trim(),
+    (item) => isWodLoadMovement(item) && !item.loadDescription?.trim(),
   );
   const remaining = warnings.filter((warning) => {
     if (warning.startsWith('Carga nao informada para ')) return false;

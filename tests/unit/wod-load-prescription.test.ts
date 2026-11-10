@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyLoadOverrides, reconcileLoadWarnings } from '@wod-coach-ai/coach-engine';
 import { wodAnalysisUpdateSchema } from '@wod-coach-ai/validation';
+import { isWodLoadMovement } from '@wod-coach-ai/types';
 
 const thruster = {
   name: 'Thrusters',
@@ -16,6 +17,38 @@ const clean = {
 };
 
 describe('manual WOD loads', () => {
+  it.each(['Wall Ball', 'wall ball', 'Wall Balls', 'Wall-Ball', 'Wallball'])(
+    'allows %s loads even when categorized as conditioning',
+    (name) => {
+      const movement = { name, category: 'conditioning' as const, loadDescription: null };
+      expect(isWodLoadMovement(movement)).toBe(true);
+      expect(reconcileLoadWarnings([], [movement])).toEqual([
+        `Carga nao informada para ${name}; confirme antes de executar.`,
+      ]);
+      const rounds = [1, 2, 3, 4].map((roundNumber) => ({
+        roundNumber,
+        movements: [{ ...movement, reps: 21 }],
+      }));
+      const edited = applyLoadOverrides(
+        [movement],
+        rounds,
+        [{ ...movement, loadDescription: '9/6 kg' }],
+        [],
+      );
+      expect(edited.warnings).toEqual([]);
+      expect(edited.movements[0]!.loadDescription).toBe('9/6 kg');
+      expect(
+        edited.rounds!.every((round) => round.movements[0]!.loadDescription === '9/6 kg'),
+      ).toBe(true);
+    },
+  );
+  it.each([
+    { name: 'Burpee box jump', category: 'conditioning' },
+    { name: 'Toes to Bar', category: 'gymnastics' },
+    { name: 'Bike', category: 'monostructural', loadDescription: '30 calorias' },
+  ])('does not offer a load for $name', (movement) => {
+    expect(isWodLoadMovement(movement)).toBe(false);
+  });
   it('clears legacy English missing-load notices once the load is filled', () => {
     expect(
       reconcileLoadWarnings(

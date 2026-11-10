@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { analyzeWod, WodAnalysisError, type SendMessage } from '@wod-coach-ai/coach-engine';
+import { wallBallLoadAnalysis, wallBallLoadSource } from '../fixtures/wod-wall-ball-loads.js';
 function textMessage(text: string) {
   return { text };
 }
@@ -20,6 +21,17 @@ const VALID_OUTPUT = {
 };
 
 describe('analyzeWod', () => {
+  it('warns about both Wall Ball and dumbbell loads in the reported four-set workout', async () => {
+    const sendMessage: SendMessage = vi
+      .fn()
+      .mockResolvedValue(textMessage(JSON.stringify(wallBallLoadAnalysis)));
+    const result = await analyzeWod({ rawText: wallBallLoadSource }, sendMessage);
+    expect(result.warnings.join(' ')).toContain('Wall Ball');
+    expect(result.warnings.join(' ')).toContain('Dumbbell Overhead lunge');
+    expect(result.warnings.join(' ')).not.toContain('Burpee box jump');
+    expect(result.rounds).toEqual(wallBallLoadAnalysis.rounds);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
   it('requires labels for explicit buy-in/out even when enough execution blocks were returned', async () => {
     const rounds = Array.from({ length: 5 }, (_, index) => ({
       roundNumber: index + 1,
