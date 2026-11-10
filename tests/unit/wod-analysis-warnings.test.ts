@@ -2,6 +2,51 @@ import { describe, expect, it } from 'vitest';
 import { formatWodAnalysisWarnings } from '../../apps/web/src/lib/wod-analysis-warnings.js';
 
 describe('athlete-facing WOD warnings', () => {
+  it.each(['de', 'do', 'da', 'para'])(
+    'deduplicates missing load notices using %s',
+    (preposition) => {
+      expect(
+        formatWodAnalysisWarnings([
+          'Carga nao informada para Dumbbell Overhead lunge; confirme antes de executar.',
+          `Falta informar a carga ${preposition} Dumbbell Overhead lunge. Preencha em Editar cargas.`,
+        ]),
+      ).toEqual(['Falta informar a carga de Dumbbell Overhead lunge. Preencha em Editar cargas.']);
+    },
+  );
+  it('keeps distinct lunge variations and mixed safety guidance', () => {
+    const safety =
+      'Falta informar a carga do Dumbbell Overhead lunge. Preencha em Editar cargas. Nao execute com dor.';
+    expect(
+      formatWodAnalysisWarnings([
+        'Falta informar a carga do Dumbbell Overhead lunge. Preencha em Editar cargas.',
+        'Falta informar a carga do Dumbbell Front Rack lunge. Preencha em Editar cargas.',
+        safety,
+      ]),
+    ).toEqual([
+      'Falta informar a carga de Dumbbell Overhead lunge. Preencha em Editar cargas.',
+      'Falta informar a carga de Dumbbell Front Rack lunge. Preencha em Editar cargas.',
+      safety,
+    ]);
+  });
+  it('deduplicates the screenshot notices despite Dumbell/Dumbbell spelling', () => {
+    const interpretation =
+      "Interpretei 'Anmrap' como o maximo de voltas ou repeticoes dentro do tempo definido de 3 minutos por set. Confirme se esta correto.";
+    const rest = 'Não foi informado o tempo de descanso entre os 4 sets.';
+    const warnings = [
+      'Falta informar a carga de Dumbell Overhead lunge. Preencha em Editar cargas.',
+      interpretation,
+      'Falta informar a carga do Wall Ball. Preencha em Editar cargas.',
+      'Falta informar a carga do Dumbbell Overhead lunge. Preencha em Editar cargas.',
+      rest,
+    ];
+    expect(formatWodAnalysisWarnings(warnings)).toEqual([
+      'Falta informar a carga de Dumbbell Overhead lunge. Preencha em Editar cargas.',
+      interpretation,
+      'Falta informar a carga de Wall Ball. Preencha em Editar cargas.',
+      rest,
+    ]);
+    expect(warnings).toHaveLength(5);
+  });
   it('shows one notice per movement for grouped, translated and saved load warnings', () => {
     expect(
       formatWodAnalysisWarnings([

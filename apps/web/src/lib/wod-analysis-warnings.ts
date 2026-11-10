@@ -1,3 +1,5 @@
+import { normalizeWodLoadName } from '@wod-coach-ai/types';
+
 const FORMATS: Record<string, string> = {
   ROUNDS_FOR_TIME: 'voltas para completar no menor tempo possivel',
   FOR_TIME: 'treino para completar no menor tempo possivel',
@@ -32,7 +34,7 @@ export function formatWodAnalysisWarnings(warnings: string[]): string[] {
       const missingPortugueseLoad =
         text.match(/^Carga n[aã]o informada para (.+?); confirme antes de executar\.[.!]?$/i) ??
         text.match(
-          /^Falta informar a carga (?:de|para) (.+?)\.\s*Preencha em Editar cargas[.!]?$/i,
+          /^Falta informar a carga (?:de|do|da|para) (.+?)\.\s*Preencha em Editar cargas[.!]?$/i,
         );
       if (missingPortugueseLoad)
         return `Falta informar a carga de ${missingPortugueseLoad[1]}. Preencha em Editar cargas.`;
@@ -82,7 +84,10 @@ export function formatWodAnalysisWarnings(warnings: string[]): string[] {
       return load
         ? load[1]!
             .split(/,\s*/)
-            .map((name) => `Falta informar a carga de ${name.trim()}. Preencha em Editar cargas.`)
+            .map(
+              (name) =>
+                `Falta informar a carga de ${normalizeWodLoadName(name)}. Preencha em Editar cargas.`,
+            )
         : [warning];
     });
   const seen = new Set<string>();

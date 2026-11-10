@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { isWodLoadMovement } from '@wod-coach-ai/types';
+import { isWodLoadMovement, normalizeWodLoadName } from '@wod-coach-ai/types';
 import type { WodRoundOutput, wodLoadOverrideSchema } from '@wod-coach-ai/validation';
 import { movementIdentity } from './movement-identity.js';
 
@@ -13,7 +13,7 @@ export function sameLoadMovement(left: Movement, right: Movement): boolean {
 }
 
 function normalized(text: string): string {
-  return text
+  return normalizeWodLoadName(text)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()

@@ -17,6 +17,27 @@ const clean = {
 };
 
 describe('manual WOD loads', () => {
+  it('clears the resolved Dumbell notice while Wall Ball still needs a load', () => {
+    expect(
+      reconcileLoadWarnings(
+        [
+          'Falta informar a carga do Dumbell Overhead lunge. Preencha em Editar cargas.',
+          'Nao execute com dor.',
+        ],
+        [
+          {
+            name: 'Dumbbell Overhead lunge',
+            category: 'weightlifting',
+            loadDescription: '2 x 15 kg',
+          },
+          { name: 'Wall Ball', category: 'conditioning', loadDescription: null },
+        ],
+      ),
+    ).toEqual([
+      'Carga nao informada para Wall Ball; confirme antes de executar.',
+      'Nao execute com dor.',
+    ]);
+  });
   it.each(['Wall Ball', 'wall ball', 'Wall Balls', 'Wall-Ball', 'Wallball'])(
     'allows %s loads even when categorized as conditioning',
     (name) => {
