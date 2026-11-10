@@ -4,6 +4,7 @@ import {
   generateStrategy,
   scoredIntervalAnalysisIssue,
   readScoredIntervals,
+  reconcileScoredIntervalWarnings,
   WodAnalysisError,
   StrategyGenerationError,
 } from '@wod-coach-ai/coach-engine';
@@ -83,6 +84,10 @@ const burpeeAnalysis: WodAnalysisOutput = {
   durationMinutes: 12,
   extractedText: wallBallLoadSource,
 };
+const unsummableMaxWarning =
+  "Repetições 'Máximo' de burpee box jump são variáveis; total não pode ser somado.";
+const burpeeScoreNotice =
+  'Resultado do treino: some as repetições de Burpee box jump realizadas nos 4 sets.';
 const burpeeStrategy = {
   ...strategy,
   pacing: 'Ataque a entrada em cada set; chegue cedo aos burpee box jumps e sustente ate o sinal.',
@@ -110,6 +115,86 @@ const burpeeStrategy = {
 };
 
 describe('fixed buy-in followed by a max-reps score', () => {
+  it.each([
+    wallBallLoadSource.replace('4 sets', '3 sets'),
+    wallBallLoadSource.replace('Máximo burpee box jump', 'Máximo Thruster'),
+    source,
+  ])('corrects the notice using the actual set count and scored movement: %s', (prescription) => {
+    const parsed = readScoredIntervals(prescription)!;
+    const warning = `Repetições “Máximo” de ${parsed.scoreMovement.name} são variáveis; total não pode ser somado.`;
+    expect(reconcileScoredIntervalWarnings([warning, warning], [prescription])).toEqual([
+      `Resultado do treino: some as repetições de ${parsed.scoreMovement.name} realizadas nos ${parsed.sets} sets.`,
+    ]);
+  });
+  it.each([
+    wallBallLoadSource.replace('4 sets', 'AMRAP 12 min'),
+    `${wallBallLoadSource}\nThen 20 burpees`,
+    wallBallLoadSource.replace('Máximo burpee box jump', 'Máximo Thruster'),
+    '',
+  ])('keeps the notice outside a fully recognized matching score: %s', (prescription) => {
+    expect(reconcileScoredIntervalWarnings([unsummableMaxWarning], [prescription])).toEqual([
+      unsummableMaxWarning,
+    ]);
+  });
+  it.each(['text', 'image'])(
+    'corrects the reported max-reps notice for %s without inventing a count',
+    async (kind) => {
+      const rest = 'Não foi informado o tempo de descanso entre os 4 sets.';
+      const result = await analyzeWod(
+        kind === 'text'
+          ? { rawText: wallBallLoadSource }
+          : { imageBase64: 'mock', imageMimeType: 'image/png' },
+        sender({
+          ...burpeeAnalysis,
+          warnings: [unsummableMaxWarning, rest, 'Não execute com dor.'],
+        }),
+      );
+      expect(result.warnings).not.toContain(unsummableMaxWarning);
+      expect(result.warnings).toEqual(
+        expect.arrayContaining([burpeeScoreNotice, rest, 'Não execute com dor.']),
+      );
+      expect(result.movements[2]!.reps).toBeNull();
+      expect(result.rounds!.every((round) => round.movements[2]!.reps == null)).toBe(true);
+    },
+  );
+  it('corrects the notice while preserving appended safety advice', async () => {
+    const mixed = unsummableMaxWarning + ' Não execute com dor.';
+    expect(
+      (
+        await analyzeWod(
+          { rawText: wallBallLoadSource },
+          sender({ ...burpeeAnalysis, warnings: [mixed] }),
+        )
+      ).warnings,
+    ).toContain(burpeeScoreNotice + ' Não execute com dor.');
+  });
+  it('retries a strategy that repeats the incorrect max-reps warning', async () => {
+    const send = sender({ ...burpeeStrategy, warnings: [unsummableMaxWarning] });
+    await expect(
+      generateStrategy({ ...input, wodAnalysis: burpeeAnalysis }, send),
+    ).rejects.toBeInstanceOf(StrategyGenerationError);
+    expect(send).toHaveBeenCalledTimes(2);
+    send.mockClear();
+    send
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ ...burpeeStrategy, warnings: [unsummableMaxWarning] }),
+      })
+      .mockResolvedValueOnce({ text: JSON.stringify(burpeeStrategy) });
+    expect(
+      (await generateStrategy({ ...input, wodAnalysis: burpeeAnalysis }, send)).warnings,
+    ).toEqual(burpeeStrategy.warnings);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+  it('does not send the contradictory saved notice to the strategy agent', async () => {
+    const saved = { ...burpeeAnalysis, warnings: [unsummableMaxWarning] };
+    const original = structuredClone(saved);
+    const send = sender(burpeeStrategy);
+    await generateStrategy({ ...input, wodAnalysis: saved }, send);
+    const text = send.mock.calls[0]![0].messages[0].content[0].text;
+    expect(text).not.toContain(unsummableMaxWarning);
+    expect(text).toContain(burpeeScoreNotice);
+    expect(saved).toEqual(original);
+  });
   it('recognizes the complete reported source without inventing rest', () => {
     expect(readScoredIntervals(wallBallLoadSource)).toMatchObject({
       sets: 4,

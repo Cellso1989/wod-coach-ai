@@ -16,7 +16,12 @@ const detail = {
   rawText: '21-15-9 Thrusters e T2B',
   imageMimeType: 'image/png',
   result: { score: '05:00' },
-  analysis: { versionId: 'analysis-v1', roundBreakdown: [{ roundNumber: 1 }] },
+  analysis: {
+    versionId: 'analysis-v1',
+    roundBreakdown: [{ roundNumber: 1 }],
+    warnings: [],
+    rawResponse: null,
+  },
   strategy: { versionId: 'strategy-v1', target: '5-6 min' },
 };
 

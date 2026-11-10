@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { prisma, Prisma } from '@wod-coach-ai/database';
+import { reconcileScoredIntervalWarnings } from '@wod-coach-ai/coach-engine';
+import { z } from 'zod';
 import {
   wodSubmissionFieldsSchema,
   wodUpdateFieldsSchema,
@@ -184,9 +186,23 @@ export default async function wodRoutes(app: FastifyInstance) {
       );
       if (!detail) return reply.code(404).send({ error: 'WOD não encontrado' });
       const { analysis, strategy, ...wod } = detail;
-      return reply
-        .header('Cache-Control', 'no-store')
-        .send({ detailVersion: 1, wod, analysis, strategy });
+      const extracted = z
+        .object({ extractedText: z.string().nullish() })
+        .safeParse(analysis?.rawResponse);
+      return reply.header('Cache-Control', 'no-store').send({
+        detailVersion: 1,
+        wod,
+        analysis: analysis
+          ? {
+              ...analysis,
+              warnings: reconcileScoredIntervalWarnings(analysis.warnings, [
+                wod.rawText,
+                extracted.success ? extracted.data.extractedText : null,
+              ]),
+            }
+          : null,
+        strategy,
+      });
     }
 
     const wod = await prisma.wod.findFirst({

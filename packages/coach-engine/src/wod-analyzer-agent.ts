@@ -14,7 +14,11 @@ import {
   reconcileTimeWarnings,
 } from './wod-time-prescription.js';
 import { WOD_TERMINOLOGY } from './wod-terminology.js';
-import { readScoredIntervals, scoredIntervalAnalysisIssue } from './wod-interval-integrity.js';
+import {
+  readScoredIntervals,
+  scoredIntervalAnalysisIssue,
+  reconcileScoredIntervalWarnings,
+} from './wod-interval-integrity.js';
 import { scoredMovementKey } from './scored-interval-prescription.js';
 import {
   callAiForJson,
@@ -122,6 +126,10 @@ Regras críticas:
   com um item em rounds por set, mesmo se o descanso nao estiver informado.
   Ex.: 4 sets / Anmrap 3 min / 21 wall ball / 16 dumbel Overhead lunge /
   Maximo burpee box jump: entrada uma vez por set; score e a soma dos burpee box jumps.
+    Maximo e o objetivo de pontuacao, nao uma falha ou informacao faltante. As reps
+    prescritas ficam null porque ainda serao realizadas; o resultado sera a soma das
+    reps efetivamente feitas nos sets. Nao avise que sao variaveis ou que o total nao
+    pode ser somado: desconhecer o volume antecipadamente nao impede somar o resultado.
   Nao repita a entrada dentro da janela. Anmrap e a grafia recebida para AMRAP;
   preserve a transcricao e avise a interpretacao. Descanso ausente fica desconhecido,
   sem inventar duracao; labels devem preservar AMRAP 3 min em cada set.
@@ -793,7 +801,13 @@ export async function analyzeWod(
     return {
       ...output,
       warnings: [
-        ...new Set([...notices, ...reconcileTimeWarnings(output.warnings, output.durationMinutes)]),
+        ...new Set([
+          ...notices,
+          ...reconcileScoredIntervalWarnings(
+            reconcileTimeWarnings(output.warnings, output.durationMinutes),
+            [input.rawText, output.extractedText],
+          ),
+        ]),
       ].slice(0, 10),
     };
   } catch (err) {
