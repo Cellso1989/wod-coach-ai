@@ -27,6 +27,7 @@ export const MOVEMENT_CATEGORIES = [
 
 export type MovementCategory = (typeof MOVEMENT_CATEGORIES)[number];
 export { isWodLoadMovement, normalizeWodLoadName } from "./wod-loads.js";
+export { wodWarningAction, type WodWarningAction } from "./wod-review.js";
 
 export const PERSONAL_RECORD_TYPES = [
   "UNKNOWN",

@@ -35,6 +35,7 @@ export interface AthleteProfileSummary {
 
 export interface StrategyCoachInput {
   wodAnalysis: WodAnalysisOutput;
+  confirmedInterpretations?: string[];
   athleteContext: AthleteContext;
   athleteProfile: AthleteProfileSummary | null;
 }
@@ -317,7 +318,10 @@ function buildUserContent(input: StrategyCoachInput): string {
       ]),
     },
   };
-  return `Dados para a recomendação de hoje:\n\n${JSON.stringify({ ...normalizedInput, ...(scoredIntervals ? { scoredIntervals, scoreMovement: scoredIntervals.scoreMovement.name, scoreAggregation: 'sum across sets', buyInOncePerSet: true, executionObjective: 'minimize buy-in time to maximize scoring time' } : {}) }, null, 2)}`;
+  const review = input.confirmedInterpretations?.length
+    ? 'As confirmedInterpretations ja foram confirmadas pelo atleta para esta analise. Use a prescricao aceita sem pedir a mesma confirmacao novamente; preserve as guardas de estrutura e os avisos de seguranca.\n\n'
+    : '';
+  return `${review}Dados para a recomendação de hoje:\n\n${JSON.stringify({ ...normalizedInput, ...(scoredIntervals ? { scoredIntervals, scoreMovement: scoredIntervals.scoreMovement.name, scoreAggregation: 'sum across sets', buyInOncePerSet: true, executionObjective: 'minimize buy-in time to maximize scoring time' } : {}) }, null, 2)}`;
 }
 
 export const DEFAULT_STRATEGY_MODEL = 'gpt-5.4-mini-2026-03-17';

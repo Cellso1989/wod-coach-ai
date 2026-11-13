@@ -15,6 +15,7 @@ const LABELS: Record<string, string> = {
   estimatedIntensity: 'Intensidade estimada',
   confidence: 'Confianca',
   warnings: 'Avisos',
+  confirmedWarnings: 'Interpretações confirmadas',
   movements: 'Movimentos',
   roundBreakdown: 'Rounds',
   roundNumber: 'Round',
@@ -323,7 +324,7 @@ export function WodVersionHistory({
                       ? ' - Ativa'
                       : ''}
                     {item.reason
-                      ? ` - ${item.reason === 'DURATION_EDIT' ? 'Duracao editada' : item.reason === 'LOAD_EDIT' ? 'Carga editada' : item.reason === 'LEGACY' ? 'Legado' : item.reason}`
+                      ? ` - ${item.reason === 'DURATION_EDIT' ? 'Duracao editada' : item.reason === 'LOAD_EDIT' ? 'Carga editada' : item.reason === 'REVIEW' ? 'Interpretação confirmada' : item.reason === 'LEGACY' ? 'Legado' : item.reason}`
                       : ''}
                   </option>
                 ))}

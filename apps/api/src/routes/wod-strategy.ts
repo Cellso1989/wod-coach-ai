@@ -11,6 +11,8 @@ import {
   type StrategyCoachInput,
 } from '@wod-coach-ai/coach-engine';
 import { wodAnalysisOutputSchema, type WodRoundOutput } from '@wod-coach-ai/validation';
+import { wodWarningAction } from '@wod-coach-ai/types';
+import { z } from 'zod';
 import {
   getAthleteContextForWod,
   WodNotFoundError,
@@ -97,6 +99,16 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
               return { error: 'Reanalise este WOD antes de gerar uma estrategia' };
             }
             const analysisVersionId = analysis.versionId;
+            if (
+              analysis.warnings.some((warning) => wodWarningAction(warning) === 'interpretation')
+            ) {
+              reply.code(409);
+              return {
+                error:
+                  'Confirme ou corrija as interpretacoes em Revisar interpretacao antes de gerar a estrategia.',
+                code: 'WOD_REVIEW_REQUIRED',
+              };
+            }
 
             const rawAnalysis = analysis.rawResponse;
             const extractedText =
@@ -152,7 +164,13 @@ export default async function wodStrategyRoutes(app: FastifyInstance) {
             const prescription = wodAnalysisOutputSchema
               .pick({ targetMinutes: true })
               .safeParse(analysis.rawResponse);
+            const review = z
+              .object({ confirmedWarnings: z.array(z.string()) })
+              .safeParse(rawAnalysis);
             const strategyInput: StrategyCoachInput = {
+              ...(review.success
+                ? { confirmedInterpretations: review.data.confirmedWarnings }
+                : {}),
               wodAnalysis: {
                 extractedText: readScoredIntervals(wodWithAnalysis.rawText ?? '')
                   ? wodWithAnalysis.rawText

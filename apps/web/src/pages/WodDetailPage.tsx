@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { isWodLoadMovement, wodWarningAction } from '@wod-coach-ai/types';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   api,
@@ -16,7 +17,7 @@ import { WorkoutDetails } from '../components/WorkoutDetails.js';
 import { WodGenerationProgress } from '../components/WodGenerationProgress.js';
 import { WodLoadEditor } from '../components/WodLoadEditor.js';
 import { WodPhoto } from '../components/WodPhoto.js';
-import { formatWodAnalysisWarnings } from '../lib/wod-analysis-warnings.js';
+import { WodAnalysisReview } from '../components/WodAnalysisReview.js';
 import { WodVersionHistory } from '../components/WodVersionHistory.js';
 import { BrandHomeLink } from '../components/BrandHomeLink.js';
 import { NavBar } from '../components/NavBar.js';
@@ -37,17 +38,20 @@ const FORMAT_LABEL: Record<NonNullable<WodAnalysis['format']>, string> = {
 function WodFlowCard({
   hasText,
   hasAnalysis,
+  needsReview,
   hasStrategy,
   hasResult,
 }: {
   hasText: boolean;
   hasAnalysis: boolean;
+  needsReview: boolean;
   hasStrategy: boolean;
   hasResult: boolean;
 }) {
   const steps = [
     { label: 'WOD recebido', done: hasText },
     { label: 'Análise', done: hasAnalysis },
+    ...(hasAnalysis && needsReview ? [{ label: 'Revisar interpretação', done: false }] : []),
     { label: 'Estratégia', done: hasStrategy },
     { label: 'Resultado', done: hasResult },
   ];
@@ -105,6 +109,13 @@ function WodDetailContent({ id }: { id: string | undefined }) {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [analysisRevision, setAnalysisRevision] = useState(0);
   const [generatingStrategy, setGeneratingStrategy] = useState(false);
+  const [savingReview, setSavingReview] = useState(false);
+  const sourceEditor = useRef<HTMLDivElement>(null);
+  const durationEditor = useRef<HTMLDivElement>(null);
+  const loadEditor = useRef<HTMLDivElement>(null);
+  const needsReview = Boolean(
+    analysis?.warnings.some((warning) => wodWarningAction(warning) === 'interpretation'),
+  );
   const active = useRef(false);
   const busy =
     loading ||
@@ -112,9 +123,22 @@ function WodDetailContent({ id }: { id: string | undefined }) {
     saving ||
     savingDuration ||
     savingLoads ||
+    savingReview ||
     deleting ||
     generatingStrategy;
   const blocked = busy || readErrors.length > 0 || Boolean(error);
+
+  useEffect(() => {
+    const target = editing
+      ? sourceEditor.current
+      : editingDuration
+        ? durationEditor.current
+        : editingLoads
+          ? loadEditor.current
+          : null;
+    target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target?.querySelector<HTMLElement>('textarea, input')?.focus({ preventScroll: true });
+  }, [editing, editingDuration, editingLoads]);
 
   useEffect(() => {
     active.current = true;
@@ -155,7 +179,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
   }, [id, loadAttempt]);
 
   function startEditing() {
-    setEditedText(wod?.rawText ?? '');
+    setEditedText(wod?.rawText ?? analysis?.rawResponse?.extractedText ?? '');
     setSaveError(null);
     setEditing(true);
   }
@@ -348,16 +372,18 @@ function WodDetailContent({ id }: { id: string | undefined }) {
           )}
 
           {editing && (
-            <div className="space-y-2">
+            <div ref={sourceEditor} className="space-y-2">
               {saveError && <Alert>{saveError}</Alert>}
               <TextArea
+                aria-label="Texto do treino"
                 value={editedText}
                 onChange={(e) => setEditedText(e.target.value)}
                 rows={8}
                 className="font-mono text-sm"
               />
               <p className="text-xs text-neutral-600">
-                Editar o texto apaga a análise e a estratégia já geradas para este WOD.
+                Corrija as siglas, cargas ou a sequência no texto, salve e analise novamente. Editar
+                o texto apaga a análise e a estratégia já geradas para este WOD.
               </p>
               <div className="flex gap-2">
                 <Button
@@ -384,6 +410,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
           <WodFlowCard
             hasText={Boolean(wod.rawText || wod.imageData)}
             hasAnalysis={Boolean(analysis)}
+            needsReview={needsReview}
             hasStrategy={Boolean(strategy)}
             hasResult={Boolean(wod.result)}
           />
@@ -426,19 +453,32 @@ function WodDetailContent({ id }: { id: string | undefined }) {
                   Target (meta): {analysis.rawResponse.targetMinutes} min
                 </p>
               )}
-              {analysis.warnings.length > 0 && (
-                <ul aria-label="Avisos da análise" className="space-y-1 text-sm text-amber-400">
-                  {formatWodAnalysisWarnings(analysis.warnings).map((warning, index) => (
-                    <li key={`${index}-${warning}`}>{warning}</li>
-                  ))}
-                </ul>
-              )}
+              <WodAnalysisReview
+                key={`review-${analysis.versionId ?? analysisRevision}`}
+                wodId={wod.id}
+                analysis={analysis}
+                disabled={blocked || editing || editingDuration || editingLoads}
+                canEditLoads={analysis.movements.some(isWodLoadMovement)}
+                onCorrect={startEditing}
+                onDuration={startEditingDuration}
+                onLoads={() => setEditingLoads(true)}
+                onSavingChange={(value) => {
+                  if (active.current) setSavingReview(value);
+                }}
+                onSaved={(updated) => {
+                  if (!active.current) return;
+                  setAnalysis(updated);
+                  setAnalysisRevision((value) => value + 1);
+                  setStrategy(null);
+                }}
+              />
 
               {editingDuration && (
-                <div className="space-y-2">
+                <div ref={durationEditor} className="space-y-2">
                   {durationError && <Alert>{durationError}</Alert>}
                   <div className="flex items-center gap-2">
                     <TextInput
+                      aria-label="Tempo do treino em minutos"
                       type="number"
                       min={0}
                       max={180}
@@ -474,22 +514,25 @@ function WodDetailContent({ id }: { id: string | undefined }) {
                 </div>
               )}
 
-              <WodLoadEditor
-                key={`loads-${analysis.versionId ?? analysisRevision}`}
-                wodId={wod.id}
-                analysis={analysis}
-                disabled={blocked || editing || editingDuration}
-                onEditingChange={setEditingLoads}
-                onSavingChange={(value) => {
-                  if (active.current) setSavingLoads(value);
-                }}
-                onSaved={(updated) => {
-                  if (!active.current) return;
-                  setAnalysis(updated);
-                  setAnalysisRevision((value) => value + 1);
-                  setStrategy(null);
-                }}
-              />
+              <div ref={loadEditor}>
+                <WodLoadEditor
+                  key={`loads-${analysis.versionId ?? analysisRevision}`}
+                  wodId={wod.id}
+                  analysis={analysis}
+                  editing={editingLoads}
+                  disabled={blocked || editing || editingDuration}
+                  onEditingChange={setEditingLoads}
+                  onSavingChange={(value) => {
+                    if (active.current) setSavingLoads(value);
+                  }}
+                  onSaved={(updated) => {
+                    if (!active.current) return;
+                    setAnalysis(updated);
+                    setAnalysisRevision((value) => value + 1);
+                    setStrategy(null);
+                  }}
+                />
+              </div>
 
               {analysis.stimulus && (
                 <p className="text-sm text-neutral-400">Estímulo: {analysis.stimulus}</p>
@@ -528,6 +571,7 @@ function WodDetailContent({ id }: { id: string | undefined }) {
               analysis={analysis}
               workoutName={wod.name}
               disabled={blocked || editing || editingDuration || editingLoads}
+              reviewRequired={needsReview}
               onGeneratingChange={(generating) => {
                 if (active.current) setGeneratingStrategy(generating);
               }}

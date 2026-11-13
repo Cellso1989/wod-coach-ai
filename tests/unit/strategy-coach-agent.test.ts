@@ -57,6 +57,22 @@ const MINIMAL_INPUT: StrategyCoachInput = {
 };
 
 describe('generateStrategy', () => {
+  it('sends accepted interpretations as confirmed context without changing the prescription', async () => {
+    const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(VALID_STRATEGY)));
+    const input = {
+      ...MINIMAL_INPUT,
+      confirmedInterpretations: [
+        "Interpretei 'STOH' como Shoulder to Overhead. Confirme se esta correto.",
+      ],
+    };
+    const original = structuredClone(input);
+    await generateStrategy(input, send);
+    const content = send.mock.calls[0][0].messages[0].content[0].text;
+    expect(content).toContain('ja foram confirmadas pelo atleta');
+    expect(content).toContain('sem pedir a mesma confirmacao novamente');
+    expect(content).toContain(JSON.stringify(input.confirmedInterpretations[0]));
+    expect(input).toEqual(original);
+  });
   it('requests readable round labels without altering repetition notation', async () => {
     const send = vi.fn().mockResolvedValue(textMessage(JSON.stringify(VALID_STRATEGY)));
     await generateStrategy(MINIMAL_INPUT, send);

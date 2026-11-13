@@ -23,6 +23,16 @@ function readableTerms(text: string): string {
 }
 
 // Legacy warnings remain intact in storage; only the athlete-facing copy changes.
+export function wodAnalysisWarningKey(warning: string): string {
+  return warning
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[\s-]+/g, ' ')
+    .replace(/[.!]+$/, '')
+    .trim();
+}
+
 export function formatWodAnalysisWarnings(warnings: string[]): string[] {
   const formatted = warnings
     .map((warning) => {
@@ -92,13 +102,7 @@ export function formatWodAnalysisWarnings(warnings: string[]): string[] {
     });
   const seen = new Set<string>();
   const unique = formatted.filter((warning) => {
-    const key = warning
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[\s-]+/g, ' ')
-      .replace(/[.!]+$/, '')
-      .trim();
+    const key = wodAnalysisWarningKey(warning);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
