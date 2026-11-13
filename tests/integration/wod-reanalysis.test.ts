@@ -386,6 +386,153 @@ async function seedAnalyzedWod() {
 }
 
 describe('WOD analysis and reanalysis API regression (database and AI transport mocked)', () => {
+  const reviewWarnings = [
+    "Interpretei 'STOH' como Shoulder to Overhead. Confirme se essa é a intenção.",
+    'Entendi o treino como 3 blocos for time (sequência repetida 3 vezes). Confirme se esse é o formato correto.',
+  ];
+  const optionalLoadWarning =
+    "A imagem mostra '60/40 50/35 30/25' mas foi fornecido '60kg' no texto; confirme as cargas de cada variação.";
+
+  async function seedReview() {
+    await seedAnalyzedWod();
+    store.analysis!.warnings = [...reviewWarnings, optionalLoadWarning];
+    store.analysis!.rawResponse = {
+      ...(store.analysis!.rawResponse as Row),
+      warnings: store.analysis!.warnings,
+      durationOverrideMinutes: 20,
+    };
+  }
+
+  it('requires interpretation review before AI, including for saved analyses', async () => {
+    await seedReview();
+    const previous = structuredClone(store);
+    mocks.sendMessage.mockClear();
+    const response = await request('POST', 'strategy');
+    expect(response.statusCode).toBe(409);
+    expect(response.json().code).toBe('WOD_REVIEW_REQUIRED');
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+    expect(store).toEqual(previous);
+  });
+
+  it('confirms each interpretation without AI or source changes and versions the accepted prescription', async () => {
+    await seedReview();
+    const previous = structuredClone(store);
+    mocks.sendMessage.mockClear();
+    const confirmFirst = await request('PATCH', 'analysis', {
+      versionId: store.analysis!.versionId,
+      confirmedWarnings: [reviewWarnings[0]],
+    });
+    expect(confirmFirst.statusCode).toBe(200);
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+    expect(store.analysis!.warnings).toEqual([reviewWarnings[1], optionalLoadWarning]);
+    expect(store.analysis!.movements).toEqual(previous.analysis!.movements);
+    expect(store.analysis!.roundBreakdown).toEqual(previous.analysis!.roundBreakdown);
+    expect(store.analysis!.rawResponse).toMatchObject({
+      confirmedWarnings: [reviewWarnings[0]],
+      durationOverrideMinutes: 20,
+    });
+    expect(store.analysisVersions.at(-1)).toMatchObject({
+      reason: 'REVIEW',
+      snapshot: { confirmedWarnings: [reviewWarnings[0]] },
+    });
+    expect(store.wod).toEqual(previous.wod);
+    expect(store.strategy).toBeNull();
+    expect(store.analysisVersions.slice(0, -1)).toEqual(previous.analysisVersions);
+    expect(store.strategyVersions).toEqual(previous.strategyVersions);
+    expect((await request('POST', 'strategy')).statusCode).toBe(409);
+    expect(
+      (
+        await request('PATCH', 'analysis', {
+          versionId: store.analysis!.versionId,
+          confirmedWarnings: [reviewWarnings[1]],
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(store.analysis!.warnings).toEqual([optionalLoadWarning]);
+    expect(store.analysis!.rawResponse).toMatchObject({ confirmedWarnings: reviewWarnings });
+    mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(STRATEGY) });
+    expect((await request('POST', 'strategy')).statusCode).toBe(200);
+    expect(store.strategyVersions.at(-1)).toMatchObject({
+      analysisVersionId: store.analysis!.versionId,
+      inputSnapshot: {
+        confirmedInterpretations: reviewWarnings,
+        wodAnalysis: { warnings: [optionalLoadWarning], rounds: ANALYSIS.rounds },
+      },
+    });
+  });
+
+  it.each(['version', 'warning', 'optional', 'repeated', 'missing-version'])(
+    'rejects invalid %s confirmation without writes',
+    async (kind) => {
+      await seedReview();
+      const previous = structuredClone(store);
+      mocks.sendMessage.mockClear();
+      const response = await request('PATCH', 'analysis', {
+        ...(kind !== 'missing-version'
+          ? { versionId: kind === 'version' ? 'stale-version' : store.analysis!.versionId }
+          : {}),
+        confirmedWarnings:
+          kind === 'repeated'
+            ? [reviewWarnings[0], reviewWarnings[0]]
+            : [
+                kind === 'warning'
+                  ? 'Interpretei outro treino.'
+                  : kind === 'optional'
+                    ? optionalLoadWarning
+                    : reviewWarnings[0],
+              ],
+      });
+      expect(response.statusCode).toBe(['repeated', 'missing-version'].includes(kind) ? 400 : 409);
+      expect(store).toEqual(previous);
+      expect(mocks.sendMessage).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['analysisVersion', 'strategy'] as const)(
+    'rolls back confirmation when %s persistence fails',
+    async (failure) => {
+      await seedReview();
+      const previous = structuredClone(store);
+      failWrite = failure;
+      const response = await request('PATCH', 'analysis', {
+        versionId: store.analysis!.versionId,
+        confirmedWarnings: reviewWarnings,
+      });
+      expect(response.statusCode).toBe(500);
+      expect(store).toEqual(previous);
+    },
+  );
+
+  it('preserves confirmations through time/load edits and asks again after reanalysis', async () => {
+    await seedReview();
+    expect(
+      (
+        await request('PATCH', 'analysis', {
+          versionId: store.analysis!.versionId,
+          confirmedWarnings: reviewWarnings,
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect((await request('PATCH', 'analysis', { durationMinutes: 18 })).statusCode).toBe(200);
+    expect(
+      (
+        await request('PATCH', 'analysis', {
+          movementLoads: [{ id: 'movement-0', loadDescription: '50 kg' }],
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(store.analysis!.rawResponse).toMatchObject({ confirmedWarnings: reviewWarnings });
+    mocks.sendMessage.mockResolvedValue({
+      text: JSON.stringify({ ...ANALYSIS, warnings: reviewWarnings }),
+    });
+    expect((await request('POST', 'analyze')).statusCode).toBe(200);
+    expect(store.analysis!.rawResponse).not.toHaveProperty('confirmedWarnings');
+    expect(store.analysis!.warnings).toEqual(expect.arrayContaining(reviewWarnings));
+    mocks.sendMessage.mockClear();
+    expect((await request('POST', 'strategy')).statusCode).toBe(409);
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
+
   it('archives full image/input snapshots while fetching only version IDs on the write path', async () => {
     store.wod.imageData = 'large-private-image-source';
     store.wod.imageMimeType = 'image/jpeg';
@@ -1077,6 +1224,14 @@ describe('WOD analysis and reanalysis API regression (database and AI transport 
       expect((await request('POST', 'analyze')).statusCode).toBe(200);
       expect(store.analysis!.movements[0]).toMatchObject({ name: '200m run', distanceMeters: 800 });
       expect(store.analysis!.movements[2]).toMatchObject({ loadDescription: null });
+      expect(
+        (
+          await request('PATCH', 'analysis', {
+            versionId: store.analysis!.versionId,
+            confirmedWarnings: [productionIntervalAnalysis.warnings[0]],
+          })
+        ).statusCode,
+      ).toBe(200);
       mocks.sendMessage.mockResolvedValue({ text: JSON.stringify(intervalStrategy) });
       expect((await request('POST', 'strategy')).statusCode).toBe(200);
       expect(store.strategyVersions.at(-1)!.inputSnapshot).toMatchObject({

@@ -7,6 +7,7 @@ import { Alert, Button, TextInput } from './ui.js';
 export function WodLoadEditor({
   wodId,
   analysis,
+  editing,
   disabled,
   onEditingChange,
   onSavingChange,
@@ -14,19 +15,22 @@ export function WodLoadEditor({
 }: {
   wodId: string;
   analysis: WodAnalysis;
+  editing: boolean;
   disabled: boolean;
   onEditingChange: (editing: boolean) => void;
   onSavingChange: (saving: boolean) => void;
   onSaved: (analysis: WodAnalysis) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [values, setValues] = useState<Record<string, string>>({});
+  const initialValues = () =>
+    Object.fromEntries(analysis.movements.map((item) => [item.id, item.loadDescription ?? '']));
+  const [values, setValues] = useState<Record<string, string>>(initialValues);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadMovements = analysis.movements.filter(isWodLoadMovement);
 
   function close() {
-    setEditing(false);
+    setValues(initialValues());
+    setError(null);
     onEditingChange(false);
   }
 
@@ -79,7 +83,6 @@ export function WodLoadEditor({
             Object.fromEntries(loadMovements.map((item) => [item.id, item.loadDescription ?? ''])),
           );
           setError(null);
-          setEditing(true);
           onEditingChange(true);
         }}
       >

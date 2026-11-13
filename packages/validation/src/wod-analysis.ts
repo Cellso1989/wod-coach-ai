@@ -68,6 +68,7 @@ export const wodAnalysisUpdateSchema = z
   .object({
     durationMinutes: z.number().int().min(0).max(180).nullable().optional(),
     versionId: z.string().min(1).optional(),
+    confirmedWarnings: z.array(z.string().min(1).max(4000)).min(1).max(50).optional(),
     movementLoads: z
       .array(
         z.object({
@@ -79,9 +80,24 @@ export const wodAnalysisUpdateSchema = z
       .max(30)
       .optional(),
   })
-  .refine((input) => input.durationMinutes !== undefined || input.movementLoads !== undefined, {
-    message: 'Informe tempo ou cargas para atualizar.',
-  })
+  .refine(
+    (input) =>
+      input.durationMinutes !== undefined ||
+      input.movementLoads !== undefined ||
+      input.confirmedWarnings !== undefined,
+    {
+      message: 'Informe tempo, cargas ou interpretacoes para atualizar.',
+    },
+  )
+  .refine(
+    (input) =>
+      !input.confirmedWarnings ||
+      (Boolean(input.versionId) &&
+        new Set(input.confirmedWarnings).size === input.confirmedWarnings.length),
+    {
+      message: 'Confirme interpretacoes unicas da versao atual da analise.',
+    },
+  )
   .refine(
     (input) =>
       !input.movementLoads ||

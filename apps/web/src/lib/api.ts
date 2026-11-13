@@ -414,7 +414,11 @@ export interface WodRound {
 }
 
 export interface WodAnalysis {
-  rawResponse?: { targetMinutes?: number | null } | null;
+  rawResponse?: {
+    targetMinutes?: number | null;
+    extractedText?: string | null;
+    confirmedWarnings?: string[];
+  } | null;
   versionId?: string | null;
   id: string;
   wodId: string;
@@ -728,6 +732,7 @@ export const api = {
       durationMinutes?: number | null;
       versionId?: string;
       movementLoads?: Array<{ id: string; loadDescription: string | null }>;
+      confirmedWarnings?: string[];
     },
   ) =>
     request<{ analysis: WodAnalysis }>(`/wods/${id}/analysis`, {

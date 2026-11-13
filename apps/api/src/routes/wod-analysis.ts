@@ -15,6 +15,7 @@ import {
   wodRoundOutputSchema,
 } from '@wod-coach-ai/validation';
 import { z } from 'zod';
+import { wodWarningAction } from '@wod-coach-ai/types';
 import {
   lockWodVersions,
   recordAnalysisVersion,
@@ -351,6 +352,27 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
         !Array.isArray(current.rawResponse)
           ? current.rawResponse
           : {};
+      const confirmations = parsed.data.confirmedWarnings ?? [];
+      if (
+        confirmations.some(
+          (warning) =>
+            !current.warnings.includes(warning) || wodWarningAction(warning) !== 'interpretation',
+        )
+      ) {
+        return {
+          error: 'Esta interpretacao nao esta pendente nesta analise. Atualize o treino.',
+          status: 409,
+        };
+      }
+      const previousConfirmations = z
+        .object({ confirmedWarnings: z.array(z.string()) })
+        .safeParse(rawResponse);
+      const confirmedWarnings = [
+        ...new Set([
+          ...(previousConfirmations.success ? previousConfirmations.data.confirmedWarnings : []),
+          ...confirmations,
+        ]),
+      ];
       const savedLoads = z
         .object({ loadOverrides: z.array(wodLoadOverrideSchema).max(30) })
         .safeParse(rawResponse);
@@ -406,7 +428,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
       let durationOverrideMinutes = parsed.data.durationMinutes;
       if (
         durationOverrideMinutes === undefined &&
-        edits.length &&
+        (edits.length || confirmations.length) &&
         current.versionId &&
         !Object.hasOwn(rawResponse, 'durationOverrideMinutes')
       ) {
@@ -421,7 +443,12 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
           ? parsed.data.durationMinutes
           : current.durationMinutes;
       const warnings = reconcileScoredIntervalWarnings(
-        reconcileTimeWarnings(edits.length ? loaded.warnings : current.warnings, durationMinutes),
+        reconcileTimeWarnings(
+          (edits.length ? loaded.warnings : current.warnings).filter(
+            (warning) => !confirmations.includes(warning),
+          ),
+          durationMinutes,
+        ),
         [
           wod.rawText,
           typeof rawResponse.extractedText === 'string' ? rawResponse.extractedText : null,
@@ -445,6 +472,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
             : {}),
           rawResponse: {
             ...rawResponse,
+            ...(confirmedWarnings.length ? { confirmedWarnings } : {}),
             durationMinutes,
             ...(durationOverrideMinutes !== undefined ? { durationOverrideMinutes } : {}),
             ...(edits.length
@@ -472,7 +500,7 @@ export default async function wodAnalysisRoutes(app: FastifyInstance) {
         tx,
         wod,
         updated,
-        edits.length ? 'LOAD_EDIT' : 'DURATION_EDIT',
+        confirmations.length ? 'REVIEW' : edits.length ? 'LOAD_EDIT' : 'DURATION_EDIT',
       );
       await tx.wodStrategy.deleteMany({ where: { wodId: id } });
       return versioned;

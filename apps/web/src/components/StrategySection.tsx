@@ -20,6 +20,7 @@ interface StrategySectionProps {
   onStrategyGenerated?: (strategy: WodStrategy) => void;
   onGeneratingChange?: (generating: boolean) => void;
   disabled?: boolean;
+  reviewRequired?: boolean;
 }
 
 function StrategyNoteList({
@@ -65,6 +66,7 @@ export function StrategySection({
   onStrategyGenerated,
   onGeneratingChange,
   disabled = false,
+  reviewRequired = false,
 }: StrategySectionProps) {
   const [strategy, setStrategy] = useState<WodStrategy | null>(initialStrategy);
   const [generating, setGenerating] = useState(false);
@@ -75,7 +77,7 @@ export function StrategySection({
   }, [initialStrategy]);
 
   async function handleGenerate() {
-    if (disabled || generating) return;
+    if (disabled || reviewRequired || generating) return;
     setGenerating(true);
     onGeneratingChange?.(true);
     setError(null);
@@ -94,11 +96,16 @@ export function StrategySection({
   if (!strategy) {
     return (
       <div className="space-y-2">
+        {reviewRequired && (
+          <p className="text-sm text-amber-400">
+            Resolva as dúvidas em Revisar interpretação para liberar a estratégia.
+          </p>
+        )}
         {error && <Alert>{error}</Alert>}
         {generating && <WodGenerationProgress />}
         <Button
           onClick={() => void handleGenerate()}
-          disabled={disabled || generating}
+          disabled={disabled || reviewRequired || generating}
           fullWidth
           className="py-4 font-bold"
         >

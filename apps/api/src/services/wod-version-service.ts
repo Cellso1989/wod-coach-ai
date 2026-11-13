@@ -43,7 +43,7 @@ export async function recordAnalysisVersion(
   tx: Prisma.TransactionClient,
   wod: Wod,
   analysis: AnalysisWithMovements,
-  reason: 'AI' | 'DURATION_EDIT' | 'LOAD_EDIT',
+  reason: 'AI' | 'DURATION_EDIT' | 'LOAD_EDIT' | 'REVIEW',
   generationMetadata?: AiGenerationMetadata,
   measure: MeasureWodDatabase = withoutDatabaseTiming,
 ) {
@@ -64,6 +64,12 @@ export async function recordAnalysisVersion(
         sourceSnapshot: sourceSnapshot(wod),
         snapshot: jsonSnapshot({
           ...analysis,
+          ...(analysis.rawResponse &&
+          typeof analysis.rawResponse === 'object' &&
+          !Array.isArray(analysis.rawResponse) &&
+          Array.isArray(analysis.rawResponse.confirmedWarnings)
+            ? { confirmedWarnings: analysis.rawResponse.confirmedWarnings }
+            : {}),
           versionId: undefined,
           generationMetadata: generationMetadata ?? null,
         }),
